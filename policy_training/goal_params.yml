@@ -1,0 +1,34 @@
+model_params:
+  model_1:
+    name: "observation_encoder"
+    path: ""
+    z_dim: 10
+    input_keys:
+      - "points"
+
+dataloading_params:
+  dataset_path: "/scr2/gg_rl/goalset_triangles/goal_set.h5"
+  num_workers: 0
+  batch_size: 128
+
+training_params:
+  seed: 1234
+  regularization_weight: 0.00001
+  lrn_rate: 0.0001
+  beta1: 0.9
+  beta2: 0.99
+  max_training_epochs: 1000
+  val_ratio: 0
+  use_GPU: True
+  radius_alpha: 1.0
+  angle_alpha: 15.0
+
+logging_params:
+  logging_folder: "/scr-ssd/gg_rl_overfit/points_only/" # Place your logging folder in a seperate location then your local code repository
+  run_description: "training" #Options include: debugging, training, testing
+  run_notes: "_test_multimodal_uniform"
+
+debugging_params:
+  debugging_val: 1.0 ### 1.0 for True,  0.0 for False
+  save_model_val: 0.0 ### 1.0 for True,  0.0 for False 
+

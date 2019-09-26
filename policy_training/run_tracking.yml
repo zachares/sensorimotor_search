@@ -1,0 +1,5 @@
+run_tracker:
+  date: '20190923'
+  debugging: 0
+  testing: 0
+  training: 187

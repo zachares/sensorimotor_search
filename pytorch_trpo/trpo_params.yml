@@ -1,0 +1,28 @@
+rep_model_params:
+  threshold: 0.5
+  z_dim: 128
+  action_dim: 5
+  oe_path: ""
+training_params:
+  gamma: 0.995
+  tau: 0.99
+  l2_reg: 0.001
+  max_kl: 0.01
+  damping: 0.1
+  seed: 1234
+  batch_size: 5
+  horizon: 30
+  num_frames: 50000
+  use_GPU: False
+logging_params:
+  log_interval: 1
+  logging_folder: "/scr2/sensorimotor_search/rl_results/" # don't save your logging folder in the same location as your local repo
+  run_notes: "first_test"
+evaluation_params:
+  eval_interval: 10
+  eval_eps: 0
+debugging_params:
+  debugging_val: 1.0 ### 1.0 for True,  0.0 for False
+save_trpo_params:
+  saving_val: 0.0 ### 1.0 for True,  0.0 for False
+  saving_path: "/scr2/sensorimotor_search/dataset_trpo/"
