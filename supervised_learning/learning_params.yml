@@ -1,0 +1,39 @@
+model_params:
+  z_dim: 10
+
+dataloading_params:
+  dataset_path: "/scr2/gg_rl/goalset_triangles/goal_set.h5"
+  num_workers: 0
+  batch_size: 128
+
+training_params:
+  seed: 1234
+  regularization_weight: 0.00001
+  lrn_rate: 0.0001
+  beta1: 0.9
+  beta2: 0.99
+  max_training_epochs: 1000
+  val_ratio: 0.05
+  use_GPU: True
+
+logging_params:
+  logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
+  run_description: "debugging" #Options include: debugging, training, testing
+  run_notes: "_inital_testing"
+
+debugging_params:
+  debugging_val: 1.0 ### 1.0 for True,  0.0 for False
+  save_model_val: 0.0 ### 1.0 for True,  0.0 for False 
+
+info_flow:
+  dataset:
+    outputs:
+      image: (128, 128, 3)
+      force: (6, 36)
+      action: (3)
+  observation_encoder:
+    inputs:
+      image: dataset
+      forces: dataset
+    outputs:
+      z: (128)

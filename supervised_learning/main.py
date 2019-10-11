@@ -37,38 +37,27 @@ if __name__ == '__main__':
     ##################################################################################
     ##### Loading required config files
     ##################################################################################
-    with open("../sim_env/game_params.yml", 'r') as ymlfile:
-        cfg_0 = yaml.safe_load(ymlfile)
+    with open("learning_params.yml", 'r') as ymlfile:
+        cfg = yaml.safe_load(ymlfile)
 
-    cols = cfg_0['game_params']['cols']
-    rows = cfg_0['game_params']['rows']
-    pose_dim = cfg_0['game_params']['pose_dim']
+    debugging_val = cfg['debugging_params']['debugging_val']
+    save_model_val = cfg['debugging_params']['save_model_val']
 
-    with open("../data_collection/datacollection_params.yml", 'r') as ymlfile:
-        cfg_1 = yaml.safe_load(ymlfile)
+    z_dim = cfg["model_params"]["model_1"]["z_dim"]
+    use_cuda = cfg['training_params']['use_GPU'] and torch.cuda.is_available()
 
-    dataset_path = cfg_1['datacollection_params']['logging_folder']
+    seed = cfg['training_params']['seed']
+    regularization_weight = cfg['training_params']['regularization_weight']
+    learning_rate = cfg['training_params']['lrn_rate']
+    beta_1 = cfg['training_params']['beta1']
+    beta_2 = cfg['training_params']['beta2']
+    max_epoch = cfg['training_params']['max_training_epochs']
+    val_ratio = cfg['training_params']['val_ratio']
+    logging_folder = cfg['logging_params']['logging_folder']
+    run_description = cfg['logging_params']['run_description'] 
 
-    with open("goal_params.yml", 'r') as ymlfile:
-        cfg_2 = yaml.safe_load(ymlfile)
-
-    debugging_val = cfg_2['debugging_params']['debugging_val']
-    save_model_val = cfg_2['debugging_params']['save_model_val']
-
-    z_dim = cfg_2["model_params"]["model_1"]["z_dim"]
-    use_cuda = cfg_2['training_params']['use_GPU'] and torch.cuda.is_available()
-
-    seed = cfg_2['training_params']['seed']
-    regularization_weight = cfg_2['training_params']['regularization_weight']
-    learning_rate = cfg_2['training_params']['lrn_rate']
-    beta_1 = cfg_2['training_params']['beta1']
-    beta_2 = cfg_2['training_params']['beta2']
-    max_epoch = cfg_2['training_params']['max_training_epochs']
-    val_ratio = cfg_2['training_params']['val_ratio']
-    logging_folder = cfg_2['logging_params']['logging_folder']
-    run_description = cfg_2['logging_params']['run_description'] 
-
-    num_workers = cfg_2['dataloading_params']['num_workers']
+    num_workers = cfg['dataloading_params']['num_workers']
+    dataset_path = cfg['dataloading_params']['dataset_path']
 
     if run_description == "testing":
         max_epoch = 1
@@ -105,7 +94,6 @@ if __name__ == '__main__':
     ##################################################################################
     # hardware and low level training details
     ##################################################################################
-    # torch.autograd.set_detect_anomaly(True)
     device = torch.device("cuda" if use_cuda else "cpu")
     random.seed(seed)
     np.random.seed(seed)
@@ -119,21 +107,21 @@ if __name__ == '__main__':
       print("Let's use", torch.cuda.device_count(), "GPUs!")
 
     ##################################################################################
-    #### Training tool to train and evaluate neural networks
-    ##################################################################################
-    trainer = Trainer(cfg_0, cfg_1, cfg_2, device)
-
-    ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
-    logger = Logger(cfg_0, cfg_1, cfg_2, trainer.model_dict, debugging_flag, save_model_flag, device)
+    logger = Logger(cfg, debugging_flag, device)
+
+    ##################################################################################
+    #### Training tool to train and evaluate neural networks
+    ##################################################################################
+    trainer = Trainer(cfg, logger.models_folder, save_models_flag, device)
 
     ##################################################################################
     #### Dataset creation function
     ##################################################################################
-    data_loader = init_dataloader(cfg_0, cfg_1, cfg_2, debugging_flag, logger.runs_folder, device)
+    data_loader, val_data_loader, idx_dict = init_dataloader(cfg, device)
 
-    np.random.seed(seed)
+    logger.save_dict("val_train_split", idx_dict)
     ##################################################################################
     ####### Training ########
     ##################################################################################
@@ -154,8 +142,34 @@ if __name__ == '__main__':
 
             global_cnt += 1
 
-        logger.save_models(trainer.model_dict, i_epoch) #  trainer.dyn_mod, trainer.goal_prov,
+        ##################################################################################
+        ##### Validation #########
+        ##################################################################################
+        # performed at the end of each epoch
+        if val_ratio is not 0:
+            
+            print("Calculating validation results after #{} epochs".format(i_epoch))
 
-        print("Epoch Params: ", trainer.current_params)
-        print("Epoch bounds: ", trainer.bounds)
-        # print("Last loss: ", trainer.loss)
+            for i_iter, sample_batched in enumerate(val_data_loader):
+
+                scalar_dict= trainer.eval(sample_batched)
+
+                logger.save_scalars(scalar_dict, val_global_cnt, 'val/')
+
+                val_global_cnt += 1
+
+        ###############################################
+        ##### Saving models every epoch ################
+        ##############################################
+        trainer.save(i_epoch)
+
+        if save_model_flag and i_epoch == 0:
+            print("Saving Models")
+            if os.path.isdir(logger.models_folder) == False:
+                os.mkdir(logger.models_folder)
+
+            trainer.save_models(logger.models_folder, i_epoch)
+
+        elif save_model_flag:
+            print("Saving Models")
+

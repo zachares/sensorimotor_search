@@ -287,7 +287,7 @@ class Proto_Model(nn.Module):
 
 #### a convolutional network
 class CONV2DN(Proto_Model):
-    def __init__(self, model_name, load_bool, input_channels, output_channels, input_height, output_height, input_width, output_width,\
+    def __init__(self, model_name, input_channels, output_channels, input_height, output_height, input_width, output_width,\
      output_activation_layer_bool, flatten_bool, num_fc_layers, device = None):
         super().__init__(model_name + "_cnn")
 
@@ -344,8 +344,7 @@ class CONV2DN(Proto_Model):
 
         self.model = nn.Sequential(*layer_list)
 
-        if load_bool:
-            self.load()
+        self.load()
 
         # -----------------------
         # weight initialization
@@ -361,7 +360,7 @@ class CONV2DN(Proto_Model):
 
 #### a time series network
 class CONV1DN(Proto_Model):
-    def __init__(self, model_name, load_bool, input_channels, output_channels, input_width, output_width,\
+    def __init__(self, model_name, input_channels, output_channels, input_width, output_width,\
      output_activation_layer_bool, flatten_bool, num_fc_layers, device = None):
         super().__init__(model_name + "_1dconv")
 
@@ -419,12 +418,11 @@ class CONV1DN(Proto_Model):
 
         self.model_logger = Model_Logger(self.model_name)
 
-        if load_bool:
-            self.load()
+        self.load()
 
 #### a fully connected network
 class FCN(Proto_Model):
-    def __init__(self, model_name, load_bool, input_channels, output_channels, num_layers, middle_channels_list = [],  device = None):
+    def __init__(self, model_name, input_channels, output_channels, num_layers, middle_channels_list = [],  device = None):
         super().__init__(model_name + "_fcn")
 
         #### activation layers: leaky relu
@@ -479,8 +477,7 @@ class FCN(Proto_Model):
         self.model_name = 
         self.model_logger = Model_Logger(self.model_name)
 
-        if load_bool:
-            self.load()
+        self.load()
 
 ######################################
 # Current Macromodel Types Supported
@@ -502,9 +499,9 @@ class Proto_Macromodel(nn.Module):
         super().__init__()   
         self.model_list = []
 
-    def save(self, epoch_num):
+    def save(self, model_folder, epoch_num):
         for model in self.model_list:
-            model.save(epoch_num)
+            model.save(model_folder, epoch_num)
 
     def load(self, path_dict = {}):
         if len(path_dict.keys()) != 0:
@@ -516,7 +513,7 @@ class Proto_Macromodel(nn.Module):
 
 #### a long short-term memory network
 class LSTM(Proto_Macromodel):
-    def __init__(self, model_name, load_bool, input_channels, output_channels, fg_list =[], ig_list = [], cg_list = [], og_list = [], device = None):
+    def __init__(self, model_name, input_channels, output_channels, fg_list =[], ig_list = [], cg_list = [], og_list = [], device = None):
         super().__init__()
 
         self.device = device
@@ -529,28 +526,28 @@ class LSTM(Proto_Macromodel):
         else:
             num_layers = len(fg_list)
 
-        self.forget_gate_encoder = FCN(model_name + "_lstm_fg", load_bool, input_channels + output_channels, num_layers, fg_list, device = device)
+        self.forget_gate_encoder = FCN(model_name + "_lstm_fg", input_channels + output_channels, num_layers, fg_list, device = device)
 
         if len(ig_list) == 0:
             num_layers = 3
         else:
             num_layers = len(ig_list)
 
-        self.input_gate_encoder = FCN(model_name + "_lstm_ig", load_bool, input_channels + output_channels, num_layers, ig_list, device = device)
+        self.input_gate_encoder = FCN(model_name + "_lstm_ig", input_channels + output_channels, num_layers, ig_list, device = device)
 
         if len(og_list) == 0:
             num_layers = 3
         else:
             num_layers = len(og_list)
 
-        self.output_gate_encoder = FCN(model_name + "_lstm_og", load_bool, input_channels + output_channels, num_layers, og_list, device = device)
+        self.output_gate_encoder = FCN(model_name + "_lstm_og", input_channels + output_channels, num_layers, og_list, device = device)
 
         if len(cg_list) == 0:
             num_layers = 3
         else:
             num_layers = len(cg_list)
 
-        self.candidate_gate_encoder = FCN(model_name + "_lstm_cg", load_bool, input_channels + output_channels, num_layers, cg_list, device = device)
+        self.candidate_gate_encoder = FCN(model_name + "_lstm_cg", input_channels + output_channels, num_layers, cg_list, device = device)
 
         self.model_list.append(self.forget_gate_encoder)
         self.model_list.append(self.input_gate_encoder)
@@ -593,7 +590,7 @@ class LSTM(Proto_Macromodel):
 
 class Params(object):
 
-    def __init__(self, model_name, load_bool, size, device, init_values = None):
+    def __init__(self, model_name, size, device, init_values = None):
 
         self.device = device
 
@@ -607,8 +604,7 @@ class Params(object):
 
         self.model_logger = Model_Logger(self.model_name)
 
-        if load_bool:
-            self.load()
+        self.load()
 
     def save(self, epoch_num):
         save_path = self.model_logger.save_path()

@@ -29,7 +29,7 @@ def gaussian_parameters(h, dim=-1):
 
 #### observation encoder for mapping from the image data and force data to low dimensional latent space
 class Observation_Encoder(Proto_Macromodel):
-    def __init__(self, model_name, load_bool, image_size, force_size, z_dim, device = None):
+    def __init__(self, model_name, image_size, force_size, z_dim, device = None):
         super().__init__()
         ##### the Proto_Macromodel class initializes a model list
 
@@ -38,11 +38,11 @@ class Observation_Encoder(Proto_Macromodel):
 
         self.device = device
 
-        self.image_encoder = CONV2DN(model_name + "_image_encoder", load_bool, image_size[0], z_dim, image_size[1], 1, image_size[2], 1, False, True, 3, device = device)
+        self.image_encoder = CONV2DN(model_name + "_image_encoder", image_size[0], z_dim, image_size[1], 1, image_size[2], 1, False, True, 3, device = device)
 
-        self.force_encoder = CONV1DN(model_name + "_force_encoder", load_bool, force_size[0], z_dim, force_size[1], 1, False, True, 3, device = device)
+        self.force_encoder = CONV1DN(model_name + "_force_encoder", force_size[0], z_dim, force_size[1], 1, False, True, 3, device = device)
 
-        self.modality_fusion = FCN(model_name + "_modality_fusion", load_bool, z_dim * 2, z_dim, 3, device = device)
+        self.modality_fusion = FCN(model_name + "_modality_fusion", z_dim * 2, z_dim, 3, device = device)
 
         self.model_list.append(self.image_encoder)
         self.model_list.append(self.force_encoder)
@@ -58,13 +58,13 @@ class Observation_Encoder(Proto_Macromodel):
         return self.modality_fusion(torch.cat((z_image.transpose(0,1), z_force.transpose(0,1))).transpose(0,1))
 
 class Confidence_Predictor(Proto_Macromodel):
-    def __init__(self, model_name, load_bool, z_dim, device = None):
+    def __init__(self, model_name, z_dim, device = None):
         super().__init__()
         ##### the Proto_Macromodel class initializes a model list
 
         self.device = device
 
-        self.confidence_predictor = FCN(model_name + "_confidence_prediction", load_bool, z_dim + 1, 1, 3, device = device)
+        self.confidence_predictor = FCN(model_name + "_confidence_prediction", z_dim + 1, 1, 3, device = device)
 
         self.model_list.append(self.confidence_predictor)
 
@@ -77,7 +77,7 @@ class Confidence_Predictor(Proto_Macromodel):
         return logits, torch.sigmoid(logits)
 
 class Switching_Policy(Proto_Macromodel):
-    def __init__(self, model_name, load_bool, z_dim, num_goals, threshold = 0.5, device = None):
+    def __init__(self, model_name, z_dim, num_goals, threshold = 0.5, device = None):
         super().__init__()
         ##### the Proto_Macromodel class initializes a model list
 
@@ -86,7 +86,7 @@ class Switching_Policy(Proto_Macromodel):
         self.threshold = threshold
         self.num_goals = num_goals
 
-        self.switching_policy = FCN(model_name + "_switching_policy", load_bool, z_dim, num_goals - 1, 3, device = device)
+        self.switching_policy = FCN(model_name + "_switching_policy", z_dim, num_goals - 1, 3, device = device)
 
         self.model_list.append(self.switching_policy)
 
@@ -104,7 +104,7 @@ class Switching_Policy(Proto_Macromodel):
         return (delta_goal + goals) % self.num_goals #### defining the new goal areas for each datapoint in the batch
 
 class Motion_Policy(Proto_Macromodel):
-    def __init__(self, model_name, load_bool, z_dim, num_goals, threshold = 0.5, device = None):
+    def __init__(self, model_name, z_dim, num_goals, threshold = 0.5, device = None):
         super().__init__()
 
     def forward(self, inputs)

@@ -26,8 +26,3 @@ def L2(estimate, target):
 	return ((estimate - target) ** 2).sum(1).unsqueeze(1)
 
 # action =  sample_batched['action'].to(self.device).unsqueeze(1).requires_grad_(True)
-# # value_obs_t0_target.sum().backward(retain_graph=True)
-
-# optimal_action = action.grad.clone()
-
-# action.grad.zero_()
