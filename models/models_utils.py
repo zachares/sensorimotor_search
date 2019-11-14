@@ -4,6 +4,7 @@ from torch.nn import functional as F
 from torch.distributions import Categorical
 import torchvision
 import copy
+import yaml
 import numpy as np
 
 ### DeCNN network
@@ -12,9 +13,12 @@ import numpy as np
 ### Network for sequential point clouds
 ### Sequential data deconv
 ### a CNN supporting  5 and 7 kernel sizes
+### add dilation to your CNNs
 
-def get_2Dconv_params(input_height, output_height, input_width, output_width, input_chan, output_chan):
+def get_2Dconv_params(input_size, output_size):
 
+    input_chan, input_height, input_width = input_size
+    output_chan, output_height, output_width = output_size
     # assume output_chan is a multiple of 2
     # assume input height and width have only two prime factors 2 and 3 for now
     # assume that output height and output width are factors of input height and input width respectively
@@ -42,7 +46,6 @@ def get_2Dconv_params(input_height, output_height, input_width, output_width, in
             chan_list.append(chan_list[-1])
 
     elif len(prime_fact_cols) < len(chan_list):
-        print("here is the problem")
 
         idx = 1
 
@@ -103,7 +106,10 @@ def get_2Dconv_params(input_height, output_height, input_width, output_width, in
 
     return e_p_list
 
-def get_1Dconv_params(input_width, output_width, input_chan, output_chan):
+def get_1Dconv_params(input_size, output_size):
+
+    input_chan, input_width = input_size
+    output_chan, output_width = output_size
 
     # assume output_chan is a multiple of 2
     # assume input height have only two prime factors 2 and 3 for now
@@ -190,7 +196,7 @@ def get_prime_fact(num):
             temp_num = temp_num / 2
             prime_fact_list.append(2)
 
-    return prime_fact_list  
+    return prime_fact_list 
 
 class Flatten(nn.Module):
     def forward(self, input):
@@ -201,9 +207,9 @@ class Model_Logger(object):
 
     def __init__(self, model_name):
 
-        self.model_name
+        self.model_name = model_name
 
-        with open("models.yml", 'r') as ymlfile1:
+        with open("../models/models.yml", 'r') as ymlfile1:
             cfg = yaml.safe_load(ymlfile1)
 
         if self.model_name not in cfg.keys():
@@ -211,31 +217,31 @@ class Model_Logger(object):
             cfg[self.model_name]['save_path'] = ""
             cfg[self.model_name]['load_path'] = ""
 
-            with open("models.yml", 'r+') as ymlfile2:
+            with open("../models/models.yml", 'r+') as ymlfile2:
                 yaml.dump(cfg, ymlfile2)
 
     def save_path(self):
 
-        with open("models.yml", 'r') as ymlfile1:
+        with open("../models/models.yml", 'r') as ymlfile1:
             cfg = yaml.safe_load(ymlfile1)
 
         return cfg[self.model_name]['save_path']
 
     def load_path(self):
 
-        with open("models.yml", 'r') as ymlfile1:
+        with open("../models/models.yml", 'r') as ymlfile1:
             cfg = yaml.safe_load(ymlfile1)
 
         return cfg[self.model_name]['load_path']
 
     def save(self, path):
 
-        with open("models.yml", 'r') as ymlfile1:
+        with open("../models/models.yml", 'r') as ymlfile1:
             cfg = yaml.safe_load(ymlfile1)
 
         cfg[self.model_name]['load_path'] = path
 
-        with open("models.yml", 'r+') as ymlfile2:
+        with open("../models/models.yml", 'r+') as ymlfile2:
             yaml.dump(cfg, ymlfile2)
 
 #########################################
@@ -252,12 +258,12 @@ class Model_Logger(object):
 #### super class of all models for logging and loading models
 class Proto_Model(nn.Module):
     def __init__(self, model_name):
-
+        super().__init__()
         self.model = None
         self.model_name = model_name
         self.model_logger = Model_Logger(self.model_name)
     
-    def forward(self, input)
+    def forward(self, input):
         return self.model(input)
 
     def weight_parameters(self):
@@ -267,12 +273,13 @@ class Proto_Model(nn.Module):
         return [param for name, param in self.named_parameters() if 'bias' in name]
 
     def save(self, epoch_num):
-        save_path = self.model_logger.save_path()
-
+        save_path = self.model_name
+        
         if save_path != "":
             ckpt_path = '{}_{}'.format(save_path, epoch_num)
+            print(ckpt_path)
             torch.save(self.model.state_dict(), ckpt_path)
-            self.model_logger.save(ckpt_path)
+            # self.model_logger.save(ckpt_path)
 
     def load(self, path = ""):
 
@@ -287,8 +294,7 @@ class Proto_Model(nn.Module):
 
 #### a convolutional network
 class CONV2DN(Proto_Model):
-    def __init__(self, model_name, input_channels, output_channels, input_height, output_height, input_width, output_width,\
-     output_activation_layer_bool, flatten_bool, num_fc_layers, device = None):
+    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, flatten_bool, num_fc_layers, device = None):
         super().__init__(model_name + "_cnn")
 
         # assume output_chan is a multiple of 2
@@ -297,21 +303,16 @@ class CONV2DN(Proto_Model):
         # activation type leaky relu and network uses batch normalization
         self.device = device
 
-        self.input_width = input_width
-        self.output_width = output_width
-
-        self.input_height = input_height
-        self.output_height = output_height
-
-        self.input_channels = input_channels
-        self.output_channels = output_channels
+        self.input_size = input_size
+        self.output_size = output_size
+        output_chan, output_height, output_width = output_size
 
         self.output_activation_layer_bool = output_activation_layer_bool
         self.flatten_bool = flatten_bool
         self.num_fc_layers = num_fc_layers
 
         #assume that the prime factorization of rows and cols is composed of only powers of 3 and 2
-        e_p_list = get_2Dconv_params(input_height, output_height, input_width, output_width, input_channels, output_channels) # encoder parameters
+        e_p_list = get_2Dconv_params(input_size, output_size) # encoder parameters
 
         layer_list = []
 
@@ -330,7 +331,7 @@ class CONV2DN(Proto_Model):
 
         if flatten_bool or num_fc_layers != 0:
             layer_list.append(Flatten())
-            num_outputs = output_width * output_height * output_channels
+            num_outputs = output_width * output_height * output_chan
 
         for idx in range(num_fc_layers):
 
@@ -358,11 +359,10 @@ class CONV2DN(Proto_Model):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-#### a time series network
-class CONV1DN(Proto_Model):
-    def __init__(self, model_name, input_channels, output_channels, input_width, output_width,\
-     output_activation_layer_bool, flatten_bool, num_fc_layers, device = None):
-        super().__init__(model_name + "_1dconv")
+#### a 2D deconvolutional network
+class DECONV2DN(Proto_Model):
+    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, device = None):
+        super().__init__(model_name + "_dcnn")
 
         # assume output_chan is a multiple of 2
         # assume input height and width have only two prime factors 2 and 3 for now
@@ -370,18 +370,69 @@ class CONV1DN(Proto_Model):
         # activation type leaky relu and network uses batch normalization
         self.device = device
 
-        self.input_width = input_width
-        self.output_width = output_width
+        self.input_size = input_size
+        self.output_size = output_size
 
-        self.input_channels = input_channels
-        self.output_channels = output_channels
+        self.output_activation_layer_bool = output_activation_layer_bool
+        #assume that the prime factorization of rows and cols is composed of only powers of 3 and 2
+        e_p_list = get_2Dconv_params(output_size, input_size) # encoder parameters
+        e_p_list.reverse()
+
+        layer_list = []
+
+        for idx, e_p in enumerate(e_p_list):
+
+            layer_list.append(nn.ConvTranspose2d(e_p[1] , e_p[0], kernel_size=(e_p[2], e_p[3]),\
+                stride=(e_p[4], e_p[5]), padding=(e_p[6], e_p[7]), bias=True))
+
+            if idx != (len(e_p_list) - 1):
+                layer_list.append(nn.BatchNorm2d(e_p[0]))
+
+            if idx != (len(e_p_list) - 1) and output_activation_layer_bool == False:
+                continue         
+
+            layer_list.append(nn.LeakyReLU(0.1, inplace = True))
+
+        self.model = nn.Sequential(*layer_list)
+
+        self.load()
+
+        # -----------------------
+        # weight initialization
+        # -----------------------
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                nn.init.kaiming_normal_(m.weight.data)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def forward(self, rep):
+        assert rep.size()[1] == self.input_size[0], "input channel dim does not match network requirements"
+
+        return self.model(rep.unsqueeze(2).unsqueeze(3).repeat(1,1,2,2))
+
+#### a time series network
+class CONV1DN(Proto_Model):
+    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, flatten_bool, num_fc_layers, device = None):
+        super().__init__(model_name + "_1dconv")
+
+        # assume output_chan is a multiple of 2
+        # assume input height and width have only two prime factors 2 and 3 for now
+        # assume that output height and output width are factors of input height and input width respectively
+        # activation type leaky relu and network uses batch normalization
+        self.device = device
+        self.input_size = input_size
+        self.output_size = output_size
 
         self.output_activation_layer_bool = output_activation_layer_bool
         self.flatten_bool = flatten_bool
         self.num_fc_layers = num_fc_layers
 
         #assume that the prime factorization of rows and cols is composed of only powers of 3 and 2
-        e_p_list = get_1Dconv_params(input_width, output_width, input_channels, output_channels) # encoder parameters
+        e_p_list = get_1Dconv_params(input_size, output_size) # encoder parameters
 
         layer_list = []
 
@@ -414,11 +465,54 @@ class CONV1DN(Proto_Model):
 
         self.model = nn.Sequential(*layer_list)
 
-        self.model_name = 
+        self.load()
 
-        self.model_logger = Model_Logger(self.model_name)
+#### a 1D deconvolutional network
+class DECONV1DN(Proto_Model):
+    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, device = None):
+        super().__init__(model_name + "_1ddeconv")
+
+        # assume output_chan is a multiple of 2
+        # assume input height and width have only two prime factors 2 and 3 for now
+        # assume that output height and output width are factors of input height and input width respectively
+        # activation type leaky relu and network uses batch normalization
+        self.device = device
+
+        self.input_size = input_size
+        self.output_size = output_size
+
+        self.output_activation_layer_bool = output_activation_layer_bool
+        self.num_fc_layers = num_fc_layers
+
+        #assume that the prime factorization of rows and cols is composed of only powers of 3 and 2
+        e_p_list = get_1Dconv_params(output_size, input_size) # encoder parameters
+        e_p_list.reverse()
+
+        layer_list = []
+
+        for idx, e_p in enumerate(e_p_list):
+
+            layer_list.append(nn.ConvTranspose1d(e_p[0] , e_p[1], kernel_size= e_p[2],\
+                stride=e_p[3], padding=e_p[4], bias=True))
+
+            if idx != (len(e_p_list) - 1):
+                layer_list.append(nn.BatchNorm1d(e_p[1]))
+
+            if idx != (len(e_p_list) - 1) and output_activation_layer_bool == False:
+                continue         
+
+            layer_list.append(nn.LeakyReLU(0.1, inplace = True))
+
+
+        self.model = nn.Sequential(*layer_list)
 
         self.load()
+
+
+    def forward(self, rep):
+        assert rep.size()[1] == self.input_size[0], "input channel dim does not match network requirements"
+        tiled_feat = rep.view(rep.size()[0], rep.size()[1], 1).expand(-1, -1, self.input_size[1])
+        return self.model(tiled_feat)
 
 #### a fully connected network
 class FCN(Proto_Model):
@@ -473,9 +567,6 @@ class FCN(Proto_Model):
                     layer_list.append(nn.LeakyReLU(0.1, inplace = True))
 
         self.model = nn.Sequential(*layer_list)
-        
-        self.model_name = 
-        self.model_logger = Model_Logger(self.model_name)
 
         self.load()
 
@@ -499,9 +590,9 @@ class Proto_Macromodel(nn.Module):
         super().__init__()   
         self.model_list = []
 
-    def save(self, model_folder, epoch_num):
+    def save(self, epoch_num):
         for model in self.model_list:
-            model.save(model_folder, epoch_num)
+            model.save(epoch_num)
 
     def load(self, path_dict = {}):
         if len(path_dict.keys()) != 0:
@@ -517,6 +608,8 @@ class LSTM(Proto_Macromodel):
         super().__init__()
 
         self.device = device
+        self.input_chan = input_channels
+        self.output_chan = output_channels
 
         # -----------------------
         # Long Short-Term Memory Network
@@ -526,44 +619,48 @@ class LSTM(Proto_Macromodel):
         else:
             num_layers = len(fg_list)
 
-        self.forget_gate_encoder = FCN(model_name + "_lstm_fg", input_channels + output_channels, num_layers, fg_list, device = device)
+        self.forget_gate_encoder = FCN(model_name + "_lstm_fg", input_channels + output_channels,\
+         output_channels, num_layers, fg_list, device = device)
 
         if len(ig_list) == 0:
             num_layers = 3
         else:
             num_layers = len(ig_list)
 
-        self.input_gate_encoder = FCN(model_name + "_lstm_ig", input_channels + output_channels, num_layers, ig_list, device = device)
+        self.input_gate_encoder = FCN(model_name + "_lstm_ig", input_channels + output_channels,\
+         output_channels, num_layers, ig_list, device = device)
 
         if len(og_list) == 0:
             num_layers = 3
         else:
             num_layers = len(og_list)
 
-        self.output_gate_encoder = FCN(model_name + "_lstm_og", input_channels + output_channels, num_layers, og_list, device = device)
+        self.output_gate_encoder = FCN(model_name + "_lstm_og", input_channels + output_channels,\
+         output_channels, num_layers, og_list, device = device)
 
         if len(cg_list) == 0:
             num_layers = 3
         else:
             num_layers = len(cg_list)
 
-        self.candidate_gate_encoder = FCN(model_name + "_lstm_cg", input_channels + output_channels, num_layers, cg_list, device = device)
+        self.candidate_gate_encoder = FCN(model_name + "_lstm_cg", input_channels + output_channels,\
+         output_channels, num_layers, cg_list, device = device)
 
         self.model_list.append(self.forget_gate_encoder)
         self.model_list.append(self.input_gate_encoder)
         self.model_list.append(self.output_gate_encoder )
         self.model_list.append(self.candidate_gate_encoder )
 
-    def forward(self, x, h_prev = None, c_prev = None):
+    def forward(self, x_t, h_prev = None, c_prev = None):
 
         if not h_prev == None:
             h_t = h_prev.clone()
             c_t = y_prev.clone()
         else:
-            h_t = torch.zeros(x.size(0), self.hidden_layer_size, dtype=torch.float).to(self.device)
-            c_t = torch.zeros(x.size(0), self.hidden_layer_size, dtype=torch.float).to(self.device)
+            h_t = torch.zeros(x_t.size(0), self.output_chan, dtype=torch.float).to(self.device)
+            c_t = torch.zeros(x_t.size(0), self.output_chan, dtype=torch.float).to(self.device)
 
-        input_tensor = torch.cat([h_t.transpose(0,1), x_t.transpose(0,1)], 1).transpose(0,1)
+        input_tensor = torch.cat([h_t, x_t], 1)
 
         f_t = torch.sigmoid(self.forget_gate_encoder(input_tensor))
         i_t = torch.sigmoid(self.input_gate_encoder(input_tensor))

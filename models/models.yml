@@ -1,4 +1,1086 @@
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131307_debugging_87_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131340_debugging_113_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131341_debugging_114_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131342_debugging_115_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131345_debugging_117_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_118_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131346_debugging_119_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131347_debugging_120_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131349_debugging_121_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131350_debugging_122_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_123_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131351_debugging_124_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131542_debugging_125_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131602_debugging_126_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131635_debugging_127_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131637_debugging_128_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131640_debugging_129_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131642_debugging_130_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131644_debugging_131_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131650_debugging_132_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131652_debugging_133_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131654_debugging_134_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131656_debugging_135_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131659_debugging_136_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131702_debugging_137_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131706_debugging_138_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131707_debugging_139_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131710_debugging_140_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131712_debugging_141_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131713_debugging_142_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131716_debugging_143_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131717_debugging_144_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn
+: load_path: ''
+  save_path: ''
+? /scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn
+: load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131720_debugging_145_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911131722_training_1_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_det_state_model_lstm_cg_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_det_state_model_lstm_fg_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_det_state_model_lstm_ig_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_det_state_model_lstm_og_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+/scr-ssd/sens_search_logging/models/201911140803_training_0_inital_testing/PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_det_state_model_lstm_cg_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_det_state_model_lstm_fg_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_det_state_model_lstm_ig_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_det_state_model_lstm_og_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_frc_dec_1ddeconv:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_frc_dec_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_frc_enc_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_hidden_enc_fcn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_img_dec_dcnn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_img_enc_cnn:
+  load_path: ''
+  save_path: ''
+PlaNet_Multimodal_trans_model_fcn:
+  load_path: ''
+  save_path: ''
 test_model:
-  save_path: ""
-  load_path: ""
-
+  load_path: ''
+  save_path: ''

@@ -9,9 +9,11 @@ import collections
 import random
 import numpy as np
 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Normal
 import torch.optim as optim
 import torch.autograd as autograd
 from torch.utils.data import Dataset, DataLoader
@@ -22,7 +24,10 @@ from tensorboardX import SummaryWriter
 from dataloader import *
 import yaml
 
+sys.path.insert(0, "../models/") 
+
 from models import *
+from losses import *
 from utils import *
 
 import matplotlib.pyplot as plt 
@@ -32,7 +37,7 @@ from shutil import copyfile
 
 ######### this model only supports ADAM for optimization at the moment
 class Trainer(object):
-	def __init__(self, models_folder, save_models_flag, device):
+	def __init__(self, cfg, models_folder, save_models_flag, device):
 
 		self.device = device
 
@@ -45,6 +50,9 @@ class Trainer(object):
 		beta_2 = cfg['training_params']['beta2']
 
 		self.info_flow = cfg['info_flow']
+		image_size = self.info_flow['dataset']['outputs']['image']
+		force_size =self.info_flow['dataset']['outputs']['force'] 
+		action_dim =self.info_flow['dataset']['outputs']['action'] 
 		self.batch_size = batch_size
 
 		### Initializing Model ####
@@ -57,13 +65,7 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["observation_encoder"] = Observations_Encoder(models_folder, "obs_enc").to(device) #### need to put in correct inputs)
-
-
-
-
-
-
+		self.model_dict["PlaNet_Multimodal"] = PlaNet_Multimodal(models_folder + "PlaNet_Multimodal", image_size, force_size, z_dim, action_dim, device = device).to(device) #### need to put in correct inputs)
 		###############################################
 		###### Code ends here ########################
 		################################################
@@ -80,9 +82,10 @@ class Trainer(object):
 		#  lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
 		
 		##### Common Loss Function ####
-		self.mse_loss = nn.MSELoss()
-		self.crent_loss = nn.CrossEntropyLoss()
-		self.bcrent_loss = nn.BCEWithLogitsLoss()
+		# self.mse_loss = Proto_Loss(nn.MSELoss(), "mean_square_error")
+		# self.crent_loss = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
+		# self.bcrent_loss = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
+		# self.kl_div = Gaussian_KL("kl_div")
 		# self.crent_loss = nn.CrossEntropyLoss(reduction = 'none')
 		# self.bcrent_loss = nn.BCEWithLogitsLoss(reduction = 'none')
 
@@ -90,15 +93,19 @@ class Trainer(object):
 		##### Declaring loss functions for every term in the training objective
 		##############################################
 		self.loss_dict = {}
-
-
-
+		self.loss_dict["MSE_image"] = Image_Reconstruction(nn.MSELoss(), "mean_square_error_image")
+		self.loss_dict["MSE_force"] = Proto_Loss(nn.MSELoss(), "mean_square_error_force")
+		self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
+		self.loss_dict["Binary_Cross_Ent"] = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
+		self.loss_dict["KL_DIV"] = Gaussian_KL("kl_div")
 		###################################
 		####### Code ends here ###########
 		####################################
 
 		##### Scalar Dictionary for logger #############
-		self.scalar_dict = {}
+		self.logging_dict = {}
+		self.logging_dict['scalar'] = {}
+		self.logging_dict['image'] = []
 
 	def train(self, sample_batched):
 		torch.enable_grad()
@@ -111,7 +118,7 @@ class Trainer(object):
 		loss.backward()
 		self.optimizer.step()
 
-		return self.scalar_dict
+		return self.logging_dict
 
 	def eval(self, sample_batched):
 		torch.no_grad()
@@ -120,7 +127,7 @@ class Trainer(object):
 
 		loss = self.forward_pass(sample_batched)
 
-		return self.scalar_dict
+		return self.logging_dict
 
 	def forward_pass(self, sample_batched):
 		####################################################################
@@ -134,24 +141,20 @@ class Trainer(object):
 		self.model_outputs['dataset'] = {}
 
 		for key in sample_batched.keys():
-			self.model_outputs['dataset'][key] = sample_batched[key]
+			self.model_outputs['dataset'][key] = sample_batched[key].to(self.device)
 
 		for key in self.model_dict.keys():
-
-			self.model_inputs[key] = []
+			self.model_inputs[key] = {}
 			
 			for input_key in self.info_flow[key]["inputs"].keys():
-				self.model_inputs[key].append(self.model_outputs[self.info_flow[key]["inputs"][input_key]][input_key])
+				input_source = self.info_flow[key]["inputs"][input_key]
 
-			model_outputs = self.model_dict[key](tuple(self.model_inputs[key]))
+				if input_key in self.model_outputs[input_source].keys():
+					self.model_inputs[key][input_key] = self.model_outputs[input_source][input_key]
+				else:
+					self.model_inputs[key][input_key] = None
 
-			output_index = 0
-
-			self.model_outputs[key] = {}
-
-			for output_key in self.info_flow[key]["outputs"].keys():
-				self.model_outputs[key][output_key] = model_outputs[output_index]
-				output_index += 1
+			self.model_outputs[key] = self.model_dict[key](self.model_inputs[key])
 
 		return self.loss()
 
@@ -160,18 +163,17 @@ class Trainer(object):
 		self.loss_inputs = {}
 
 		for idx, key in enumerate(self.info_flow['losses'].keys()):
-
 			self.loss_inputs[key] = []
+			for input_key in self.info_flow['losses'][key]['inputs'].keys():
+				input_source = self.info_flow['losses'][key]["inputs"][input_key]
+				self.loss_inputs[key].append(self.model_outputs[input_source][input_key])
 
-			for input_key in self.info_flow['losses'][key]['inputs']:
-
-				self.loss_inputs[key].append(self.model_outputs[self.info_flow[key]["inputs"][input_key]][input_key])
+			loss_function = self.loss_dict[self.info_flow['losses'][key]['loss']]
 
 			if idx == 0:
-				loss = self.loss_dict[key].loss(tuple(self.loss_inputs[key]), self.scalar_dict)
-
+				loss = loss_function.loss(tuple(self.loss_inputs[key]), self.logging_dict, self.info_flow['losses'][key]['weight'] )
 			else:
-				loss += self.loss_dict[key].loss(tuple(self.loss_inputs[key]), self.scalar_dict) 
+				loss += loss_function.loss(tuple(self.loss_inputs[key]), self.logging_dict, self.info_flow['losses'][key]['weight'] )
 
 		return loss
 

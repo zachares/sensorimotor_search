@@ -54,7 +54,7 @@ class GridworldEnv(discrete.DiscreteEnv):
                     # LEFT = 3 down one col
                     P_vals[idx_row, idx_col, idx_hrow] = np.random.uniform(0.0, 1.0, nA + 1)
 
-                    large_value = 9
+                    large_value = 18
 
                     if idx_col == 0 and idx_row == 0:
                         P_vals[idx_row, idx_col, idx_hrow, 0] = 0
@@ -99,6 +99,7 @@ class GridworldEnv(discrete.DiscreteEnv):
                     P_vals[idx_row, idx_col, idx_hrow] =   P_vals[idx_row, idx_col, idx_hrow] / P_vals[idx_row, idx_col, idx_hrow].sum()                 
 
         P = {}
+        self.P_vals = P_vals
         grid = np.arange(nS).reshape(shape)
         it = np.nditer(grid, flags=['multi_index'])
 

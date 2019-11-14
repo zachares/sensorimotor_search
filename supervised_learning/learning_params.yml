@@ -1,10 +1,11 @@
 model_params:
-  z_dim: 10
+  z_dim: 128
 
 dataloading_params:
-  dataset_path: "/scr2/gg_rl/goalset_triangles/goal_set.h5"
-  num_workers: 0
+  dataset_path: "/scr2/dataset_senssearch/"
+  num_workers: 6
   batch_size: 128
+  saved_dataset_split: ""
 
 training_params:
   seed: 1234
@@ -18,7 +19,7 @@ training_params:
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_description: "debugging" #Options include: debugging, training, testing
+  run_description: "training" #Options include: debugging, training, testing
   run_notes: "_inital_testing"
 
 debugging_params:
@@ -28,12 +29,43 @@ debugging_params:
 info_flow:
   dataset:
     outputs:
-      image: (128, 128, 3)
-      force: (6, 36)
-      action: (3)
-  observation_encoder:
+      image: [3, 128, 128]
+      force: [6]
+      action: [6]
+      image_fut: [3, 128, 128]
+      force_fut: [6]
+  PlaNet_Multimodal:
     inputs:
-      image: dataset
-      forces: dataset
+      image: "dataset"
+      force: "dataset"
+      image_fut: "dataset"
+      force_fut: "dataset"
+      action: "dataset"
+      rnn_state: "dataset"
+      z: "dataset"
     outputs:
-      z: (128)
+      params: tuple
+      rnn_state: tuple
+      z: 128
+      image_pred: [3, 128, 128]
+      force_pred: 6
+  losses:
+    image_rec:
+      inputs:
+        image_pred: "PlaNet_Multimodal"
+        image_fut: "dataset"
+      loss: "MSE_image"
+      weight: 0.0001
+    force_rec:
+      inputs:
+        force_pred: "PlaNet_Multimodal"
+        force_fut: "dataset"
+      loss: "MSE_force"
+      weight: 1.0
+    kl_div:
+      inputs:
+        params: "PlaNet_Multimodal"
+      loss: "KL_DIV"
+      weight: 0.00005
+
+

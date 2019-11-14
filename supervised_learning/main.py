@@ -4,6 +4,7 @@ import sys
 import time
 import datetime
 
+
 import argparse
 import collections
 import random
@@ -19,11 +20,15 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torchvision import transforms, utils
 
 from tensorboardX import SummaryWriter
-from trainer import Trainer
-from logger import Logger
+
 from dataloader import *
 import yaml
 
+sys.path.insert(0, "../models/") 
+sys.path.insert(0, "../datalogging/") 
+
+from trainer import Trainer
+from logger import Logger
 from models import *
 from utils import *
 
@@ -43,7 +48,7 @@ if __name__ == '__main__':
     debugging_val = cfg['debugging_params']['debugging_val']
     save_model_val = cfg['debugging_params']['save_model_val']
 
-    z_dim = cfg["model_params"]["model_1"]["z_dim"]
+    z_dim = cfg["model_params"]["z_dim"]
     use_cuda = cfg['training_params']['use_GPU'] and torch.cuda.is_available()
 
     seed = cfg['training_params']['seed']
@@ -114,7 +119,7 @@ if __name__ == '__main__':
     ##################################################################################
     #### Training tool to train and evaluate neural networks
     ##################################################################################
-    trainer = Trainer(cfg, logger.models_folder, save_models_flag, device)
+    trainer = Trainer(cfg, logger.models_folder, save_model_flag, device)
 
     ##################################################################################
     #### Dataset creation function
@@ -127,21 +132,26 @@ if __name__ == '__main__':
     ##################################################################################
     global_cnt = 0
     val_global_cnt = 0
-
+    prev_time = time.time()
     for i_epoch in range(max_epoch):
+        current_time = time.time()
+
+        if i_epoch != 0:
+            print("Epoch took ", current_time - prev_time, " seconds")
+            prev_time = time.time()
+
         print('Training epoch #{}...'.format(i_epoch))
         
         for i_iter, sample_batched in enumerate(data_loader):
 
-            if global_cnt % 500 == 0:
-                print(global_cnt, " Updates to the model have been performed ")
-
-            scalar_dict = trainer.train(sample_batched)
-
-            logger.save_scalars(scalar_dict, global_cnt, 'train/')
-
+            logging_dict = trainer.train(sample_batched)
             global_cnt += 1
 
+            if global_cnt % 50 == 0 or global_cnt == 1:
+                print(global_cnt, " Updates to the model have been performed ")
+                logger.save_images2D(logging_dict, global_cnt, 'train/')
+
+            logger.save_scalars(logging_dict, global_cnt, 'train/')
         ##################################################################################
         ##### Validation #########
         ##################################################################################
@@ -152,24 +162,25 @@ if __name__ == '__main__':
 
             for i_iter, sample_batched in enumerate(val_data_loader):
 
-                scalar_dict= trainer.eval(sample_batched)
+                logging_dict= trainer.eval(sample_batched)
 
-                logger.save_scalars(scalar_dict, val_global_cnt, 'val/')
+                logger.save_scalars(logging_dict, val_global_cnt, 'val/')
 
                 val_global_cnt += 1
+
+            logger.save_images2D(logging_dict, val_global_cnt, 'val/')
 
         ###############################################
         ##### Saving models every epoch ################
         ##############################################
-        trainer.save(i_epoch)
-
         if save_model_flag and i_epoch == 0:
             print("Saving Models")
             if os.path.isdir(logger.models_folder) == False:
                 os.mkdir(logger.models_folder)
 
-            trainer.save_models(logger.models_folder, i_epoch)
+            trainer.save(i_epoch)
 
         elif save_model_flag:
             print("Saving Models")
 
+            trainer.save(i_epoch)

@@ -22,6 +22,8 @@ from tensorboardX import SummaryWriter
 from dataloader import *
 import yaml
 
+sys.path.insert(0, "../datalogging/") 
+
 from models import *
 from utils import *
 
@@ -30,16 +32,13 @@ from shutil import copyfile
 
 
 class Logger(object):
-
 	def __init__(self, cfg, debugging_flag, device):
-
 		self.debugging_flag = debugging_flag
 
 		run_description = cfg['logging_params']['run_description'] 
 
-
 		##### Code to keep track of runs during a day and create a unique path for logging each run
-		with open("run_tracking.yml", 'r+') as ymlfile1:
+		with open("../datalogging/run_tracking.yml", 'r+') as ymlfile1:
 			load_cfg = yaml.safe_load(ymlfile1)
 
 		t_now = time.time()
@@ -58,7 +57,7 @@ class Logger(object):
 			load_cfg['run_tracker']['training'] = 0        
 			load_cfg['run_tracker']['testing'] = 0
 
-		with open("run_tracking.yml", 'r+') as ymlfile1:
+		with open("../datalogging/run_tracking.yml", 'r+') as ymlfile1:
 			yaml.dump(load_cfg, ymlfile1)
 
 
@@ -95,34 +94,24 @@ class Logger(object):
 
 			self.save_dict("config_params", cfg)
 
-	def save_scalars(self, scalar_dict, iteration, label):
+	def save_scalars(self, logging_dict, iteration, label):
+		if self.debugging_flag == False and len(logging_dict.keys()) != 0:
 
-		if self.debugging_flag == False and len(scalar_dict.keys()) != 0:
-
-			for key in scalar_dict.keys():
-				self.writer.add_scalar(label + key, scalar_dict[key], iteration)
+			for key in logging_dict['scalar'].keys():
+				self.writer.add_scalar(label + key, logging_dict['scalar'][key], iteration)
 
 	def save_dict(self, name, dictionary):
-
 		if self.debugging_flag == False:
 			with open(self.runs_folder + name + ".yml", 'w') as ymlfile2:
 				yaml.dump(dictionary, ymlfile2)
 
-	# def save_images1D(self, image_list, image_label, iteration, label):
+	def save_images2D(self, logging_dict, iteration, label):
+		image_list = logging_dict['image']
 
-	# 	#assumes all images are the same size
-	# 	## needs work to standardize image size to give to writer
-	# 	if self.debugging_flag == False and len(image_list) != 0:
+		if len(image_list) != 0:
+			for idx, image in enumerate(image_list):
+				image_list[idx] = image.detach().cpu().numpy()
 
-	# 		upsampled_image_list = []
+			image_array = np.rot90(np.concatenate(image_list, axis = 1), k = 3, axes=(1,2)).astype(np.uint8)
 
-	# 		for image in image_list:
-	# 			upsampled_image_list.append(np.repeat(np.expand_dims(np.repeat(np.repeat(fut_fb[image_index].cpu().detach().numpy(), 20, axis = 0)\
-	# 			, 20, axis = 1), axis = 0), 3, axis = 0))
-
-	# 			concat_image = np.concatenate(upsampled_image_list, 2)
-
-	# 			full_label = label + image_label
-
-	# 			self.writer.add_image(full_label, concat_image, iteration)
-
+			self.writer.add_image(label + 'predicted_image', image_array, iteration)

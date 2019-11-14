@@ -23,20 +23,18 @@ class H5_DataLoader(Dataset):
     ### h5py file type dataloader dataset ###
 
     def __init__(self, filename_list, loading_dict, val_ratio, idx_dict = None, device = None, transform=None):
-
         self.device = device
         self.transform = transform
         self.loading_dict = loading_dict
         self.filename_list = filename_list
 
-        self.val_bool = None
+        self.val_bool = False
         self.val_ratio = val_ratio
 
         self.train_length = 0
         self.val_length = 0
 
-        if idx_dict = None:
-
+        if idx_dict == None:
             self.idx_dict = {}
             self.idx_dict['val'] = {}
             self.idx_dict['train'] = {}
@@ -45,7 +43,7 @@ class H5_DataLoader(Dataset):
             for idx, filename in enumerate(filename_list):
                 dataset = self.load_file(filename)
 
-                dataset_length = np.array(self.dataset[loading_dict.keys()[0]]).shape[0]
+                dataset_length = np.array(dataset[list(loading_dict.keys())[0]]).shape[0]
 
                 for dataset_idx in range(dataset_length):
 
@@ -56,7 +54,6 @@ class H5_DataLoader(Dataset):
                         self.train_length += 1  
 
                     else:
-
                         self.idx_dict['val'][self.val_length] = (filename, dataset_idx) 
                         self.val_length += 1                         
 
@@ -68,29 +65,23 @@ class H5_DataLoader(Dataset):
             self.val_length = len(self.idx_dict['val'].keys())
 
     def __len__(self):      
-
         if self.val_bool:
             return self.val_length
         else:
             return self.train_length
 
     def __getitem__(self, idx):
-
-        if val_bool:
+        if self.val_bool:
             dataset = self.load_file(self.idx_dict['val'][idx][0])
             curr_idx = self.idx_dict['val'][idx][1] 
         else:
             dataset = self.load_file(self.idx_dict['train'][idx][0])
             curr_idx = self.idx_dict['train'][idx][1] 
-         
+        
         sample = {}
 
-        for key in self.loading_dict:
-
-            if self.loading_dict[key] == 0;
-                sample[key] = np.array([np.array(dataset[key])[curr_idx]])
-            else:
-                sample[key] = np.array(dataset[key])[curr_idx]
+        for key in self.loading_dict.keys():
+            sample[key] = np.array(dataset[key])[curr_idx]
 
         dataset.close()
 
@@ -113,18 +104,14 @@ class ToTensor(object):
         # convert numpy arrays to pytorch tensors
         new_dict = dict()
         for k, v in sample.items():
-            if self.device == None:
-                new_dict[k] = torch.FloatTensor(v)
-            else:
-                new_dict[k] = torch.from_numpy(v).float().to(self.device)
-
+            new_dict[k] = torch.from_numpy(v).float()
         return new_dict
 
 def init_dataloader(cfg, device):
     ###############################################
     ########## Loading dataloader parameters ######
     ###############################################
-    dataset_path = cfg['dataloading_params']['logging_folder']
+    dataset_path = cfg['dataloading_params']['dataset_path']
     num_workers = cfg['dataloading_params']['num_workers']
     batch_size = cfg['dataloading_params']['batch_size']
 
@@ -132,7 +119,7 @@ def init_dataloader(cfg, device):
 
     run_description = cfg['logging_params']['run_description']
 
-    sample_keys = cfg['dataloading_params']['sample_keys']
+    sample_keys = cfg['info_flow']['dataset']['outputs']
 
     saved_dataset_split = cfg['dataloading_params']['saved_dataset_split']
 
@@ -159,6 +146,9 @@ def init_dataloader(cfg, device):
 
         idx_dict = cfg_dataloader['idx_dict']
 
+    else:
+        idx_dict = None
+
     dataset = H5_DataLoader(filename_list, sample_keys, val_ratio, idx_dict = idx_dict, device = device, transform=transforms.Compose([ToTensor(device = device)]))
 
     if val_ratio == 0:
@@ -180,5 +170,5 @@ def init_dataloader(cfg, device):
         val_sampler = SubsetRandomSampler(range(val_dataset.__len__()))
         val_data_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers, sampler= val_sampler, pin_memory = True)
 
-    return data_loader, val_data_loader, dataloader.idx_dict
+    return data_loader, val_data_loader, dataset.idx_dict
 

@@ -6,15 +6,25 @@ from gym.envs.toy_text import discrete
 from scipy.special import softmax
 from gridworld import GridworldEnv
 
+def KL_div(p, q):
+
+	p_idx = np.argwhere(p.flatten() > 0)
+
+	p_dis = p.flatten()[p_idx]
+	q_dis = q.flatten()[p_idx]
+
+	q_idx = np.argwhere(q_dis.flatten() > 0)
+
+	p_dis0 = p_dis[q_idx]
+	q_dis0 = q_dis[q_idx]
+
+	return - (p_dis0 * np.log(q_dis0 / p_dis0)).sum()
+
 class Entropy_Minimizer(object):
 
-	def __init__(self, dyn_1, dyn_2, dyn_3):
+	def __init__(self, dyn):
 
-		self.dyn = []
-		self.dyn.append(dyn_1)
-		self.dyn.append(dyn_2)
-		self.dyn.append(dyn_3)
-
+		self.dyn = dyn
 		self.nD = len(self.dyn)
 		self.nA = 4
 		self.T = 40
@@ -23,20 +33,27 @@ class Entropy_Minimizer(object):
 
 		self.nIter = 40
 
-	def optimize(self, state):
+	def optimize(self, state, trajectory):
 
 		self.min_entropy = np.inf
-		# print("Initial Minimum Entropy Estimate: ", self.min_entropy)
+
+		if len(trajectory) != 0:
+			prob_tau_old = self.calc_prob_tau_from_trajectory(trajectory)
 
 		for idx_trial in range(self.nIter):
 			action_sequences = self.generate_action_sequence()
-			entropy_array = self.min_entropy * np.ones(self.nS)
+			entropy_array = np.ones(self.nS)
 
 			for idx_sample in range(self.nS):
 
 				action_sequence = action_sequences[idx_sample]
 
-				prob_tau = self.calc_prob_tau(state, action_sequence)
+				if len(trajectory) == 0:
+					prob_tau = self.calc_prob_tau(state, action_sequence)
+
+				else: 
+					prob_tau_new = self.calc_prob_tau(state, action_sequence)
+					prob_tau = np.concatenate((prob_tau_old, prob_tau_new), axis = 1)
 
 				prob_dyn_tau = self.calc_prob_dyn(prob_tau)
 
@@ -47,22 +64,11 @@ class Entropy_Minimizer(object):
 					best_probs = prob_dyn_tau
 					best_action_sequence = action_sequence
 
-		# print("Final Minimum Entropy Estimate: ", self.min_entropy)
-
-		# print("Estimated Probabilities of Action Sequence: ", best_probs)
-
 		return best_action_sequence
-
 
 	def generate_action_sequence(self):
 
-		action_sequences = np.zeros((self.nS, self.T))
-
-		for idx in range(self.nS):
-			for idx_traj in range(self.T):
-				action_sequences[idx, idx_traj] = np.random.choice([0,1,2,3])
-
-		return action_sequences
+		return np.random.choice([0,1,2,3], size=(self.nS, self.T))
 
 	def calc_prob_tau(self, state, action_sequence):
 
@@ -88,7 +94,6 @@ class Entropy_Minimizer(object):
 
 		# print(prob_tau)
 
-		# a = input("")
 		log_prob_tau_dyn = np.zeros(prob_tau.shape[0])
 		prob_dyn = np.array([1/self.nD])
 
@@ -97,22 +102,10 @@ class Entropy_Minimizer(object):
 			######################
 			# Add code incase transition probability is zero for a specific action
 			######################
-			# if np.count_nonzero(prob_tau[idx]):
-			# 	print("This happened")
-			# 	log_prob_tau_dyn[idx] = -np.inf
-
-
-
 			log_prob_tau_dyn[idx] =  np.log(prob_tau[idx]).sum()
 
-		# print(np.exp(log_prob_tau_dyn))
-		# print(np.exp(log_prob_tau_dyn).sum())
-		# a = input("")
+		log_prob_dyn_tau = log_prob_tau_dyn - np.log(np.exp(log_prob_tau_dyn).sum())
 
-		log_prob_dyn_tau = log_prob_tau_dyn + np.log(1/self.nD) - np.log(np.exp(log_prob_tau_dyn).sum())
-
-		# print(np.exp(log_prob_dyn_tau))
-		# a = input("")
 
 		return np.exp(log_prob_dyn_tau)
 
@@ -143,7 +136,7 @@ class Entropy_Minimizer(object):
 				return prob
 		return 0
 
-	def calc_prod_dyn_from_trajectory(self, trajectory):
+	def calc_prob_tau_from_trajectory(self, trajectory):
 
 		prob_tau = np.zeros((self.nD, len(trajectory)))
 
@@ -151,39 +144,62 @@ class Entropy_Minimizer(object):
 			for idx_traj in range(len(trajectory)):
 				prob_tau[idx_dyn, idx_traj] = self.trans_prob(trajectory[idx_traj], self.dyn[idx_dyn])
 
+		return prob_tau
+
+	def calc_prod_dyn_from_trajectory(self, trajectory):
+
+		prob_tau = self.calc_prob_tau_from_trajectory(trajectory)
+
 		return self.calc_prob_dyn(prob_tau)
 
 if __name__ == '__main__':
 
-    env_1 = GridworldEnv()
-    env_2 = GridworldEnv()
-    env_3 = GridworldEnv()
-    env_4 = GridworldEnv()
-    env_5 = GridworldEnv()
+	num_envs = 3
+	envs = []
+	envs_P = []
 
-    dyn_count = np.zeros(3)
+	for idx in range(num_envs):
+		envs.append(GridworldEnv())
+		envs_P.append(envs[-1].P)
 
-    for idx in range(30):
-	    optimizer = Entropy_Minimizer(env_4.P, env_2.P, env_5.P)
+	envs_idx = 2
+	
+	optimizer = Entropy_Minimizer(envs_P)
+	
+	prob_dyn = np.zeros(num_envs)
+	kl_div = np.zeros(num_envs)
 
-	    action_sequence = optimizer.optimize(env_1.s)
+	for idx in range(num_envs):
+		kl_div[idx] = KL_div(envs[envs_idx].P_vals, envs[idx].P_vals)
 
-	    trajectory = []
+	iter_count = 0
+	
+	trajectory = []
 
-	    for idx_act in range(action_sequence.shape[0]):
+	while(prob_dyn.max() < 0.95):
 
-	    	state = env_2.s
-	    	action = action_sequence[idx_act]
-	    	next_state, r, d, p = env_2.step(action)
-	    	trajectory.append((next_state, action, state))
+		if (iter_count + 1) % 10 == 0:
+			print("Number of iterations of action: ", iter_count + 1)
+			print("Results of Estimation:  ", np.round(100 * prob_dyn))
 
-	    prob_dyn = optimizer.calc_prod_dyn_from_trajectory(trajectory)
+		state = envs[envs_idx].s
 
-	    dyn_count[prob_dyn.argmax()] += 1
+		action_sequence = optimizer.optimize(state, trajectory)
+
+		action = action_sequence[0]
+
+		next_state, r, d, p = envs[envs_idx].step(action)
+
+		trajectory.append((next_state, action, state))
+
+		prob_dyn = optimizer.calc_prod_dyn_from_trajectory(trajectory)
+
+		iter_count += 1
+
+	print("KL Divergence between chosen dynamics and other dynamics: ", kl_div)
+	print("Results of Estimation:  ", np.round(100 * prob_dyn))
+	print("Correct Dynamics are: ", envs_idx)
+	print("Estimated Dynamics are: ", prob_dyn.argmax())
+	print("Number of Iterations till Convergence: ", iter_count)
 
 
-    print("Estimate of Correct Dynamics Model: ")
-    print(dyn_count.argmax())
-    print("Probabilities of Dynamics Model: ")
-    print(np.round(100 *dyn_count/dyn_count.sum()))
-    print("")
