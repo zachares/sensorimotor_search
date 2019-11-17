@@ -52,7 +52,8 @@ class Trainer(object):
 		self.info_flow = cfg['info_flow']
 		image_size = self.info_flow['dataset']['outputs']['image']
 		force_size =self.info_flow['dataset']['outputs']['force'] 
-		action_dim =self.info_flow['dataset']['outputs']['action'] 
+		action_dim =self.info_flow['dataset']['outputs']['action']
+		z_dim = cfg["model_params"]["z_dim"] 
 		self.batch_size = batch_size
 
 		### Initializing Model ####
@@ -60,12 +61,11 @@ class Trainer(object):
 		self.model_dict = {}
 		self.model_inputs = {}
 		self.model_outputs = {}
-
 		###############################################
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["PlaNet_Multimodal"] = PlaNet_Multimodal(models_folder + "PlaNet_Multimodal", image_size, force_size, z_dim, action_dim, device = device).to(device) #### need to put in correct inputs)
+		self.model_dict["PlaNet_Multimodal"] = PlaNet_Multimodal(models_folder + "PlaNet_Multimodal", image_size, force_size, z_dim, action_dim, device = device).to(device)
 		###############################################
 		###### Code ends here ########################
 		################################################
@@ -93,11 +93,11 @@ class Trainer(object):
 		##### Declaring loss functions for every term in the training objective
 		##############################################
 		self.loss_dict = {}
-		self.loss_dict["MSE_image"] = Image_Reconstruction(nn.MSELoss(), "mean_square_error_image")
-		self.loss_dict["MSE_force"] = Proto_Loss(nn.MSELoss(), "mean_square_error_force")
-		self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
-		self.loss_dict["Binary_Cross_Ent"] = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
-		self.loss_dict["KL_DIV"] = Gaussian_KL("kl_div")
+		self.loss_dict["MSE_image"] = Image_Reconstruction_MultiStep(nn.MSELoss(), "mean_square_error_image")
+		self.loss_dict["MSE_force"] = MSE_MultiStep(nn.MSELoss(), "mean_square_error_force")
+		self.loss_dict["KL_DIV"] = Gaussian_KL_MultiStep("kl_div")
+		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
+		# self.loss_dict["Binary_Cross_Ent"] = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
 		###################################
 		####### Code ends here ###########
 		####################################

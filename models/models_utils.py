@@ -202,48 +202,6 @@ class Flatten(nn.Module):
     def forward(self, input):
         return input.view(input.size(0), -1)
 
-#### automating model logging process
-class Model_Logger(object):
-
-    def __init__(self, model_name):
-
-        self.model_name = model_name
-
-        with open("../models/models.yml", 'r') as ymlfile1:
-            cfg = yaml.safe_load(ymlfile1)
-
-        if self.model_name not in cfg.keys():
-            cfg[self.model_name] = {}
-            cfg[self.model_name]['save_path'] = ""
-            cfg[self.model_name]['load_path'] = ""
-
-            with open("../models/models.yml", 'r+') as ymlfile2:
-                yaml.dump(cfg, ymlfile2)
-
-    def save_path(self):
-
-        with open("../models/models.yml", 'r') as ymlfile1:
-            cfg = yaml.safe_load(ymlfile1)
-
-        return cfg[self.model_name]['save_path']
-
-    def load_path(self):
-
-        with open("../models/models.yml", 'r') as ymlfile1:
-            cfg = yaml.safe_load(ymlfile1)
-
-        return cfg[self.model_name]['load_path']
-
-    def save(self, path):
-
-        with open("../models/models.yml", 'r') as ymlfile1:
-            cfg = yaml.safe_load(ymlfile1)
-
-        cfg[self.model_name]['load_path'] = path
-
-        with open("../models/models.yml", 'r+') as ymlfile2:
-            yaml.dump(cfg, ymlfile2)
-
 #########################################
 # Current Model Types Supported 
 ########################################
@@ -261,7 +219,6 @@ class Proto_Model(nn.Module):
         super().__init__()
         self.model = None
         self.model_name = model_name
-        self.model_logger = Model_Logger(self.model_name)
     
     def forward(self, input):
         return self.model(input)
@@ -273,24 +230,15 @@ class Proto_Model(nn.Module):
         return [param for name, param in self.named_parameters() if 'bias' in name]
 
     def save(self, epoch_num):
-        save_path = self.model_name
-        
-        if save_path != "":
-            ckpt_path = '{}_{}'.format(save_path, epoch_num)
-            print(ckpt_path)
-            torch.save(self.model.state_dict(), ckpt_path)
-            # self.model_logger.save(ckpt_path)
+        ckpt_path = '{}_{}'.format(self.model_name, epoch_num)
+        print("Saved Model to: ", ckpt_path)
+        torch.save(self.model.state_dict(), ckpt_path)
 
-    def load(self, path = ""):
-
-        if path == "":
-            load_path = self.model_logger.load_path()
-        else:
-            load_path = path
-
-        if load_path != "":
-            ckpt = torch.load(load_path)
-            self.model.load_state_dict(ckpt)
+    def load(self, epoch_num):
+        ckpt_path = '{}_{}'.format(self.model_name, epoch_num)
+        ckpt = torch.load(load_path)
+        self.model.load_state_dict(ckpt)
+        print("Loaded Model to: ", ckpt_path)
 
 #### a convolutional network
 class CONV2DN(Proto_Model):
@@ -345,8 +293,6 @@ class CONV2DN(Proto_Model):
 
         self.model = nn.Sequential(*layer_list)
 
-        self.load()
-
         # -----------------------
         # weight initialization
         # -----------------------
@@ -394,8 +340,6 @@ class DECONV2DN(Proto_Model):
             layer_list.append(nn.LeakyReLU(0.1, inplace = True))
 
         self.model = nn.Sequential(*layer_list)
-
-        self.load()
 
         # -----------------------
         # weight initialization
@@ -465,8 +409,6 @@ class CONV1DN(Proto_Model):
 
         self.model = nn.Sequential(*layer_list)
 
-        self.load()
-
 #### a 1D deconvolutional network
 class DECONV1DN(Proto_Model):
     def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, device = None):
@@ -503,11 +445,7 @@ class DECONV1DN(Proto_Model):
 
             layer_list.append(nn.LeakyReLU(0.1, inplace = True))
 
-
         self.model = nn.Sequential(*layer_list)
-
-        self.load()
-
 
     def forward(self, rep):
         assert rep.size()[1] == self.input_size[0], "input channel dim does not match network requirements"
@@ -567,9 +505,6 @@ class FCN(Proto_Model):
                     layer_list.append(nn.LeakyReLU(0.1, inplace = True))
 
         self.model = nn.Sequential(*layer_list)
-
-        self.load()
-
 ######################################
 # Current Macromodel Types Supported
 #####################################
@@ -594,13 +529,9 @@ class Proto_Macromodel(nn.Module):
         for model in self.model_list:
             model.save(epoch_num)
 
-    def load(self, path_dict = {}):
-        if len(path_dict.keys()) != 0:
-            for model in self.model_list:
-                model.load(path_dict[model.model_name])
-        else:
-            for model in self.model_list:
-                model.load()
+    def load(self, epoch_num):
+        for model in self.model_list:
+            model.load(epoch_num)
 
 #### a long short-term memory network
 class LSTM(Proto_Macromodel):
@@ -653,9 +584,9 @@ class LSTM(Proto_Macromodel):
 
     def forward(self, x_t, h_prev = None, c_prev = None):
 
-        if not h_prev == None:
+        if h_prev is not None:
             h_t = h_prev.clone()
-            c_t = y_prev.clone()
+            c_t = c_prev.clone()
         else:
             h_t = torch.zeros(x_t.size(0), self.output_chan, dtype=torch.float).to(self.device)
             c_t = torch.zeros(x_t.size(0), self.output_chan, dtype=torch.float).to(self.device)
@@ -684,11 +615,8 @@ class LSTM(Proto_Macromodel):
 # 1. init - initializes the network with the inputs requested by the user
 # 3. save - saves the model
 # 4. load - loads a model if there is a nonempty path corresponding to that model in the yaml file
-
 class Params(object):
-
     def __init__(self, model_name, size, device, init_values = None):
-
         self.device = device
 
         if init_values == None:
@@ -699,25 +627,18 @@ class Params(object):
 
         self.model_name = model_name + "_params"
 
-        self.model_logger = Model_Logger(self.model_name)
-
         self.load()
 
     def save(self, epoch_num):
-        save_path = self.model_logger.save_path()
+        ckpt_path = '{}_{}.{}'.format(self.model_name, epoch_num, "pt")
+        torch.save(self.parameters, ckpt_path)
+        self.model_logger.save(ckpt_path)
+        print("Saved Model to: ", ckpt_path)
 
-        if save_path != "":
-            ckpt_path = '{}_{}.{}'.format(save_path, epoch_num, "pt")
-            torch.save(self.parameters, ckpt_path)
-            self.model_logger.save(ckpt_path)
+    def load(self, epoch_num):
+        ckpt_path = '{}_{}.{}'.format(self.model_name, epoch_num, "pt")
+        ckpt = torch.load(ckpt_path)
+        self.model.load_state_dict(ckpt)
+        print("Loaded Model to: ", ckpt_path)
 
-    def load(self, path = ""):
-        if path == "":
-            load_path = self.model_logger.load_path()
-        else:
-            load_path = path
-
-        if load_path != "":
-            ckpt = torch.load(load_path)
-            self.model.load_state_dict(ckpt)
 

@@ -21,12 +21,12 @@ from torchvision import transforms, utils
 
 class H5_DataLoader(Dataset):
     ### h5py file type dataloader dataset ###
-
-    def __init__(self, filename_list, loading_dict, val_ratio, idx_dict = None, device = None, transform=None):
+    def __init__(self, filename_list, loading_dict, val_ratio, num_steps = 1, idx_dict = None, device = None, transform=None):
         self.device = device
         self.transform = transform
         self.loading_dict = loading_dict
         self.filename_list = filename_list
+        self.num_steps = num_steps
 
         self.val_bool = False
         self.val_ratio = val_ratio
@@ -42,22 +42,32 @@ class H5_DataLoader(Dataset):
             #### assumes one dataset per file
             for idx, filename in enumerate(filename_list):
                 dataset = self.load_file(filename)
-
-                dataset_length = np.array(dataset[list(loading_dict.keys())[0]]).shape[0]
+                traj_nums = np.array(dataset['traj_num'])
+                dataset_length = traj_nums.shape[0]
 
                 for dataset_idx in range(dataset_length):
+                    min_idx = dataset_idx
+                    max_idx = dataset_idx + self.num_steps + 1
+
+                    if max_idx >= dataset_length or (traj_nums[min_idx] != traj_nums[max_idx]):
+                        continue
 
                     train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
 
                     if train_val_bool == 1:
-                        self.idx_dict['train'][self.train_length] = (filename, dataset_idx) 
+                        self.idx_dict['train'][self.train_length] = (filename, (min_idx, max_idx)) 
                         self.train_length += 1  
 
                     else:
-                        self.idx_dict['val'][self.val_length] = (filename, dataset_idx) 
+                        self.idx_dict['val'][self.val_length] = (filename, (min_idx, max_idx)) 
                         self.val_length += 1                         
 
                 dataset.close()
+
+            print("Total data points: ", self.train_length + self.val_length)
+            print("Total training points: ", self.train_length)
+            print("Total validation points: ", self.val_length)
+
         else:
             self.idx_dict = idx_dict
 
@@ -73,15 +83,18 @@ class H5_DataLoader(Dataset):
     def __getitem__(self, idx):
         if self.val_bool:
             dataset = self.load_file(self.idx_dict['val'][idx][0])
-            curr_idx = self.idx_dict['val'][idx][1] 
+            idx_bounds = self.idx_dict['val'][idx][1] 
         else:
             dataset = self.load_file(self.idx_dict['train'][idx][0])
-            curr_idx = self.idx_dict['train'][idx][1] 
+            idx_bounds = self.idx_dict['train'][idx][1] 
         
         sample = {}
 
         for key in self.loading_dict.keys():
-            sample[key] = np.array(dataset[key])[curr_idx]
+            if key == "action":
+                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1] - 1]                
+            else:
+                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1]]
 
         dataset.close()
 
@@ -114,6 +127,7 @@ def init_dataloader(cfg, device):
     dataset_path = cfg['dataloading_params']['dataset_path']
     num_workers = cfg['dataloading_params']['num_workers']
     batch_size = cfg['dataloading_params']['batch_size']
+    num_steps = cfg['dataloading_params']['num_steps']
 
     val_ratio = cfg['training_params']['val_ratio']
 
@@ -149,7 +163,7 @@ def init_dataloader(cfg, device):
     else:
         idx_dict = None
 
-    dataset = H5_DataLoader(filename_list, sample_keys, val_ratio, idx_dict = idx_dict, device = device, transform=transforms.Compose([ToTensor(device = device)]))
+    dataset = H5_DataLoader(filename_list, sample_keys, val_ratio, num_steps = num_steps, idx_dict = idx_dict, device = device, transform=transforms.Compose([ToTensor(device = device)]))
 
     if val_ratio == 0:
         print("No validation set")

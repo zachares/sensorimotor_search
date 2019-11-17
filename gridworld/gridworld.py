@@ -30,17 +30,22 @@ class GridworldEnv(discrete.DiscreteEnv):
 
     metadata = {'render.modes': ['human', 'ansi']}
 
-    def __init__(self, shape=[4,4]):
+    def __init__(self, shape=[100,100]):
         if not isinstance(shape, (list, tuple)) or not len(shape) == 2:
             raise ValueError('shape argument must be a list/tuple of length 2')
 
         self.shape = shape
 
         nS = np.prod(shape) #number of states
+        self.nS = nS
         nA = 4
 
         MAX_Y = shape[0]
         MAX_X = shape[1]
+
+        self.goal = (np.random.choice(shape[0]), np.random.choice(shape[1]))
+        self.goals = self.goal[0] * MAX_X + self.goal[1]
+
 
         P_vals = np.zeros((shape[0], shape[1], nA, nA + 1))
 
@@ -54,9 +59,13 @@ class GridworldEnv(discrete.DiscreteEnv):
                     # LEFT = 3 down one col
                     P_vals[idx_row, idx_col, idx_hrow] = np.random.uniform(0.0, 1.0, nA + 1)
 
-                    large_value = 18
+                    large_value = 9
 
-                    if idx_col == 0 and idx_row == 0:
+                    if idx_row == self.goal[0] and idx_col == self.goal[1]:
+                        P_vals[idx_row, idx_col, idx_hrow] = np.zeros(nA + 1)
+                        P_vals[idx_row, idx_col, idx_hrow, 4] = 1
+
+                    elif idx_col == 0 and idx_row == 0:
                         P_vals[idx_row, idx_col, idx_hrow, 0] = 0
                         P_vals[idx_row, idx_col, idx_hrow, 3] = 0                                               
                         P_vals[idx_row, idx_col, idx_hrow, idx_hrow] = large_value / 2
@@ -110,8 +119,19 @@ class GridworldEnv(discrete.DiscreteEnv):
             # P[s][a] = (prob, next_state, reward, is_done)
             P[s] = {a : [] for a in range(nA)}
 
-            is_done = lambda s: s == 0 or s == (nS - 1)
-            reward = 0.0 if is_done(s) else -1.0
+            def is_done(s):
+                y, x = self.s2yx(s)
+
+                if y == self.goal[0] and x == self.goal[1]:
+                    return True
+                else:
+                    return False
+
+            def reward(s):
+                if is_done(s):
+                    return 0
+                else:
+                    return -1
 
             ns_up = s if y == 0 else s - MAX_X
             ns_right = s if x == (MAX_X - 1) else s + 1
@@ -123,7 +143,9 @@ class GridworldEnv(discrete.DiscreteEnv):
             for idx_act in range(nA):
                 for idx_dyn in range(nA + 1):
                     if P_vals[y, x, idx_act, idx_dyn] != 0:
-                        P[s][idx_act].append((P_vals[y, x, idx_act, idx_dyn], s_trans[idx_dyn], reward, is_done(s_trans[idx_dyn])))
+                        if P_vals[y, x, idx_act, idx_dyn] == 0:
+                            continue
+                        P[s][idx_act].append((P_vals[y, x, idx_act, idx_dyn], s_trans[idx_dyn], reward(s), is_done(s_trans[idx_dyn])))
                 # P[s][UP] = [(1.0, ns_up, reward, is_done(ns_up))]
                 # P[s][RIGHT] = [(1.0, ns_right, reward, is_done(ns_right))]
                 # P[s][DOWN] = [(1.0, ns_down, reward, is_done(ns_down))]
@@ -139,6 +161,9 @@ class GridworldEnv(discrete.DiscreteEnv):
         self.P = P
 
         super(GridworldEnv, self).__init__(nS, nA, P, isd)
+
+    def s2yx(self, s):
+        return (np.floor(s / self.shape[1]), s % self.shape[1])        
 
     def _render(self, mode='human', close=False):
         """ Renders the current gridworld layout

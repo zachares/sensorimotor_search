@@ -6,6 +6,7 @@ from gym.envs.toy_text import discrete
 from scipy.special import softmax
 from gridworld import GridworldEnv
 
+
 def KL_div(p, q):
 
 	p_idx = np.argwhere(p.flatten() > 0)
@@ -64,7 +65,8 @@ class Entropy_Minimizer(object):
 					best_probs = prob_dyn_tau
 					best_action_sequence = action_sequence
 
-		return best_action_sequence
+		print("Min Entropy: ",self.min_entropy)
+		return best_action_sequence[0]
 
 	def generate_action_sequence(self):
 
@@ -102,6 +104,7 @@ class Entropy_Minimizer(object):
 			######################
 			# Add code incase transition probability is zero for a specific action
 			######################
+			
 			log_prob_tau_dyn[idx] =  np.log(prob_tau[idx]).sum()
 
 		log_prob_dyn_tau = log_prob_tau_dyn - np.log(np.exp(log_prob_tau_dyn).sum())
@@ -152,9 +155,94 @@ class Entropy_Minimizer(object):
 
 		return self.calc_prob_dyn(prob_tau)
 
+class Goal_Reacher(object):
+
+	def __init__(self, dyn_array, goal):
+
+		self.dyn = dyn_array
+		self.goal = goal
+		self.nA = 5
+		self.policy =  {}
+		self.policy[goal] = 0
+
+		self.dijkstra()
+
+	def get_neighbors(self, state):
+		trans_probs = self.dyn[state[0], state[1]].sum(0)
+		neighbors = []
+
+		if trans_probs[0] != 0 and state[0] - 1 >= 0:
+			neighbors.append((state[0] - 1, state[1]))
+
+		if trans_probs[0] != 1 and state[1] + 1  < self.dyn.shape[1] :
+			neighbors.append((state[0], state[1] + 1))
+
+		if trans_probs[0] != 2 and state[0] + 1 < self.dyn.shape[0] :
+			neighbors.append((state[0] + 1, state[1]))
+
+		if trans_probs[0] != 3 and state[1] - 1 >= 0:
+			neighbors.append((state[0], state[1] - 1))
+
+		return neighbors
+
+	def max_prob_action(self, state, next_state):
+		vert = next_state[0] - state[0]
+		hor = next_state[1] - state[1]
+
+		if vert == 1:
+			idx = 0
+		elif vert == -1:
+			idx = 2
+		elif hor == 1:
+			idx = 3
+		elif hor == -1:
+			idx = 1
+		else:
+			raise Exception("One of the cases above should be true")
+
+		trans_probs = self.dyn[next_state[0], next_state[1], :, idx]
+
+		action = np.argmax(trans_probs)
+		prob = np.max(trans_probs)
+
+		return prob, action
+
+	def dijkstra(self):
+
+		open_set = [self.goal]
+		prob_dict = {}
+		prob_dict[self.goal] = 1
+
+		while len(open_set) != 0:
+			state = open_set[0]
+			state_prob = prob_dict[state]
+			open_set.pop(0)
+
+			neighbors = self.get_neighbors(state)
+
+			for neighbor in neighbors:
+
+
+				prob, action = self.max_prob_action(state, neighbor)
+
+				if neighbor in prob_dict.keys():
+					if prob_dict[neighbor] < prob * state_prob:
+						prob_dict[neighbor] = prob * state_prob
+						self.policy[neighbor] = action
+						open_set.append(neighbor)
+				else:
+					prob_dict[neighbor] = prob * state_prob
+					self.policy[neighbor] = action
+					open_set.append(neighbor)
+
+	def optimal_action(self, state):
+		return self.policy[state]
+
+
 if __name__ == '__main__':
 
 	num_envs = 3
+	gamma = 0.95
 	envs = []
 	envs_P = []
 
@@ -175,8 +263,10 @@ if __name__ == '__main__':
 	iter_count = 0
 	
 	trajectory = []
+	done_bool = False
+	returns = 0
 
-	while(prob_dyn.max() < 0.95):
+	while(prob_dyn.max() < 0.95) and not done_bool:
 
 		if (iter_count + 1) % 10 == 0:
 			print("Number of iterations of action: ", iter_count + 1)
@@ -184,11 +274,13 @@ if __name__ == '__main__':
 
 		state = envs[envs_idx].s
 
-		action_sequence = optimizer.optimize(state, trajectory)
-
-		action = action_sequence[0]
+		action = optimizer.optimize(state, trajectory)
 
 		next_state, r, d, p = envs[envs_idx].step(action)
+
+		returns += r
+
+		if d == True: done_bool = True
 
 		trajectory.append((next_state, action, state))
 
@@ -196,10 +288,25 @@ if __name__ == '__main__':
 
 		iter_count += 1
 
-	print("KL Divergence between chosen dynamics and other dynamics: ", kl_div)
+	if not done_bool:
+		policy = Goal_Reacher(envs[envs_idx].P_vals, envs[envs_idx].goal)
+
+	while envs[envs_idx].s != envs[envs_idx].goals and not done_bool:
+		state = envs[envs_idx].s2yx(envs[envs_idx].s)
+
+		action = policy.optimal_action(state)
+
+		next_state, r, d, p = envs[envs_idx].step(action)
+
+		returns += r
+
+		iter_count += 1
+
+	print("KL Divergence between chosen dynamics and other dynamics: ", kl_div / envs[env_idx].nS)
 	print("Results of Estimation:  ", np.round(100 * prob_dyn))
 	print("Correct Dynamics are: ", envs_idx)
 	print("Estimated Dynamics are: ", prob_dyn.argmax())
 	print("Number of Iterations till Convergence: ", iter_count)
+	print("Returns for run: ", returns)
 
 

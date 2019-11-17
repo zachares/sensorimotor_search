@@ -96,6 +96,7 @@ if __name__ == '__main__':
         else:
             save_model_flag = True
 
+
     ##################################################################################
     # hardware and low level training details
     ##################################################################################
@@ -114,7 +115,7 @@ if __name__ == '__main__':
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
-    logger = Logger(cfg, debugging_flag, device)
+    logger = Logger(cfg, debugging_flag, save_model_flag, device)
 
     ##################################################################################
     #### Training tool to train and evaluate neural networks
@@ -126,7 +127,9 @@ if __name__ == '__main__':
     ##################################################################################
     data_loader, val_data_loader, idx_dict = init_dataloader(cfg, device)
 
-    logger.save_dict("val_train_split", idx_dict)
+    if save_model_flag:
+        logger.save_dict("val_train_split", idx_dict)
+        trainer.save(0)
     ##################################################################################
     ####### Training ########
     ##################################################################################
@@ -174,13 +177,9 @@ if __name__ == '__main__':
         ##### Saving models every epoch ################
         ##############################################
         if save_model_flag and i_epoch == 0:
-            print("Saving Models")
             if os.path.isdir(logger.models_folder) == False:
                 os.mkdir(logger.models_folder)
-
             trainer.save(i_epoch)
 
         elif save_model_flag:
-            print("Saving Models")
-
             trainer.save(i_epoch)
