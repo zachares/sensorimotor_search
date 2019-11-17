@@ -10,11 +10,8 @@ from models_utils import *
 
 
 def sample_gaussian(m, v, device):
-    
     epsilon = Normal(0, 1).sample(m.size())
-    z = m + torch.sqrt(v) * epsilon.to(device)
-
-    return z
+    return m + torch.sqrt(v) * epsilon.to(device)
 
 def gaussian_parameters(h, dim=-1):
     m, h = torch.split(h, h.size(dim) // 2, dim=dim)
@@ -136,37 +133,63 @@ class PlaNet_Multimodal(Proto_Macromodel):
             'force_pred': frc_dec_list,
         }
 
-    # def trans(self, inputs):
+    def encode(self, input_dict):
 
-    #     image = input_dict["image"]
-    #     force = input_dict["force"]
-    #     prev_state = input_dict["z"]
-    #     prev_rnn_state = input_dict["rnn_state"]
-    #     action = input_dict["action"]
+        images = input_dict["image"] / 255.0
+        forces = input_dict["force"]
 
-    #     if prev_rnn_state == None:
-    #         prev_hidden = None
-    #         prev_cell = None
-    #     else:
-    #         prev_hidden, prev_cell = prev_rnn_state
+        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
+        frc_mu, frc_var = gaussian_parameters(self.frc_enc(forces[:,0])) 
 
-    #     if prev_state == None:
-    #         img_mu, img_var = gaussian_parameters(self.img_enc(image))
-    #         frc_mu, frc_var = gaussian_parameters(self.frc_enc(force)) 
+        mu_vect = torch.cat([img_mu, frc_mu], dim = 2)
+        var_vect = torch.cat([img_var, frc_var], dim = 2)
+        mu_z, var_z = product_of_experts(mu_vect, var_vect)   
 
-    #         mu_vect = torch.cat([img_mu, frc_mu], dim = 2)
-    #         var_vect = torch.cat([img_var, frc_var], dim = 2)
-    #         mu_z, var_z = product_of_experts(m_vect, var_vect)
+        return {
+            'latent_state': mu_z,
+        }
 
-    #         prev_state = sample_gaussian(mu_z, var_z, self.device)
+    def trans(self, input_dict):
+        image = input_dict["image"] / 255.0
+        force = input_dict["force"]
+        actions = input_dict["action_sequence"]
 
-    #     belif_state, cell_state = self.det_state_model(torch.cat([prev_state, action], dim = 1), prev_hidden, prev_cell)
+        belief_state_post = None
+        cell_state_post = None
+        belief_state_prior = None
+        cell_state_prior = None
 
-    #     rnn_state = (belief_state, cell_state)
-        
-    #     trans_mu, trans_var = gaussian_parameters(self.trans_model(belief_state))        
+        img_mu, img_var = gaussian_parameters(self.img_enc(image[:,0]))
+        frc_mu, frc_var = gaussian_parameters(self.frc_enc(force[:,0])) 
 
-    #     return {
-    #         'next_state': sample_gaussian(trans_mu, trans_var, self.device),
-    #         'rnn_state': rnn_state,
-    #     }
+        mu_vect = torch.cat([img_mu, frc_mu], dim = 2)
+        var_vect = torch.cat([img_var, frc_var], dim = 2)
+        mu_z, var_z = product_of_experts(mu_vect, var_vect)
+
+        prev_state_prior = mu_z
+
+
+        for idx in range(actions.size(1)):
+            action = actions[idx].unsqueeze(0)
+
+            # print("Actions size: ", action.size())
+            # print("Prev state prior: ", prev_state_prior.size())
+
+            belief_state_prior, cell_state_prior = self.det_state_model(torch.cat([prev_state_prior, action], dim = 1), belief_state_prior,  cell_state_prior)
+
+            trans_mu, trans_var = gaussian_parameters(self.trans_model(belief_state_prior))
+
+            prev_state_prior = trans_mu.squeeze().unsqueeze(0)
+
+            # print("Belief state prior size: ", belief_state_prior.size())
+            # print("Cell state prior size: ", cell_state_prior.size())
+            # print("trans_mu size: ", trans_mu.size())
+
+
+        return {
+            'latent_state': prev_state_prior,
+        }
+
+    def get_image(self, z):
+        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
+        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')

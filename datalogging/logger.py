@@ -40,7 +40,7 @@ class Logger(object):
 		logging_folder = cfg['logging_params']['logging_folder']
 
 		##### Code to keep track of runs during a day and create a unique path for logging each run
-		with open("../datalogging/run_tracking.yml", 'r+') as ymlfile1:
+		with open("/scr-ssd/sens_search/learning/datalogging/run_tracking.yml", 'r+') as ymlfile1:
 			load_cfg = yaml.safe_load(ymlfile1)
 
 		t_now = time.time()
@@ -58,7 +58,7 @@ class Logger(object):
 			load_cfg['run_tracker']['training'] = 0        
 			load_cfg['run_tracker']['testing'] = 0
 
-		with open("../datalogging/run_tracking.yml", 'r+') as ymlfile1:
+		with open("/scr-ssd/sens_search/learning/datalogging/run_tracking.yml", 'r+') as ymlfile1:
 			yaml.dump(load_cfg, ymlfile1)
 
 		self.runs_folder = ""

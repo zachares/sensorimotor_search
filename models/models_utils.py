@@ -236,7 +236,7 @@ class Proto_Model(nn.Module):
 
     def load(self, epoch_num):
         ckpt_path = '{}_{}'.format(self.model_name, epoch_num)
-        ckpt = torch.load(load_path)
+        ckpt = torch.load(ckpt_path)
         self.model.load_state_dict(ckpt)
         print("Loaded Model to: ", ckpt_path)
 
