@@ -63,16 +63,14 @@ class H5_DataLoader(Dataset):
                         self.val_length += 1                         
 
                 dataset.close()
-
-            print("Total data points: ", self.train_length + self.val_length)
-            print("Total training points: ", self.train_length)
-            print("Total validation points: ", self.val_length)
-
         else:
             self.idx_dict = idx_dict
+            self.train_length = len(list(self.idx_dict['train'].keys())) + 1
+            self.val_length = len(list(self.idx_dict['val'].keys())) + 1 
 
-            self.train_length = len(self.idx_dict['train'].keys())
-            self.val_length = len(self.idx_dict['val'].keys())
+        print("Total data points: ", self.train_length + self.val_length)
+        print("Total training points: ", self.train_length)
+        print("Total validation points: ", self.val_length)
 
     def __len__(self):      
         if self.val_bool:
@@ -120,7 +118,7 @@ class ToTensor(object):
             new_dict[k] = torch.from_numpy(v).float()
         return new_dict
 
-def init_dataloader(cfg, device):
+def init_dataloader(cfg, device, idx_dict_path = None):
     ###############################################
     ########## Loading dataloader parameters ######
     ###############################################
@@ -134,8 +132,6 @@ def init_dataloader(cfg, device):
     run_description = cfg['logging_params']['run_description']
 
     sample_keys = cfg['info_flow']['dataset']['outputs']
-
-    saved_dataset_split = cfg['dataloading_params']['saved_dataset_split']
 
     if run_description == "testing":
         val_ratio = 0
@@ -154,12 +150,11 @@ def init_dataloader(cfg, device):
             filename_list.append(dataset_path + file)
 
     #### loading previous val_train split to continue training a model
-    if saved_dataset_split != "":
-        with open(saved_dataset_split, 'r') as ymlfile_dl:
-            cfg_dataloader = yaml.safe_load(ymlfile_dl)
+    if idx_dict_path is not None:
+        with open(idx_dict_path, 'rb') as f:
+            idx_dict = pickle.load(f)
 
-        idx_dict = cfg_dataloader['idx_dict']
-
+        print("Loaded Train Val split dictionary from path")
     else:
         idx_dict = None
 

@@ -63,6 +63,10 @@ if __name__ == '__main__':
 
     num_workers = cfg['dataloading_params']['num_workers']
     dataset_path = cfg['dataloading_params']['dataset_path']
+    idx_dict_path = cfg['dataloading_params']['idx_dict_path']
+
+    if idx_dict_path == "":
+        idx_dict_path = None
 
     if run_description == "testing":
         max_epoch = 1
@@ -125,10 +129,10 @@ if __name__ == '__main__':
     ##################################################################################
     #### Dataset creation function
     ##################################################################################
-    data_loader, val_data_loader, idx_dict = init_dataloader(cfg, device)
+    data_loader, val_data_loader, idx_dict = init_dataloader(cfg, device, idx_dict_path)
 
     if save_model_flag:
-        logger.save_dict("val_train_split", idx_dict)
+        logger.save_dict("val_train_split", idx_dict, False)
         trainer.save(0)
     ##################################################################################
     ####### Training ########
@@ -146,6 +150,8 @@ if __name__ == '__main__':
         print('Training epoch #{}...'.format(i_epoch))
         
         for i_iter, sample_batched in enumerate(data_loader):
+            sample_batched['epoch'] = torch.from_numpy(np.array([[i_epoch]])).float()
+            sample_batched['iteration'] = torch.from_numpy(np.array([[i_iter]])).float()
 
             logging_dict = trainer.train(sample_batched)
             global_cnt += 1
@@ -164,6 +170,8 @@ if __name__ == '__main__':
             print("Calculating validation results after #{} epochs".format(i_epoch))
 
             for i_iter, sample_batched in enumerate(val_data_loader):
+                sample_batched['epoch'] = torch.from_numpy(np.array([[i_epoch]])).float()
+                sample_batched['iteration'] = torch.from_numpy(np.array([[i_iter]])).float()
 
                 logging_dict= trainer.eval(sample_batched)
 

@@ -21,11 +21,13 @@ from torchvision import transforms, utils
 from tensorboardX import SummaryWriter
 from dataloader import *
 import yaml
+import pickle
 
 sys.path.insert(0, "../datalogging/") 
 
 from models import *
 from utils import *
+from sklearn.manifold import TSNE
 
 import matplotlib.pyplot as plt 
 from shutil import copyfile
@@ -54,9 +56,9 @@ class Logger(object):
 		else:
 			print("New day of training!")
 			load_cfg['run_tracker']['date'] = date
-			load_cfg['run_tracker']['debugging'] = 0
-			load_cfg['run_tracker']['training'] = 0        
-			load_cfg['run_tracker']['testing'] = 0
+			load_cfg['run_tracker']['debugging'] -= load_cfg['run_tracker']['debugging']
+			load_cfg['run_tracker']['training'] -= load_cfg['run_tracker']['training']        
+			load_cfg['run_tracker']['testing'] -= load_cfg['run_tracker']['testing']
 
 		with open("/scr-ssd/sens_search/learning/datalogging/run_tracking.yml", 'r+') as ymlfile1:
 			yaml.dump(load_cfg, ymlfile1)
@@ -90,7 +92,7 @@ class Logger(object):
 
 				os.mkdir(self.models_folder)
 				print("Model Folder:  ", self.models_folder)
-				self.save_dict("config_params", cfg)
+				self.save_dict("config_params", cfg, True)
 				
 			self.writer = SummaryWriter(self.runs_folder)
 
@@ -100,19 +102,50 @@ class Logger(object):
 			for key in logging_dict['scalar'].keys():
 				self.writer.add_scalar(label + key, logging_dict['scalar'][key], iteration)
 
-	def save_dict(self, name, dictionary):
-		if self.debugging_flag == False:
+	def save_dict(self, name, dictionary, yml_bool):
+		if self.debugging_flag == False and yml_bool:
 			with open(self.runs_folder + name + ".yml", 'w') as ymlfile2:
 				yaml.dump(dictionary, ymlfile2)
 
+		elif self.debugging_flag == False:
+		    with open(self.runs_folder + name + '.pkl', 'wb') as f:
+		        pickle.dump(dictionary, f, pickle.HIGHEST_PROTOCOL)
+
 	def save_images2D(self, logging_dict, iteration, label):
-		if self.debugging_flag == False and len(logging_dict['image']) != 0:
-			image_list = logging_dict['image']
+		if self.debugging_flag == False and len(list(logging_dict['image'].keys())) != 0:
+			for image_key in logging_dict['image']:
 
-			if len(image_list) != 0:
-				for idx, image in enumerate(image_list):
-					image_list[idx] = image.detach().cpu().numpy()
+				image_list = logging_dict['image'][image_key]
 
-				image_array = np.rot90(np.concatenate(image_list, axis = 1), k = 3, axes=(1,2)).astype(np.uint8)
+				if len(image_list) != 0:
+					for idx, image in enumerate(image_list):
+						image_list[idx] = image.detach().cpu().numpy()
 
-				self.writer.add_image(label + 'predicted_image', image_array, iteration)
+					image_array = np.rot90(np.concatenate(image_list, axis = 1), k = 3, axes=(1,2)).astype(np.uint8)
+
+					self.writer.add_image(label + image_key + 'predicted_image' , image_array, iteration)
+
+	def save_tsne(self, points, labels_list, iteration, label, tensor_bool):	
+		if self.debugging_flag == False:
+			perplexity = 30.0
+			lr_rate = 500
+			initial_dims = 30
+			tsne = TSNE(n_components=2, perplexity = 30.0, early_exaggeration = 12.0, learning_rate = 200.0, n_iter = 1000, method='barnes_hut')
+			print("Beginning TSNE")
+			if tensor_bool:
+				Y = tsne.fit_transform(points.detach().cpu().numpy())
+			else:
+				Y = tsne.fit_transform(points)
+
+			print("Finished TSNE")
+
+			for idx, label_tuple in enumerate(labels_list):
+				description, labels = label_tuple
+				# plt.switch_backend('agg')
+				fig = plt.figure()
+				if tensor_bool:
+					plt.scatter(Y[:,0], Y[:,1], c = labels.detach().cpu().numpy())
+				else:
+					plt.scatter(Y[:,0], Y[:,1], c = labels)
+
+				self.writer.add_figure(label + '_tsne_' + description, fig, iteration)

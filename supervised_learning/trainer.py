@@ -52,9 +52,15 @@ class Trainer(object):
 		self.info_flow = cfg['info_flow']
 		image_size = self.info_flow['dataset']['outputs']['image']
 		force_size =self.info_flow['dataset']['outputs']['force'] 
+		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
 		action_dim =self.info_flow['dataset']['outputs']['action']
 		z_dim = cfg["model_params"]["z_dim"] 
 		self.batch_size = batch_size
+
+		if 'curriculum' in cfg['training_params'].keys():
+			self.curriculum = cfg['training_params']['curriculum']
+		else:
+			self.curriculum = None
 
 		### Initializing Model ####
 		print("Initializing Neural Network Models")
@@ -65,19 +71,27 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["PlaNet_Multimodal"] = PlaNet_Multimodal(models_folder + "PlaNet_Multimodal", image_size, force_size, z_dim, action_dim, device = device).to(device)
+		self.model_dict["Simple_Multimodal"] = Simple_Multimodal(models_folder + "Simple_Multimodal", image_size, force_size, proprio_size, z_dim,\
+		 action_dim, device = device, curriculum = self.curriculum).to(device)
+
+		self.model_dict["Simple_Multimodal_woutforce"] = Simple_Multimodal_woutforce(models_folder + "Simple_Multimodal_woutforce", image_size, proprio_size, z_dim,\
+		 action_dim, device = device, curriculum = self.curriculum).to(device)
+
+		self.model_dict["Simple_Multimodal_woutforcewfusion"] = Simple_Multimodal_woutforcewfusion(models_folder + "Simple_Multimodal_woutforcewfusion", image_size, proprio_size, z_dim,\
+		 action_dim, device = device, curriculum = self.curriculum).to(device)
+
+		self.model_dict["EEpos_dynamics"] = EEpos_dynamics(models_folder + "EEpos_dynamics", proprio_size, action_dim, device = device, curriculum = self.curriculum).to(device)
 		###############################################
 		###### Code ends here ########################
 		################################################
 
 		#### Setting per step model update method ####
 		# Adam is a type of stochastic gradient descent    
-		parameters_list = []
+		self.opt_dict = {}
 
 		for key in self.model_dict.keys():
-			parameters_list += list(self.model_dict[key].parameters())
-
-		self.optimizer = optim.Adam(parameters_list, lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
+			parameters_list = list(self.model_dict[key].parameters())
+			self.opt_dict[key] = optim.Adam(parameters_list, lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
 		# self.optimizer = optim.Adam(list(self.obs_enc.parameters()) + list(self.dyn_mod.parameters()) + list(self.goal_prov.parameters()),\
 		#  lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
 		
@@ -93,19 +107,21 @@ class Trainer(object):
 		##### Declaring loss functions for every term in the training objective
 		##############################################
 		self.loss_dict = {}
-		self.loss_dict["MSE_image"] = Image_Reconstruction_MultiStep(nn.MSELoss(), "mean_square_error_image")
-		self.loss_dict["MSE_force"] = MSE_MultiStep(nn.MSELoss(), "mean_square_error_force")
-		self.loss_dict["KL_DIV"] = Gaussian_KL_MultiStep("kl_div")
+		self.loss_dict["MSE_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss(), "mse_image")
+		self.loss_dict["MSE_force_multistep"] = MSE_MultiStep(nn.MSELoss(), "mse_force")
+		self.loss_dict["MSE_proprio_multistep"] = MSE_MultiStep(nn.MSELoss(), "mse_proprio")
+		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep("kl_div")
 		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
 		# self.loss_dict["Binary_Cross_Ent"] = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
 		###################################
 		####### Code ends here ###########
 		####################################
-
-		##### Scalar Dictionary for logger #############
+		####################################
+		##### Training Results Dictionary for logger #############
+		##########################################
 		self.logging_dict = {}
 		self.logging_dict['scalar'] = {}
-		self.logging_dict['image'] = []
+		self.logging_dict['image'] = {}
 
 	def train(self, sample_batched):
 		torch.enable_grad()
@@ -114,9 +130,13 @@ class Trainer(object):
 
 		loss = self.forward_pass(sample_batched)
 
-		self.optimizer.zero_grad()
+		for key in self.opt_dict.keys():
+			self.opt_dict[key].zero_grad()
+
 		loss.backward()
-		self.optimizer.step()
+
+		for key in self.opt_dict.keys():
+			self.opt_dict[key].step()
 
 		return self.logging_dict
 
@@ -159,21 +179,19 @@ class Trainer(object):
 		return self.loss()
 
 	def loss(self):
+		for idx_model, model_key in enumerate(self.model_dict.keys()):
+			for idx_output, output_key in enumerate(self.info_flow[model_key]['outputs'].keys()):
+				input_list = []
+				for input_key in self.info_flow[model_key]['outputs'][output_key]['inputs'].keys():
+					input_source = self.info_flow[model_key]['outputs'][output_key]['inputs'][input_key]
+					input_list.append(self.model_outputs[input_source][input_key])
 
-		self.loss_inputs = {}
+				loss_function = self.loss_dict[self.info_flow[model_key]['outputs'][output_key]['loss']]
 
-		for idx, key in enumerate(self.info_flow['losses'].keys()):
-			self.loss_inputs[key] = []
-			for input_key in self.info_flow['losses'][key]['inputs'].keys():
-				input_source = self.info_flow['losses'][key]["inputs"][input_key]
-				self.loss_inputs[key].append(self.model_outputs[input_source][input_key])
-
-			loss_function = self.loss_dict[self.info_flow['losses'][key]['loss']]
-
-			if idx == 0:
-				loss = loss_function.loss(tuple(self.loss_inputs[key]), self.logging_dict, self.info_flow['losses'][key]['weight'] )
-			else:
-				loss += loss_function.loss(tuple(self.loss_inputs[key]), self.logging_dict, self.info_flow['losses'][key]['weight'] )
+				if idx_model == 0 and idx_output == 0:
+					loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/")
+				else:
+					loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/")
 
 		return loss
 

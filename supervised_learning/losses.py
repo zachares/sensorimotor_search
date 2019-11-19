@@ -29,18 +29,17 @@ import matplotlib.pyplot as plt
 from shutil import copyfile
 
 class Proto_Loss(object):
-
 	def __init__(self, loss_function, loss_name):
 		self.loss_name = loss_name
 		self.loss_function = loss_function
 
-	def loss(self, input_tuple, logging_dict, weight):
+	def loss(self, input_tuple, logging_dict, weight, model_label):
 		net_est = input_tuple[0]
 		target = input_tuple[1]
 
 		loss = weight * self.loss_function(net_est, target)
 
-		logging_dict['scalar']["loss/" + self.loss_name] = loss.item()
+		logging_dict['scalar']["loss/" + model_label + self.loss_name] = loss.item()
 
 		return loss
 
@@ -48,17 +47,17 @@ class Proto_Loss(object):
 		pass
 
 class Image_Reconstruction(Proto_Loss):
-	def loss(self, input_tuple, logging_dict, weight):
+	def loss(self, input_tuple, logging_dict, weight, model_label):
 		net_est = input_tuple[0]
 		target = input_tuple[1]
 
 
 		loss = weight * self.loss_function(net_est, target)
 
-		logging_dict['scalar']["loss/" + self.loss_name] = loss.item()
-		logging_dict['image'] = []		
-		logging_dict['image'].append(net_est[0])
-		logging_dict['image'].append(target[0])
+		logging_dict['scalar']["loss/" + model_label + self.loss_name] = loss.item()
+		logging_dict['image'][model_label] = []		
+		logging_dict['image'][model_label].append(net_est[0])
+		logging_dict['image'][model_label].append(target[0])
 
 		return loss
 
@@ -67,7 +66,7 @@ class Gaussian_KL(Proto_Loss):
 	def __init__(self, loss_name):
 	    super().__init__(None, loss_name)
 
-	def loss(self, input_tuple, logging_dict, weight):
+	def loss(self, input_tuple, logging_dict, weight, model_label):
 		params = input_tuple[0]
 		mu_est, var_est, mu_tar, var_tar = params
 
@@ -75,12 +74,12 @@ class Gaussian_KL(Proto_Loss):
 
 		loss = weight * element_wise.sum(1).sum(0)
 
-		logging_dict['scalar']["loss/" + self.loss_name] = loss.item()
+		logging_dict['scalar']["loss/" + model_label + self.loss_name] = loss.item()
 
 		return loss
 
 class Image_Reconstruction_MultiStep(Proto_Loss):
-	def loss(self, input_tuple, logging_dict, weight):
+	def loss(self, input_tuple, logging_dict, weight, model_label):
 		net_est_list = input_tuple[0]
 		targets = input_tuple[1]
 
@@ -92,15 +91,15 @@ class Image_Reconstruction_MultiStep(Proto_Loss):
 			else:
 				loss += weight * self.loss_function(net_est, target)
 
-		logging_dict['scalar']["loss/" + self.loss_name] = loss.item()
-		logging_dict['image'] = []		
-		logging_dict['image'].append(net_est[0])
-		logging_dict['image'].append(target[0])
+		logging_dict['scalar']["loss/" + model_label + self.loss_name] = loss.item()
+		logging_dict['image'][model_label] = []		
+		logging_dict['image'][model_label].append(net_est[0])
+		logging_dict['image'][model_label].append(target[0])
 
 		return loss
 
 class MSE_MultiStep(Proto_Loss):
-	def loss(self, input_tuple, logging_dict, weight):
+	def loss(self, input_tuple, logging_dict, weight, model_label):
 		net_est_list = input_tuple[0]
 		targets = input_tuple[1]
 
@@ -112,7 +111,7 @@ class MSE_MultiStep(Proto_Loss):
 			else:
 				loss += weight * self.loss_function(net_est, target)
 
-		logging_dict['scalar']["loss/" + self.loss_name] = loss.item()
+		logging_dict['scalar']["loss/" + model_label + self.loss_name] = loss.item()
 
 		return loss
 
@@ -121,7 +120,7 @@ class Gaussian_KL_MultiStep(Proto_Loss):
 	def __init__(self, loss_name):
 	    super().__init__(None, loss_name)
 
-	def loss(self, input_tuple, logging_dict, weight):
+	def loss(self, input_tuple, logging_dict, weight, model_label):
 		params_list = input_tuple[0]
 
 		for idx, params in enumerate(params_list):
@@ -134,7 +133,7 @@ class Gaussian_KL_MultiStep(Proto_Loss):
 			else:
 				loss += weight * element_wise.sum(1).sum(0)
 
-		logging_dict['scalar']["loss/" + self.loss_name] = loss.item()
+		logging_dict['scalar']["loss/" + model_label + self.loss_name] = loss.item()
 		
 		return loss
 		
