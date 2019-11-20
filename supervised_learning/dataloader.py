@@ -7,6 +7,7 @@ import os
 import sys
 import yaml
 import copy
+import random
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -63,10 +64,40 @@ class H5_DataLoader(Dataset):
                         self.val_length += 1                         
 
                 dataset.close()
+
+            idx_range = 500
+
+            for idx in range(self.train_length):
+                idx_choices = []
+                if self.train_length - 1 - idx > idx_range:
+                    idx_choices.append(idx + idx_range)
+                if idx  >  idx_range:
+                    idx_choices.append(idx - idx_range)
+
+                idx_unpaired = random.choice(idx_choices)
+
+                paired_tuple = self.idx_dict['train'][idx]
+                unpaired_tuple = self.idx_dict['train'][idx_unpaired]
+                self.idx_dict['train'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])
+
+            for idx in range(self.val_length):
+                idx_choices = []
+                if self.val_length - 1 - idx > idx_range:
+                    idx_choices.append(idx + idx_range)
+                if idx - idx_range > 0:
+                    idx_choices.append(idx - idx_range)
+
+                idx_unpaired = random.choice(idx_choices)
+
+                paired_tuple = self.idx_dict['val'][idx]
+                unpaired_tuple = self.idx_dict['val'][idx_unpaired]
+                self.idx_dict['val'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])
+
         else:
             self.idx_dict = idx_dict
             self.train_length = len(list(self.idx_dict['train'].keys())) + 1
             self.val_length = len(list(self.idx_dict['val'].keys())) + 1 
+
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
@@ -81,16 +112,23 @@ class H5_DataLoader(Dataset):
     def __getitem__(self, idx):
         if self.val_bool:
             dataset = self.load_file(self.idx_dict['val'][idx][0])
-            idx_bounds = self.idx_dict['val'][idx][1] 
+            dataset_unpaired = self.load_file(self.idx_dict['val'][idx][2])
+            idx_bounds = self.idx_dict['val'][idx][1]
+            idx_bounds_unpaired = self.idx_dict['val'][idx][3]  
         else:
             dataset = self.load_file(self.idx_dict['train'][idx][0])
-            idx_bounds = self.idx_dict['train'][idx][1] 
+            dataset_unpaired = self.load_file(self.idx_dict['train'][idx][2])
+            idx_bounds = self.idx_dict['train'][idx][1]
+            idx_bounds_unpaired = self.idx_dict['train'][idx][3]  
         
         sample = {}
 
         for key in self.loading_dict.keys():
             if key == "action":
-                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1] - 1]                
+                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1] - 1]
+            elif key == "force" or key == "proprio":
+                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1]]
+                sample[key + "_unpaired"] = np.array(dataset_unpaired[key])[idx_bounds_unpaired[0]:idx_bounds_unpaired[1]]                           
             else:
                 sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1]]
 

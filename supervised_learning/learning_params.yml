@@ -35,85 +35,46 @@ info_flow:
       force: [6]
       action: [6]
       proprio: [12]
-  Simple_Multimodal:
+  Selfsupervised_Multimodal_woutforce:
     inputs:
       image: "dataset"
-      force: "dataset"
       proprio: "dataset"
+      proprio_unpaired: "dataset"
       action: "dataset"
       epoch: "dataset"
     outputs:
       params:
         loss: "KL_DIV_multistep"
         weight: 0.0005
-        inputs:
-          params: "Simple_Multimodal"
-      image_pred:
-        loss: "MSE_image_multistep"
-        weight: 0.0001
-        inputs:
-          image_pred: "Simple_Multimodal"
-          image: "dataset"
-      proprio_pred:
-        loss: "MSE_proprio_multistep"
+      pair_class:
+        loss: "Pairing_multistep"
+        weight: 10.0
+      eepos_pred:
+        loss: "MSE_eepos_multistep"
         weight: 1.0
         inputs:
-          proprio_pred: "Simple_Multimodal"
           proprio: "dataset"
-      force_pred:
-        loss: "MSE_force_multistep"
-        weight: 1.0
-        inputs:
-          force_pred: "Simple_Multimodal"
-          force: "dataset"
-  Simple_Multimodal_woutforce:
-    inputs:
-      image: "dataset"
-      proprio: "dataset"
-      action: "dataset"
-      epoch: "dataset"
-    outputs:
-      params:
-        loss: "KL_DIV_multistep"
-        weight: 0.0005
-        inputs:
-          params: "Simple_Multimodal_woutforce"
-      image_pred:
-        loss: "MSE_image_multistep"
-        weight: 0.0001
-        inputs:
-          image_pred: "Simple_Multimodal_woutforce"
-          image: "dataset"
-      proprio_pred:
-        loss: "MSE_proprio_multistep"
-        weight: 1.0
-        inputs:
-          proprio_pred: "Simple_Multimodal_woutforce"
-          proprio: "dataset"
-  Simple_Multimodal_woutforcewfusion:
-    inputs:
-      image: "dataset"
-      proprio: "dataset"
-      action: "dataset"
-      epoch: "dataset"
-    outputs:
-      params:
-        loss: "KL_DIV_multistep"
-        weight: 0.0005
-        inputs:
-          params: "Simple_Multimodal_woutforcewfusion"
-      image_pred:
-        loss: "MSE_image_multistep"
-        weight: 0.0001
-        inputs:
-          image_pred: "Simple_Multimodal_woutforcewfusion"
-          image: "dataset"
-      proprio_pred:
-        loss: "MSE_proprio_multistep"
-        weight: 1.0
-        inputs:
-          proprio_pred: "Simple_Multimodal_woutforcewfusion"
-          proprio: "dataset"
+
+  # Simple_Multimodal_woutforcewfusion:
+  #   inputs:
+  #     image: "dataset"
+  #     proprio: "dataset"
+  #     action: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     params:
+  #       loss: "KL_DIV_multistep"
+  #       weight: 0.0005
+  #     image_pred:
+  #       loss: "MSE_image_multistep"
+  #       weight: 0.0001
+  #       inputs:
+  #         image: "dataset"
+  #     proprio_pred:
+  #       loss: "MSE_proprio_multistep"
+  #       weight: 1.0
+  #       inputs:
+  #         proprio: "dataset"
   EEpos_dynamics:
     inputs:
       proprio: "dataset"
@@ -124,8 +85,32 @@ info_flow:
         loss: "MSE_proprio_multistep"
         weight: 1.0
         inputs:
-          proprio_pred: "EEpos_dynamics"
           proprio: "dataset"
-
+  # Simple_Multimodal:
+  #   inputs:
+  #     image: "dataset"
+  #     force: "dataset"
+  #     proprio: "dataset"
+  #     action: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     params:
+  #       loss: "KL_DIV_multistep"
+  #       weight: 0.0005
+  #     image_pred:
+  #       loss: "MSE_image_multistep"
+  #       weight: 0.0001
+  #       inputs:
+  #         image: "dataset"
+  #     proprio_pred:
+  #       loss: "MSE_proprio_multistep"
+  #       weight: 1.0
+  #       inputs:
+  #         proprio: "dataset"
+  #     force_pred:
+  #       loss: "MSE_force_multistep"
+  #       weight: 1.0
+  #       inputs:
+  #         force: "dataset"
 
 

@@ -71,13 +71,7 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["Simple_Multimodal"] = Simple_Multimodal(models_folder + "Simple_Multimodal", image_size, force_size, proprio_size, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
-
-		self.model_dict["Simple_Multimodal_woutforce"] = Simple_Multimodal_woutforce(models_folder + "Simple_Multimodal_woutforce", image_size, proprio_size, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
-
-		self.model_dict["Simple_Multimodal_woutforcewfusion"] = Simple_Multimodal_woutforcewfusion(models_folder + "Simple_Multimodal_woutforcewfusion", image_size, proprio_size, z_dim,\
+		self.model_dict["Selfsupervised_Multimodal_woutforce"] = Selfsupervised_Multimodal_woutforce(models_folder + "Selfsupervised_Multimodal_woutforce", image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
 
 		self.model_dict["EEpos_dynamics"] = EEpos_dynamics(models_folder + "EEpos_dynamics", proprio_size, action_dim, device = device, curriculum = self.curriculum).to(device)
@@ -108,9 +102,11 @@ class Trainer(object):
 		##############################################
 		self.loss_dict = {}
 		self.loss_dict["MSE_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss(), "mse_image")
-		self.loss_dict["MSE_force_multistep"] = MSE_MultiStep(nn.MSELoss(), "mse_force")
-		self.loss_dict["MSE_proprio_multistep"] = MSE_MultiStep(nn.MSELoss(), "mse_proprio")
+		self.loss_dict["MSE_force_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), "mse_force")
+		self.loss_dict["MSE_proprio_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), "mse_proprio")
 		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep("kl_div")
+		self.loss_dict["MSE_eepos_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), "mse_eepos", 3)
+		self.loss_dict["Pairing_multistep"] = Pairing_MultiStep(nn.BCEWithLogitsLoss(), "binary_cross_ent")
 		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
 		# self.loss_dict["Binary_Cross_Ent"] = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
 		###################################
@@ -181,10 +177,12 @@ class Trainer(object):
 	def loss(self):
 		for idx_model, model_key in enumerate(self.model_dict.keys()):
 			for idx_output, output_key in enumerate(self.info_flow[model_key]['outputs'].keys()):
-				input_list = []
-				for input_key in self.info_flow[model_key]['outputs'][output_key]['inputs'].keys():
-					input_source = self.info_flow[model_key]['outputs'][output_key]['inputs'][input_key]
-					input_list.append(self.model_outputs[input_source][input_key])
+				input_list = [self.model_outputs[model_key][output_key]]
+
+				if 'inputs' in list(self.info_flow[model_key]['outputs'][output_key].keys()):
+					for input_key in self.info_flow[model_key]['outputs'][output_key]['inputs'].keys():
+						input_source = self.info_flow[model_key]['outputs'][output_key]['inputs'][input_key]
+						input_list.append(self.model_outputs[input_source][input_key])
 
 				loss_function = self.loss_dict[self.info_flow[model_key]['outputs'][output_key]['loss']]
 
