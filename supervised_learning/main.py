@@ -119,7 +119,7 @@ if __name__ == '__main__':
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
-    logger = Logger(cfg, debugging_flag, save_model_flag, device)
+    logger = Logger(cfg, debugging_flag, save_model_flag)
 
     ##################################################################################
     #### Training tool to train and evaluate neural networks

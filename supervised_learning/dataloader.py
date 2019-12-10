@@ -26,7 +26,10 @@ class H5_DataLoader(Dataset):
         self.device = device
         self.transform = transform
         self.loading_dict = loading_dict
-        self.filename_list = filename_list
+        self.sample = {}
+
+        self.filename_list = filename_list     
+
         self.num_steps = num_steps
 
         self.val_bool = False
@@ -35,73 +38,93 @@ class H5_DataLoader(Dataset):
         self.train_length = 0
         self.val_length = 0
 
+        self.up_thresh = 0.035
+
         if idx_dict == None:
             self.idx_dict = {}
             self.idx_dict['val'] = {}
             self.idx_dict['train'] = {}
+            val_eepos_list = []
+            train_eepos_list = []
 
             #### assumes one dataset per file
-            for idx, filename in enumerate(filename_list):
+            for idx, filename in enumerate(self.filename_list):
                 dataset = self.load_file(filename)
-                traj_nums = np.array(dataset['traj_num'])
-                dataset_length = traj_nums.shape[0]
+                proprios = np.array(dataset['proprio'])
+                dataset_length = proprios.shape[0]
 
                 for dataset_idx in range(dataset_length):
                     min_idx = dataset_idx
                     max_idx = dataset_idx + self.num_steps + 1
 
-                    if max_idx >= dataset_length or (traj_nums[min_idx] != traj_nums[max_idx]):
+                    if max_idx >= dataset_length:
                         continue
 
                     train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
 
                     if train_val_bool == 1:
-                        self.idx_dict['train'][self.train_length] = (filename, (min_idx, max_idx)) 
+                        self.idx_dict['train'][self.train_length] = (filename, (min_idx, max_idx))
+                        train_eepos_list.append(np.expand_dims(proprios[dataset_idx], axis = 0))
                         self.train_length += 1  
 
                     else:
                         self.idx_dict['val'][self.val_length] = (filename, (min_idx, max_idx)) 
+                        val_eepos_list.append(np.expand_dims(proprios[dataset_idx], axis = 0))
                         self.val_length += 1                         
 
                 dataset.close()
 
-            idx_range = 500
+            val_eepos = np.concatenate(val_eepos_list, axis = 0)
+            train_eepos = np.concatenate(train_eepos_list, axis = 0)
+
+            val_dist = np.linalg.norm(val_eepos, axis = 1)
+            train_dist = np.linalg.norm(train_eepos, axis = 1)
 
             for idx in range(self.train_length):
-                idx_choices = []
-                if self.train_length - 1 - idx > idx_range:
-                    idx_choices.append(idx + idx_range)
-                if idx  >  idx_range:
-                    idx_choices.append(idx - idx_range)
+                if idx % 10000 == 0:
+                    print("Training idx: ", idx)
 
-                idx_unpaired = random.choice(idx_choices)
+                train_distance = train_dist[idx]
+                train_error = 0
+
+                while train_error < self.up_thresh:
+                    idx_up = np.random.choice(self.train_length)
+                    compare_distance = train_dist[idx_up]
+                    train_error = abs(train_distance - compare_distance)
 
                 paired_tuple = self.idx_dict['train'][idx]
-                unpaired_tuple = self.idx_dict['train'][idx_unpaired]
-                self.idx_dict['train'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])
+                unpaired_tuple = self.idx_dict['train'][idx_up]
+                self.idx_dict['train'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])   
 
             for idx in range(self.val_length):
-                idx_choices = []
-                if self.val_length - 1 - idx > idx_range:
-                    idx_choices.append(idx + idx_range)
-                if idx - idx_range > 0:
-                    idx_choices.append(idx - idx_range)
+                if idx % 10000 == 0:
+                    print("Validation idx: ", idx)
 
-                idx_unpaired = random.choice(idx_choices)
+                val_distance = val_dist[idx]
+                val_error = 0
+
+                while val_error < self.up_thresh:
+                    idx_up = np.random.choice(self.val_length)
+                    compare_distance = val_dist[idx_up]
+                    val_error = abs(val_distance - compare_distance)
 
                 paired_tuple = self.idx_dict['val'][idx]
-                unpaired_tuple = self.idx_dict['val'][idx_unpaired]
-                self.idx_dict['val'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])
+                unpaired_tuple = self.idx_dict['val'][idx_up]
+                self.idx_dict['val'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])                    
 
         else:
             self.idx_dict = idx_dict
-            self.train_length = len(list(self.idx_dict['train'].keys())) + 1
-            self.val_length = len(list(self.idx_dict['val'].keys())) + 1 
+            self.train_length = len(list(self.idx_dict['train'].keys()))
+            self.val_length = len(list(self.idx_dict['val'].keys()))
 
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
         print("Total validation points: ", self.val_length)
+
+    def return_idxs(self, curr_idx):
+        file_idx = int(np.floor(curr_idx / self.dataset_length))
+        return (file_idx, int(curr_idx - file_idx * self.dataset_length))
 
     def __len__(self):      
         if self.val_bool:
@@ -111,28 +134,28 @@ class H5_DataLoader(Dataset):
 
     def __getitem__(self, idx):
         if self.val_bool:
-            dataset = self.load_file(self.idx_dict['val'][idx][0])
-            dataset_unpaired = self.load_file(self.idx_dict['val'][idx][2])
-            idx_bounds = self.idx_dict['val'][idx][1]
-            idx_bounds_unpaired = self.idx_dict['val'][idx][3]  
+            key_set = 'val'
         else:
-            dataset = self.load_file(self.idx_dict['train'][idx][0])
-            dataset_unpaired = self.load_file(self.idx_dict['train'][idx][2])
-            idx_bounds = self.idx_dict['train'][idx][1]
-            idx_bounds_unpaired = self.idx_dict['train'][idx][3]  
-        
+            key_set = 'train'
+
+        dataset = self.load_file(self.idx_dict[key_set][idx][0])
+        idxs_p = self.idx_dict[key_set][idx][1]
+        dataset_up = self.load_file(self.idx_dict[key_set][idx][2])
+        idxs_up = self.idx_dict[key_set][idx][3]
+
         sample = {}
 
         for key in self.loading_dict.keys():
-            if key == "action":
-                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1] - 1]
-            elif key == "force" or key == "proprio":
-                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1]]
-                sample[key + "_unpaired"] = np.array(dataset_unpaired[key])[idx_bounds_unpaired[0]:idx_bounds_unpaired[1]]                           
+            if key == 'action':
+                sample[key] = np.array(dataset[key])[idxs_p[0]:(idxs_p[1]-1)]
+            elif key == 'force' or key == 'proprio':   
+                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
+                sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]]  
             else:
-                sample[key] = np.array(dataset[key])[idx_bounds[0]:idx_bounds[1]]
+                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]                         
 
         dataset.close()
+        dataset_up.close()
 
         if self.transform:
             sample = self.transform(sample)
@@ -154,6 +177,7 @@ class ToTensor(object):
         new_dict = dict()
         for k, v in sample.items():
             new_dict[k] = torch.from_numpy(v).float()
+
         return new_dict
 
 def init_dataloader(cfg, device, idx_dict_path = None):

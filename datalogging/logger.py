@@ -19,14 +19,11 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torchvision import transforms, utils
 
 from tensorboardX import SummaryWriter
-from dataloader import *
 import yaml
 import pickle
 
 sys.path.insert(0, "../datalogging/") 
 
-from models import *
-from utils import *
 from sklearn.manifold import TSNE
 
 import matplotlib.pyplot as plt 
@@ -34,7 +31,7 @@ from shutil import copyfile
 
 
 class Logger(object):
-	def __init__(self, cfg, debugging_flag, save_model_flag, device):
+	def __init__(self, cfg, debugging_flag, save_model_flag):
 		self.debugging_flag = debugging_flag
 
 		run_description = cfg['logging_params']['run_description'] 
@@ -125,6 +122,17 @@ class Logger(object):
 
 					self.writer.add_image(label + image_key + 'predicted_image' , image_array, iteration)
 
+	def save_npimages2D(self, logging_dict, iteration, label):
+		if self.debugging_flag == False and len(list(logging_dict['image'].keys())) != 0:
+			for image_key in logging_dict['image']:
+
+				image_list = logging_dict['image'][image_key]
+
+				if len(image_list) != 0:
+					image_array = np.expand_dims(np.concatenate(image_list, axis = 1), axis = 0)
+
+					self.writer.add_image(label + image_key + 'visitation_freq' , image_array, iteration)
+
 	def save_tsne(self, points, labels_list, iteration, label, tensor_bool):	
 		if self.debugging_flag == False:
 			perplexity = 30.0
@@ -141,7 +149,7 @@ class Logger(object):
 
 			for idx, label_tuple in enumerate(labels_list):
 				description, labels = label_tuple
-				# plt.switch_backend('agg')
+				plt.switch_backend('agg')
 				fig = plt.figure()
 				if tensor_bool:
 					plt.scatter(Y[:,0], Y[:,1], c = labels.detach().cpu().numpy())

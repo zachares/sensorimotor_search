@@ -6,7 +6,7 @@ dataloading_params:
   num_workers: 6
   batch_size: 128
   num_steps: 10
-  idx_dict_path: "" #/scr-ssd/sens_search_logging/runs/201911191154_debugging_17_inital_testing/val_train_split.pkl"
+  idx_dict_path: ""
 
 training_params:
   seed: 1234
@@ -17,7 +17,7 @@ training_params:
   max_training_epochs: 25
   val_ratio: 0.05
   use_GPU: True
-  curriculum: [1,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10]
+  curriculum: [3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10]
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
@@ -33,84 +33,81 @@ info_flow:
     outputs:
       image: [3, 128, 128]
       force: [6]
-      action: [6]
+      action: [3]
       proprio: [12]
-  Selfsupervised_Multimodal_woutforce:
+      contact: [1]
+  Relational_Multimodal:
     inputs:
       image: "dataset"
       proprio: "dataset"
-      proprio_unpaired: "dataset"
+      epoch: "dataset"
+    outputs:
+      z_perm:
+        loss: "Relational_multistep"
+        loss_name: "relative_random"
+        weight: 1.0
+      image_dec:
+        loss: "Rec_image_multistep"
+        loss_name: "image_rec_multistep"
+        weight: 0.001
+        inputs:
+          image: "dataset"
+      prop_dec:
+        loss: "Rec_multistep"
+        loss_name: "proprio_rec_multistep"
+        weight: 10
+        inputs:
+          proprio: "dataset"
+  VAE_Multimodal:
+    inputs:
+      image: "dataset"
+      proprio: "dataset"
+      epoch: "dataset"
+    outputs:
+      params:
+        loss: "KL_DIV_multistep"
+        loss_name: "kl_div_multistep"
+        weight: 0.0005
+      image_dec:
+        loss: "Rec_image_multistep"
+        loss_name: "image_rec_multistep"
+        weight: 0.0001
+        inputs:
+          image: "dataset"
+      prop_dec:
+        loss: "Rec_multistep"
+        loss_name: "proprio_rec_multistep"
+        weight: 1.0
+        inputs:
+          proprio: "dataset"
+  Selfsupervised_Multimodal:
+    inputs:
+      image: "dataset"
+      proprio: "dataset"
+      proprio_up: "dataset"
+      contact: "dataset"
       action: "dataset"
       epoch: "dataset"
     outputs:
       params:
         loss: "KL_DIV_multistep"
+        loss_name: "kl_div_multistep"
         weight: 0.0005
-      pair_class:
-        loss: "Pairing_multistep"
-        weight: 10.0
       eepos_pred:
-        loss: "MSE_eepos_multistep"
-        weight: 1.0
+        loss: "Pred_eepos_multistep"
+        loss_name: "eepos_pred_multistep"
+        weight: 0.0001
         inputs:
           proprio: "dataset"
+      contact_pred:
+        loss: "BCE_multistep"
+        loss_name: "contact_pred_multistep"
+        weight: 1.0
+      pairing_class:
+        loss: "BCE_multistep"
+        loss_name: "pairing_class_multistep"
+        weight: 1.0
 
-  # Simple_Multimodal_woutforcewfusion:
-  #   inputs:
-  #     image: "dataset"
-  #     proprio: "dataset"
-  #     action: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     params:
-  #       loss: "KL_DIV_multistep"
-  #       weight: 0.0005
-  #     image_pred:
-  #       loss: "MSE_image_multistep"
-  #       weight: 0.0001
-  #       inputs:
-  #         image: "dataset"
-  #     proprio_pred:
-  #       loss: "MSE_proprio_multistep"
-  #       weight: 1.0
-  #       inputs:
-  #         proprio: "dataset"
-  EEpos_dynamics:
-    inputs:
-      proprio: "dataset"
-      action: "dataset"
-      epoch: "dataset"
-    outputs:
-      proprio_pred:
-        loss: "MSE_proprio_multistep"
-        weight: 1.0
-        inputs:
-          proprio: "dataset"
-  # Simple_Multimodal:
-  #   inputs:
-  #     image: "dataset"
-  #     force: "dataset"
-  #     proprio: "dataset"
-  #     action: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     params:
-  #       loss: "KL_DIV_multistep"
-  #       weight: 0.0005
-  #     image_pred:
-  #       loss: "MSE_image_multistep"
-  #       weight: 0.0001
-  #       inputs:
-  #         image: "dataset"
-  #     proprio_pred:
-  #       loss: "MSE_proprio_multistep"
-  #       weight: 1.0
-  #       inputs:
-  #         proprio: "dataset"
-  #     force_pred:
-  #       loss: "MSE_force_multistep"
-  #       weight: 1.0
-  #       inputs:
-  #         force: "dataset"
+
 
 

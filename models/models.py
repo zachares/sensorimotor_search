@@ -35,8 +35,226 @@ def product_of_experts(m_vect, v_vect):
 
 #### observation encoder for mapping from the image data and force data to low dimensional latent space
 # Add network processing to determine latent space paramenters instead of product of experts to compare performance
+class Dynamics_Model(Proto_Macromodel):
+    def __init__(self, model_name, z_dim, action_dim, device = None, curriculum = None):
+        super().__init__()
+        self.curriculum = curriculum
+        self.device = device
 
-class Selfsupervised_Multimodal_woutforce(Proto_Macromodel):
+        self.action_dim = action_dim[0]
+        self.z_dim = z_dim
+        self.model_list = []
+
+        self.trans_model = FCN(model_name + "_trans_model", self.z_dim + self.action_dim, self.z_dim, 5, device = self.device)
+        self.model_list.append(self.trans_model)
+
+    def forward(self, input_dict):
+        z_list = input_dict["z"]
+        actions = input_dict["action"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        z_pred = z_list[0]
+
+        z_pred_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)        
+
+        for idx in range(steps):
+            action = actions[:,idx]
+            z_pred = self.trans_model(torch.cat([z_pred, action], dim = 1))
+
+            z_pred_list.append(z_pred)
+
+        return {
+            "z_pred": z_pred_list,
+        }
+
+    def trans(self, input_dict):
+        z = input_dict["z"].to(self.device).squeeze().unsqueeze(0)
+        actions = (input_dict["action_sequence"]).to(self.device)
+
+        steps = actions.size(0)
+
+        for idx in range(steps):
+            action = actions[idx].unsqueeze(0)
+            z = self.trans_model(torch.cat([z, action], dim = 1)) #.squeeze().unsqueeze(0)
+
+        return {
+            'latent_state': z,
+        }
+
+class Relational_Multimodal(Proto_Macromodel):
+    def __init__(self, model_name, image_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
+        super().__init__()
+
+        self.curriculum = curriculum
+        self.device = device
+        self.image_size = image_size
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.z_dim = z_dim
+
+        self.proprio_enc = FCN(model_name + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
+        self.proprio_dec = FCN(model_name + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
+
+        self.img_enc = CONV2DN(model_name + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
+        self.img_dec = DECONV2DN(model_name + "_img_dec", (self.z_dim,  2, 2), (image_size[0], image_size[1] / 4, image_size[2] / 4), False, device = self.device)
+
+        self.fusion_module = FCN(model_name + "_fusion_unit", 4 * self.z_dim, self.z_dim, 5, device = self.device) 
+
+        self.model_list = [self.fusion_module, self.proprio_enc, self.proprio_dec, self.img_enc, self.img_dec]
+
+    def get_z(self, image, proprio):
+        img_emb = self.img_enc(image)
+        proprio_emb = self.proprio_enc(proprio)
+        return self.fusion_module(torch.cat([img_emb.squeeze(), proprio_emb.squeeze()], dim = 1))
+
+    def get_image(self, z):
+        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
+        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
+
+    def get_proprio(self, z):
+        return self.proprio_dec(z)
+
+    def forward(self, input_dict):
+        images = (input_dict["image"] / 255.0).to(self.device)
+        proprios = (input_dict["proprio"]).to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        z_list = []
+        z_perm_list = []
+        eepos_list = []
+        eepos_perm_list = []
+        img_list = []
+        prop_list = []
+
+        if self.curriculum is not None:
+            steps = images.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = images.size(1)
+
+        for idx in range(steps):
+            image = images[:,idx]
+            proprio = proprios[:, idx]
+
+            z = self.get_z(image, proprio)
+            img = self.get_image(z)
+            prop = self.get_proprio(z)
+
+            idxs_perm = torch.randperm(z.size(0))
+
+            z_perm_list.append(z[idxs_perm])
+            eepos_perm_list.append(proprio[idxs_perm,:3])
+
+            img_list.append(img)
+            prop_list.append(prop)
+
+
+        return {
+            'z_perm': (z_perm_list, eepos_perm_list),
+            'image_dec': img_list,
+            'prop_dec': prop_list,
+        }
+
+    def encode(self, input_dict):
+        images = (input_dict["image"] / 255.0).to(self.device)
+        proprios = (input_dict["proprio"]).to(self.device)
+
+        return {
+            'latent_state': self.get_z(images[:,0], proprios[:,0]),
+        }
+
+class VAE_Multimodal(Proto_Macromodel):
+    def __init__(self, model_name, image_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
+        super().__init__()
+
+        self.curriculum = curriculum
+        self.device = device
+        self.image_size = image_size
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.z_dim = z_dim
+
+        self.proprio_enc = FCN(model_name + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
+        self.proprio_dec = FCN(model_name + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
+
+        self.img_enc = CONV2DN(model_name + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
+        self.img_dec = DECONV2DN(model_name + "_img_dec", (self.z_dim,  2, 2), (image_size[0], image_size[1] / 4, image_size[2] / 4), False, device = self.device)
+
+        self.model_list = [self.img_enc, self.img_dec, self.proprio_enc, self.proprio_dec]
+
+    def get_z(self, image, proprio):
+
+        img_mu, img_var = gaussian_parameters(self.img_enc(image))
+        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprio)) 
+
+        mu_vect = torch.cat([img_mu, proprio_mu], dim = 2)
+        var_vect = torch.cat([img_var, proprio_var], dim = 2)
+        mu_z, var_z = product_of_experts(mu_vect, var_vect)
+
+        z = sample_gaussian(mu_z, var_z, self.device)
+
+        return z, mu_z, var_z
+
+    def get_image(self, z):
+        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
+        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
+
+    def get_proprio(self, z):
+        return self.proprio_dec(z)
+
+    def forward(self, input_dict):
+        images = (input_dict["image"] / 255.0).to(self.device)
+        proprios = (input_dict["proprio"]).to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        params_list = []
+        img_list = []
+        prop_list = []
+
+        if self.curriculum is not None:
+            steps = images.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = images.size(1)
+
+        for idx in range(steps):
+            image = images[:,idx]
+            proprio = proprios[:, idx]
+
+            z, z_mu, z_var = self.get_z(image, proprio)
+            img = self.get_image(z)
+            prop = self.get_proprio(z)
+
+            params_list.append((z_mu, z_var, torch.zeros_like(z_mu), torch.ones_like(z_var)))
+            img_list.append(img)
+            prop_list.append(prop)
+
+        return {
+            'params': params_list,
+            'image_dec': img_list,
+            'prop_dec': prop_list,
+        }
+
+    def encode(self, input_dict):
+        images = (input_dict["image"] / 255.0).to(self.device)
+        proprios = (input_dict["proprio"]).to(self.device)
+        z, z_mu, z_var = self.get_z(images[:,0], proprios[:,0])
+        return {
+            'latent_state': z_mu,
+        }
+
+class Selfsupervised_Multimodal(Proto_Macromodel):
     def __init__(self, model_name, image_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
         super().__init__()
 
@@ -49,15 +267,14 @@ class Selfsupervised_Multimodal_woutforce(Proto_Macromodel):
         self.z_dim = z_dim
 
         self.pair_clas = FCN(model_name + "_pair_clas", self.z_dim, 1, 3, device = self.device)
+        self.contact_clas = FCN(model_name + "_contact_clas", self.z_dim + self.action_dim, 1, 3, device = self.device)        
 
         self.proprio_enc = FCN(model_name + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
-        self.proprio_dec = FCN(model_name + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
+        self.eepos_dec = FCN(model_name + "_eepos_dec", self.z_dim + self.action_dim, 3, 5, device = self.device)
 
         self.img_enc = CONV2DN(model_name + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
 
-        self.trans_model = FCN(model_name + "_trans_model", self.z_dim + self.action_dim, 2 * self.z_dim, 5, device = self.device)
-
-        self.model_list = [self.img_enc, self.proprio_enc, self.proprio_dec, self.trans_model, self.pair_clas]
+        self.model_list = [self.img_enc, self.proprio_enc, self.eepos_dec, self.contact_clas, self.pair_clas]
 
     def get_z(self, image, proprio):
 
@@ -72,284 +289,30 @@ class Selfsupervised_Multimodal_woutforce(Proto_Macromodel):
 
         return z, mu_z, var_z
  
+    def get_contact(self, z, action):
+        return self.contact_clas(torch.cat([z, action], dim = 1))
+
+    def get_eepos(self, z, action):
+        return self.eepos_dec(torch.cat([z, action], dim = 1))
+
+    def get_pairing(self, z):
+        return self.pair_clas(z)
+
     def forward(self, input_dict):
-        images = (input_dict["image"] / 255.0).to(self.device)
-        proprios = (input_dict["proprio"]).to(self.device)
-        proprios_up = (input_dict["proprio_unpaired"]).to(self.device)
         actions = (input_dict["action"]).to(self.device)
-        epoch = int(input_dict["epoch"].detach().item())
-
-        z_post_up, mu_z_up, var_z_up = self.get_z(images[:,0], proprios_up[:,0])
-        up_logits = self.pair_clas(z_post_up).squeeze()
-        z_post, mu_z, var_z = self.get_z(images[:,0], proprios[:,0])
-        p_logits = self.pair_clas(z_post).squeeze()
-
-        pair_class = (torch.cat([p_logits, up_logits], dim = 0), torch.cat([torch.ones_like(p_logits), torch.zeros_like(up_logits)], dim = 0))
-
-        z_prior = z_post.clone()
-
-        params_list = []
-        pair_class_list = [pair_class]
-        eepos_dec_list = []
-
-        if self.curriculum is not None:
-            steps = actions.size(1)
-            if len(self.curriculum) - 1 >= epoch:
-                steps = self.curriculum[epoch]
-        else:
-            steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-            image = images[:,idx+1]
-            proprio = proprios[:, idx+1]
-            proprio_up = proprios_up[:, idx+1]
-
-            z_post_up, mu_z_up, var_z_up = self.get_z(image, proprio_up)
-            up_logits = self.pair_clas(z_post_up).squeeze()
-            z_post, mu_z, var_z = self.get_z(image, proprio)
-            p_logits = self.pair_clas(z_post).squeeze()
-
-            pair_class = (torch.cat([p_logits, up_logits], dim = 0), torch.cat([torch.ones_like(p_logits), torch.zeros_like(up_logits)], dim = 0))
-
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-            z_prior = sample_gaussian(trans_mu.squeeze(), trans_var.squeeze(), self.device)
-
-            eepos_dec = self.proprio_dec(z_post)
-
-            params = (mu_z.squeeze(), var_z.squeeze(), trans_mu.squeeze(), trans_var.squeeze())
-
-            params_list.append(params)
-            pair_class_list.append(pair_class)
-            eepos_dec_list.append(eepos_dec)
-
-
-        return {
-            'params': params_list,
-            'pair_class': pair_class_list,
-            'eepos_pred': eepos_dec_list,
-        }
-
-    def encode(self, input_dict):
-
-        images = ((input_dict["image"] / 255.0).to(self.device))[:,0]
-        proprio = ((input_dict["proprio"]).to(self.device))[:,0]
-        z_post, mu_z, var_z = self.get_z(image, proprio)
-
-        return {
-            'latent_state': mu_z,
-        }
-
-    def trans(self, input_dict):
-        image = (input_dict["image"] / 255.0).to(self.device)
-        proprio = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action_sequence"]).to(self.device)
-
-        z_post, z_prior, var_z = self.get_z(image, proprio)
-
-        steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-
-            z_prior = trans_mu.squeeze().unsqueeze(0)
-
-        return {
-            'latent_state': z_prior,
-        }
-
-    def get_image(self, z):
-        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
-        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-
-class Simple_Multimodal(Proto_Macromodel):
-    def __init__(self, model_name, image_size, force_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
-        super().__init__()
-
-        self.curriculum = curriculum
-        self.device = device
-        self.image_size = image_size
-
-        self.force_size = force_size[0]
-        self.action_dim = action_dim[0]
-        self.proprio_size = proprio_size[0]
-        self.z_dim = z_dim
-
-        self.frc_enc = FCN(model_name + "_frc_enc", self.force_size, 2 * self.z_dim, 5, device = self.device)
-        self.frc_dec = FCN(model_name + "_frc_dec", self.z_dim, self.force_size, 5, device = self.device)
-
-        self.proprio_enc = FCN(model_name + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
-        self.proprio_dec = FCN(model_name + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
-
-        self.img_enc = CONV2DN(model_name + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
-        self.img_dec = DECONV2DN(model_name + "_img_dec", (self.z_dim,  2, 2), (image_size[0], image_size[1] / 4, image_size[2] / 4), False, device = self.device)
-
-        self.trans_model = FCN(model_name + "_trans_model", self.z_dim + self.action_dim, 2 * self.z_dim, 5, device = self.device)
-
-        self.model_list = [ self.frc_enc, self.frc_dec, self.img_enc, self.img_dec, self.proprio_enc, self.proprio_dec, self.trans_model]
- 
-    def forward(self, input_dict):
-        images = (input_dict["image"] / 255.0).to(self.device)
-        forces = (input_dict["force"]).to(self.device)
-        proprios = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action"]).to(self.device)
-        epoch = int(input_dict["epoch"].detach().item())
-
-        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
-        frc_mu, frc_var = gaussian_parameters(self.frc_enc(forces[:,0])) 
-        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprios[:,0])) 
-
-        mu_vect = torch.cat([img_mu, frc_mu, proprio_mu], dim = 2)
-        var_vect = torch.cat([img_var, frc_var, proprio_var], dim = 2)
-        mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
-        z_post = sample_gaussian(mu_z, var_z, self.device)
-        z_prior = z_post.clone()
-
-        params_list = []
-        img_dec_list = []
-        frc_dec_list = []
-        proprio_dec_list = []
-
-        if self.curriculum is not None:
-            steps = actions.size(1)
-            if len(self.curriculum) - 1 >= epoch:
-                steps = self.curriculum[epoch]
-        else:
-            steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-            image = images[:,idx+1]
-            force = forces[:, idx+1]
-            proprio = proprios[:, idx+1]
-
-            img_mu, img_var = gaussian_parameters(self.img_enc(image))
-            frc_mu, frc_var = gaussian_parameters(self.frc_enc(force)) 
-            proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprio)) 
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-
-            mu_vect = torch.cat([img_mu, frc_mu, proprio_mu], dim = 2)
-            var_vect = torch.cat([img_var, frc_var, proprio_var], dim = 2)
-            mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
-            z_post = sample_gaussian(mu_z, var_z, self.device)
-            z_prior = sample_gaussian(trans_mu.squeeze(), trans_var.squeeze(), self.device)
-
-            img_dec = 255.0 * torch.sigmoid(self.img_dec(z_post))
-            img_dec = F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-            frc_dec = self.frc_dec(z_post)
-            proprio_dec = self.proprio_dec(z_post)
-
-            params = (mu_z.squeeze(), var_z.squeeze(), trans_mu.squeeze(), trans_var.squeeze())
-
-            params_list.append(params)
-            img_dec_list.append(img_dec)
-            frc_dec_list.append(frc_dec)
-            proprio_dec_list.append(proprio_dec)
-
-
-        return {
-            'params': params_list,
-            'image_pred': img_dec_list,
-            'force_pred': frc_dec_list,
-            'proprio_pred': proprio_dec_list,
-        }
-
-    def encode(self, input_dict):
-
-        images = (input_dict["image"] / 255.0).to(self.device)
-        forces = (input_dict["force"]).to(self.device)
-        proprios = (input_dict["proprio"]).to(self.device)
-
-        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
-        frc_mu, frc_var = gaussian_parameters(self.frc_enc(forces[:,0])) 
-        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprios[:,0])) 
-
-        mu_vect = torch.cat([img_mu, frc_mu, proprio_mu], dim = 2)
-        var_vect = torch.cat([img_var, frc_var, proprio_var], dim = 2)
-        mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
-        return {
-            'latent_state': mu_z,
-        }
-
-    def trans(self, input_dict):
-        image = (input_dict["image"] / 255.0).to(self.device)
-        force = (input_dict["force"]).to(self.device)
-        proprio = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action_sequence"]).to(self.device)
-
-        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
-        frc_mu, frc_var = gaussian_parameters(self.frc_enc(forces[:,0])) 
-        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprios[:,0])) 
-
-        mu_vect = torch.cat([img_mu, frc_mu, proprio_mu], dim = 2)
-        var_vect = torch.cat([img_var, frc_var, proprio_var], dim = 2)
-        mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
-        z_prior = mu_z
-
-        steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-
-            z_prior = rans_mu.squeeze().unsqueeze(0)
-
-        return {
-            'latent_state': z_prior,
-        }
-
-    def get_image(self, z):
-        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
-        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-
-class Simple_Multimodal_woutforce(Proto_Macromodel):
-    def __init__(self, model_name, image_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
-        super().__init__()
-
-        self.curriculum = curriculum
-        self.device = device
-        self.image_size = image_size
-
-        self.action_dim = action_dim[0]
-        self.proprio_size = proprio_size[0]
-        self.z_dim = z_dim
-
-        self.proprio_enc = FCN(model_name + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
-        self.proprio_dec = FCN(model_name + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
-
-        self.img_enc = CONV2DN(model_name + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
-        self.img_dec = DECONV2DN(model_name + "_img_dec", (self.z_dim,  2, 2), (image_size[0], image_size[1] / 4, image_size[2] / 4), False, device = self.device)
-
-        self.trans_model = FCN(model_name + "_trans_model", self.z_dim + self.action_dim, 2 * self.z_dim, 5, device = self.device)
-
-        self.model_list = [self.proprio_enc, self.proprio_dec, self.img_enc, self.img_dec, self.trans_model]
- 
-    def forward(self, input_dict):
+        contacts = (input_dict["contact"]).to(self.device)
         images = (input_dict["image"] / 255.0).to(self.device)
         proprios = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action"]).to(self.device)
+        proprios_up = (input_dict["proprio_up"]).to(self.device)
         epoch =  int(input_dict["epoch"].detach().item())
 
-        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
-        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprios[:,0])) 
-
-        mu_vect = torch.cat([img_mu, proprio_mu], dim = 2)
-        var_vect = torch.cat([img_var, proprio_var], dim = 2)
-        mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
-        z_post = sample_gaussian(mu_z, var_z, self.device)
-        z_prior = z_post.clone()
-
         params_list = []
-        img_dec_list = []
-        proprio_dec_list = []
+
+        pair_list = []
+
+        eepos_list = []
+
+        contact_list = []
 
         if self.curriculum is not None:
             steps = actions.size(1)
@@ -359,274 +322,43 @@ class Simple_Multimodal_woutforce(Proto_Macromodel):
             steps = actions.size(1)
 
         for idx in range(steps):
+            image = images[:,idx]
+            proprio = proprios[:, idx]
+            proprio_up = proprios_up[:,idx]
             action = actions[:,idx]
-            image = images[:,idx+1]
-            proprio = proprios[:, idx+1]
+            contact = contacts[:,idx + 1]
 
-            img_mu, img_var = gaussian_parameters(self.img_enc(image))
-            proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprio)) 
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
+            z, z_mu, z_var = self.get_z(image, proprio)
+            z_up, z_mu_up, z_var_up = self.get_z(image, proprio_up)
 
-            mu_vect = torch.cat([img_mu, proprio_mu], dim = 2)
-            var_vect = torch.cat([img_var, proprio_var], dim = 2)
-            mu_z, var_z = product_of_experts(mu_vect, var_vect)
+            p_logits = self.get_pairing(z).squeeze().unsqueeze(1)
+            up_logits = self.get_pairing(z_up).squeeze().unsqueeze(1)
 
-            z_post = sample_gaussian(mu_z, var_z, self.device)
-            z_prior = sample_gaussian(trans_mu.squeeze(), trans_var.squeeze(), self.device)
+            ones = torch.ones_like(p_logits)
+            zeros = torch.zeros_like(up_logits)
 
-            img_dec = 255.0 * torch.sigmoid(self.img_dec(z_post))
-            img_dec = F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-            proprio_dec = self.proprio_dec(z_post)
+            contact_logits = self.get_contact(z, action).squeeze()
+            eepos_pred = self.get_eepos(z, action).squeeze()
 
-            params = (mu_z.squeeze(), var_z.squeeze(), trans_mu.squeeze(), trans_var.squeeze())
+            params_list.append((z_mu, z_var, torch.zeros_like(z_mu), torch.ones_like(z_var)))
 
-            params_list.append(params)
-            img_dec_list.append(img_dec)
-            proprio_dec_list.append(proprio_dec)
+            eepos_list.append(eepos_pred)
+            contact_list.append((contact_logits.squeeze(), contact.squeeze()))
+
+            pair_list.append((torch.cat([p_logits, up_logits], dim = 1), torch.cat([ones, zeros], dim = 1)))
 
 
         return {
             'params': params_list,
-            'image_pred': img_dec_list,
-            'proprio_pred': proprio_dec_list,
+            'pairing_class': pair_list,
+            'eepos_pred': eepos_list,
+            'contact_pred': contact_list,
         }
 
     def encode(self, input_dict):
-
         images = (input_dict["image"] / 255.0).to(self.device)
         proprios = (input_dict["proprio"]).to(self.device)
-
-        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
-        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprios[:,0])) 
-
-        mu_vect = torch.cat([img_mu, proprio_mu], dim = 2)
-        var_vect = torch.cat([img_var, proprio_var], dim = 2)
-        mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
+        z, z_mu, z_var = self.get_z(images[:,0], proprios[:,0])
         return {
-            'latent_state': mu_z,
-        }
-
-    def trans(self, input_dict):
-        image = (input_dict["image"] / 255.0).to(self.device)
-        proprio = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action_sequence"]).to(self.device)
-
-        img_mu, img_var = gaussian_parameters(self.img_enc(images[:,0]))
-        proprio_mu, proprio_var = gaussian_parameters(self.proprio_enc(proprios[:,0])) 
-
-        mu_vect = torch.cat([img_mu, proprio_mu], dim = 2)
-        var_vect = torch.cat([img_var, proprio_var], dim = 2)
-        mu_z, var_z = product_of_experts(mu_vect, var_vect)
-
-        z_prior = mu_z
-
-        steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-
-            z_prior = rans_mu.squeeze().unsqueeze(0)
-
-        return {
-            'latent_state': z_prior,
-        }
-
-    def get_image(self, z):
-        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
-        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-
-class Simple_Multimodal_woutforcewfusion(Proto_Macromodel):
-    def __init__(self, model_name, image_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
-        super().__init__()
-
-        self.curriculum = curriculum
-        self.device = device
-        self.image_size = image_size
-
-        self.action_dim = action_dim[0]
-        self.proprio_size = proprio_size[0]
-        self.z_dim = z_dim
-
-        self.proprio_enc = FCN(model_name + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
-        self.proprio_dec = FCN(model_name + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
-
-        self.img_enc = CONV2DN(model_name + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
-        self.img_dec = DECONV2DN(model_name + "_img_dec", (self.z_dim,  2, 2), (image_size[0], image_size[1] / 4, image_size[2] / 4), False, device = self.device)
-
-        self.fusion_module = FCN(model_name + "_fusion_unit", 4 * self.z_dim, 2 * self.z_dim, 5, device = self.device) 
-
-        self.trans_model = FCN(model_name + "_trans_model", self.z_dim + self.action_dim, 2 * self.z_dim, 5, device = self.device)
-
-        self.model_list = [self.fusion_module, self.proprio_enc, self.proprio_dec, self.img_enc, self.img_dec, self.trans_model]
- 
-    def forward(self, input_dict):
-        images = (input_dict["image"] / 255.0).to(self.device)
-        proprios = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action"]).to(self.device)
-        epoch =  int(input_dict["epoch"].detach().item())
-
-        img_emb = self.img_enc(images[:,0])
-        proprio_emb = self.proprio_enc(proprios[:,0])
-
-        mu_z, var_z = gaussian_parameters(self.fusion_module(torch.cat([img_emb.squeeze(), proprio_emb.squeeze()], dim = 1)))
-
-        z_post = sample_gaussian(mu_z, var_z, self.device).squeeze()
-        z_prior = z_post.clone().squeeze()
-
-        # print("Z posterior size: ", z_post.size())
-        # print("Z prior size: ", z_prior.size())
-
-        params_list = []
-        img_dec_list = []
-        proprio_dec_list = []
-
-        if self.curriculum is not None:
-            steps = actions.size(1)
-            if len(self.curriculum) - 1 >= epoch:
-                steps = self.curriculum[epoch]
-        else:
-            steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-            image = images[:,idx+1]
-            proprio = proprios[:, idx+1]
-
-            img_emb = self.img_enc(image)
-            proprio_emb = self.proprio_enc(proprio)
-
-            mu_z, var_z = gaussian_parameters(self.fusion_module(torch.cat([img_emb.squeeze(), proprio_emb.squeeze()], dim = 1)))
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-
-            z_post = sample_gaussian(mu_z, var_z, self.device).squeeze()
-            z_prior = sample_gaussian(trans_mu.squeeze(), trans_var.squeeze(), self.device).squeeze()
-
-            # print("Z posterior size: ", z_post.size())
-            # print("Z prior size: ", z_prior.size())
-
-            img_dec = 255.0 * torch.sigmoid(self.img_dec(z_post))
-            img_dec = F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-            proprio_dec = self.proprio_dec(z_post)
-
-            params = (mu_z.squeeze(), var_z.squeeze(), trans_mu.squeeze(), trans_var.squeeze())
-
-            params_list.append(params)
-            img_dec_list.append(img_dec)
-            proprio_dec_list.append(proprio_dec)
-
-
-        return {
-            'params': params_list,
-            'image_pred': img_dec_list,
-            'proprio_pred': proprio_dec_list,
-        }
-
-    def encode(self, input_dict):
-
-        images = (input_dict["image"] / 255.0).to(self.device)
-        proprios = (input_dict["proprio"]).to(self.device)
-
-        img_emb = self.img_enc(images[:,0])
-        proprio_emb = self.proprio_enc(proprios[:,0])
-
-        mu_z, var_z = gaussian_parameters(self.fusion_module(torch.cat([img_emb.squeeze(), proprio_emb.squeeze()], dim = 1)))
-
-        return {
-            'latent_state': mu_z,
-        }
-
-    def trans(self, input_dict):
-        image = (input_dict["image"] / 255.0).to(self.device)
-        proprio = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action_sequence"]).to(self.device)
-
-        img_emb = self.img_enc(images[:,0])
-        proprio_emb = self.proprio_enc(proprios[:,0])
-
-        mu_z, var_z = gaussian_parameters(self.fusion_module(torch.cat([img_emb.squeeze(), proprio_emb.squeeze()], dim = 1)))
-
-        z_prior = mu_z
-
-        steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-
-            trans_mu, trans_var = gaussian_parameters(self.trans_model(torch.cat([z_prior, action], dim = 1)))
-
-            z_prior = rans_mu.squeeze().unsqueeze(0)
-
-        return {
-            'latent_state': z_prior,
-        }
-
-    def get_image(self, z):
-        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
-        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
-
-class EEpos_dynamics(Proto_Macromodel):
-    def __init__(self, model_name, proprio_size, action_dim, device = None, curriculum = None):
-        super().__init__()
-
-        self.curriculum = curriculum
-        self.device = device
-
-        self.action_dim = action_dim[0]
-        self.proprio_size = proprio_size[0]
-
-        self.proprio_dyn = FCN(model_name + "_proprio_enc", self.proprio_size + self.action_dim, self.proprio_size, 5, device = self.device)
-
-        self.model_list = [self.proprio_dyn]
- 
-    def forward(self, input_dict):
-        proprio = (input_dict["proprio"]).to(self.device)[:, 0]
-        actions = (input_dict["action"]).to(self.device)
-        epoch =  int(input_dict["epoch"].detach().item())
-
-        proprio_dec_list = []
-
-        # print("Proprio size: ", proprio.size())
-
-        if self.curriculum is not None:
-            steps = actions.size(1)
-            if len(self.curriculum) - 1 >= epoch:
-                steps = self.curriculum[epoch]
-        else:
-            steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-
-            proprio = self.proprio_dyn(torch.cat([proprio.squeeze(), action.squeeze()], dim = 1)).squeeze()
-
-            proprio_dec_list.append(proprio)
-        # print("Proprio size: ", proprio.size())
-
-        return {
-            'proprio_pred': proprio_dec_list,
-        }
-    def trans(self, input_dict):
-        proprio_pred = (input_dict["proprio"]).to(self.device)
-        actions = (input_dict["action"]).to(self.device)
-        epoch = input_dict["epoch"]
-
-        proprio_dec_list = []
-
-        if self.curriculum is not None:
-            steps = actions.size(1)
-            if len(self.curriculum) - 1 >= epoch:
-                steps = self.curriculum[epoch]
-        else:
-            steps = actions.size(1)
-
-        for idx in range(steps):
-            action = actions[:,idx]
-
-            proprio = self.proprio_dyn(torch.cat([proprio_pred.squeeze(), action.squeeze()], dim = 1)).squeeze()
-
-        return {
-            'latent_state': proprio,
+            'latent_state': z_mu,
         }
