@@ -192,3 +192,83 @@ class PlaNet_Multimodal(Proto_Macromodel):
     def get_image(self, z):
         img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
         return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
+
+
+class Dynamics_VarModel(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, z_dim, action_dim, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+
+        self.action_dim = action_dim[0]
+        self.z_dim = z_dim
+        self.model_list = []
+
+        self.trans_model = ResNetFCN(folder + "_trans_resnet", self.z_dim + self.action_dim, 2*self.z_dim, 3, device = self.device)
+        self.model_list.append(self.trans_model)
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"]) 
+
+    def get_z(self, z, action):
+        mu_z, var_z = gaussian_parameters(self.trans_model(torch.cat([z, action], dim = 1), torch.cat([z, z], dim = 1)))
+
+        z = sample_gaussian(mu_z.squeeze(), var_z.squeeze(), self.device).squeeze()
+
+        return z, mu_z.squeeze(), var_z.squeeze()
+
+    def forward(self, input_dict):
+        z_list = input_dict["z"]
+        params = input_dict["params"]
+        actions = input_dict["action"].to(self.device)
+        contact = input_dict["contact"]
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        param = params[0]
+        z_mu_enc, z_var_enc, prior_mu, prior_var = param
+
+        z_pred = z_mu_enc.clone()
+
+        params_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)       
+
+        for idx in range(steps - 1):
+            action = actions[:,idx]
+            param = params[idx+1]
+
+            z_mu_enc, z_var_enc, prior_mu, prior_var = param
+            z_pred, mu_z, var_z = self.get_z(z_pred, action)
+
+            params_list.append((mu_z, var_z, z_mu_enc, z_var_enc))
+
+        return {
+            "params": params_list,
+        }
+
+    def trans(self, input_dict):
+        mu_z = input_dict["z"].to(self.device).squeeze()
+        actions = (input_dict["action_sequence"]).to(self.device)
+
+        steps = actions.size(0)
+
+        for idx in range(steps):
+            action = actions[idx].squeeze()
+            z, mu_z, var_z = self.get_z(mu_z.squeeze().unsqueeze(0), action.squeeze().unsqueeze(0))
+
+        return {
+            'latent_state': mu_z,
+        }

@@ -19,13 +19,23 @@ def get_2Dconv_params(input_size, output_size):
 
     input_chan, input_height, input_width = input_size
     output_chan, output_height, output_width = output_size
-    # assume output_chan is a multiple of 2
+
+    # if output_chan == 128 or output_chan == 256:
+    #     output_2 = output_chan
+    # else:
+    #     output_2 = 128
+    # # assume output_chan is a multiple of 2
     # assume input height and width have only two prime factors 2 and 3 for now
     # assume that output height and output width are factors of input height and input width respectively
     chan_list = [input_chan, 16]
 
     while chan_list[-1] != output_chan:
+        # print(chan_list[-1])
+        # print("Target", output_2)
         chan_list.append(chan_list[-1] * 2)
+
+    # if output_chan != 128 and output_chan != 256:
+    #     chan_list.append(output_chan)
 
     prime_fact_rows = get_prime_fact(input_width // output_width)
     prime_fact_cols = get_prime_fact(input_height // output_height)
@@ -526,14 +536,53 @@ class Proto_Macromodel(nn.Module):
         self.model_list = []
 
     def save(self, epoch_num):
-        for model in self.model_list:
-            model.save(epoch_num)
+        if self.save_bool:
+            for model in self.model_list:
+                model.save(epoch_num)
 
     def load(self, epoch_num):
         for model in self.model_list:
             model.load(epoch_num)
 
+    def parameters(self):
+        parameters = []
+        for model in self.model_list:
+            parameters += list(model.parameters())
+        return parameters
+
+    def eval(self):
+        for model in self.model_list:
+            model.eval()
+
 #### a long short-term memory network
+class ResNetFCN(Proto_Macromodel):
+    def __init__(self, model_name, input_channels, output_channels, num_layers, device = None):
+        super().__init__()
+        self.device = device
+        self.input_channels = input_channels
+        self.save_bool = True
+        self.output_channels = output_channels
+
+        self.num_layers = num_layers
+        self.model_list = []
+
+        for idx in range(self.num_layers):
+            if idx == 0:
+                self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.input_channels, self.output_channels, 2, device = self.device).to(self.device))
+            else:
+                self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.output_channels, self.output_channels, 2, device = self.device).to(self.device))
+
+    def forward(self, x, residual_0):
+        for idx, model in enumerate(self.model_list):
+            if idx == 0:
+                output = model(x) + residual_0
+                residual = output.clone()
+            else:
+                output = model(output) + residual
+                residual = output.clone()
+                
+        return output
+
 class LSTM(Proto_Macromodel):
     def __init__(self, model_name, input_channels, output_channels, fg_list =[], ig_list = [], cg_list = [], og_list = [], device = None):
         super().__init__()
@@ -541,7 +590,7 @@ class LSTM(Proto_Macromodel):
         self.device = device
         self.input_chan = input_channels
         self.output_chan = output_channels
-
+        self.save_bool = True
         # -----------------------
         # Long Short-Term Memory Network
         # -----------------------

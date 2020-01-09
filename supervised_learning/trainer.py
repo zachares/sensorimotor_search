@@ -71,12 +71,18 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["Relational_Multimodal"] = Relational_Multimodal(models_folder + "Relational_Multimodal", image_size, proprio_size, z_dim,\
+		self.model_dict["Relational_Multimodal"] = Relational_Multimodal(models_folder, "Relational_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["VAE_Multimodal"] = VAE_Multimodal(models_folder + "VAE_Multimodal", image_size, proprio_size, z_dim,\
+		self.model_dict["VAE_Multimodal"] = VAE_Multimodal(models_folder, "VAE_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Selfsupervised_Multimodal"] = Selfsupervised_Multimodal(models_folder + "Selfsupervised_Multimodal", image_size, proprio_size, z_dim,\
+		self.model_dict["Selfsupervised_Multimodal"] = Selfsupervised_Multimodal(models_folder, "Selfsupervised_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["Selfsupervised_Dynamics"] = Dynamics_DetModel(models_folder, "Selfsupervised_Dynamics", self.info_flow, z_dim,\
+		 action_dim, device = device, curriculum = self.curriculum).to(device)	
+		self.model_dict["VAE_Dynamics"] = Dynamics_DetModel(models_folder, "VAE_Dynamics", self.info_flow, z_dim,\
+		 action_dim, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["Relational_Dynamics"] = Dynamics_DetModel(models_folder, "Relational_Dynamics", self.info_flow, z_dim,\
+		 action_dim, device = device, curriculum = self.curriculum).to(device)				 	
 		###############################################
 		###### Code ends here ########################
 		################################################
@@ -86,8 +92,12 @@ class Trainer(object):
 		self.opt_dict = {}
 
 		for key in self.model_dict.keys():
-			parameters_list = list(self.model_dict[key].parameters())
-			self.opt_dict[key] = optim.Adam(parameters_list, lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
+			if self.info_flow[key]["train"] == 1:
+				print("Training " , key)
+				parameters_list = list(self.model_dict[key].parameters())
+				self.opt_dict[key] = optim.Adam(parameters_list, lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
+			else:
+				print("Not Training ", key)
 		# self.optimizer = optim.Adam(list(self.obs_enc.parameters()) + list(self.dyn_mod.parameters()) + list(self.goal_prov.parameters()),\
 		#  lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
 		
@@ -104,11 +114,12 @@ class Trainer(object):
 		##############################################
 		self.loss_dict = {}
 		self.loss_dict["Rec_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss(), offset = 0)
-		self.loss_dict["Pred_multistep"] = Proto_MultiStep_Loss(nn.MSELoss())
+		self.loss_dict["Pred_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss())
+		self.loss_dict["Pred_multistep_list"] = Proto_MultiStep_Loss_List(nn.MSELoss())
 		self.loss_dict["Rec_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), offset = 0)
 		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep()
 		self.loss_dict["Pred_eepos_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), max_idx = 3)
-		self.loss_dict["Relational_multistep"] = Relational_Multistep()
+		self.loss_dict["Prior_multistep"] = Prior_Multistep()
 		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
 		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
 		###################################
@@ -177,8 +188,14 @@ class Trainer(object):
 		return self.loss()
 
 	def loss(self):
+		loss_idx = 0
+		loss_bool = False
 		for idx_model, model_key in enumerate(self.model_dict.keys()):
 			for idx_output, output_key in enumerate(self.info_flow[model_key]['outputs'].keys()):
+				if self.info_flow[model_key]['outputs'][output_key]['loss'] == "":
+					loss_idx += 1
+					continue
+
 				input_list = [self.model_outputs[model_key][output_key]]
 
 				if 'inputs' in list(self.info_flow[model_key]['outputs'][output_key].keys()):
@@ -189,8 +206,9 @@ class Trainer(object):
 				loss_function = self.loss_dict[self.info_flow[model_key]['outputs'][output_key]['loss']]
 				loss_name = self.info_flow[model_key]["outputs"][output_key]["loss_name"]
 
-				if idx_model == 0 and idx_output == 0:
+				if loss_bool == False:
 					loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
+					loss_bool = True
 				else:
 					loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
 

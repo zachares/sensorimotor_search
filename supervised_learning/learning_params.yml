@@ -5,8 +5,8 @@ dataloading_params:
   dataset_path: "/scr2/dataset_senssearch/"
   num_workers: 6
   batch_size: 128
-  num_steps: 10
-  idx_dict_path: ""
+  num_steps: 3 #10
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/201912092127_debugging_146_inital_testing/val_train_split.pkl"
 
 training_params:
   seed: 1234
@@ -17,7 +17,7 @@ training_params:
   max_training_epochs: 25
   val_ratio: 0.05
   use_GPU: True
-  curriculum: [3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10]
+  curriculum: [2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
@@ -37,50 +37,63 @@ info_flow:
       proprio: [12]
       contact: [1]
   Relational_Multimodal:
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/201912101814_debugging_70_inital_testing/"
+    epoch_num: 20
     inputs:
       image: "dataset"
       proprio: "dataset"
       epoch: "dataset"
     outputs:
-      z_perm:
-        loss: "Relational_multistep"
-        loss_name: "relative_random"
-        weight: 1.0
-      image_dec:
-        loss: "Rec_image_multistep"
-        loss_name: "image_rec_multistep"
-        weight: 0.001
-        inputs:
-          image: "dataset"
-      prop_dec:
-        loss: "Rec_multistep"
-        loss_name: "proprio_rec_multistep"
-        weight: 10
-        inputs:
-          proprio: "dataset"
+      z:
+        loss: ""
+      # z_dist:
+      #   loss: "Prior_multistep"
+      #   loss_name: "relative_random"
+      #   weight: 0.01
+      # image_dec:
+      #   loss: "Rec_image_multistep"
+      #   loss_name: "image_rec_multistep"
+      #   weight: 0.0001
+      #   inputs:
+      #     image: "dataset"
+      # prop_dec:
+      #   loss: "Rec_multistep"
+      #   loss_name: "proprio_rec_multistep"
+      #   weight: 10
+      #   inputs:
+      #     proprio: "dataset"
   VAE_Multimodal:
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/201912101814_debugging_70_inital_testing/"
+    epoch_num: 20
     inputs:
       image: "dataset"
       proprio: "dataset"
       epoch: "dataset"
     outputs:
-      params:
-        loss: "KL_DIV_multistep"
-        loss_name: "kl_div_multistep"
-        weight: 0.0005
-      image_dec:
-        loss: "Rec_image_multistep"
-        loss_name: "image_rec_multistep"
-        weight: 0.0001
-        inputs:
-          image: "dataset"
-      prop_dec:
-        loss: "Rec_multistep"
-        loss_name: "proprio_rec_multistep"
-        weight: 1.0
-        inputs:
-          proprio: "dataset"
+      z:
+        loss: ""
+      # params:
+      #   loss: "KL_DIV_multistep"
+      #   loss_name: "kl_div_multistep"
+      #   weight: 0.0005
+      # image_dec:
+      #   loss: "Rec_image_multistep"
+      #   loss_name: "image_rec_multistep"
+      #   weight: 0.0001
+      #   inputs:
+      #     image: "dataset"
+      # prop_dec:
+      #   loss: "Rec_multistep"
+      #   loss_name: "proprio_rec_multistep"
+      #   weight: 1.0
+      #   inputs:
+      #     proprio: "dataset"
   Selfsupervised_Multimodal:
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/201912101814_debugging_70_inital_testing/"
+    epoch_num: 20
     inputs:
       image: "dataset"
       proprio: "dataset"
@@ -89,25 +102,77 @@ info_flow:
       action: "dataset"
       epoch: "dataset"
     outputs:
-      params:
-        loss: "KL_DIV_multistep"
-        loss_name: "kl_div_multistep"
-        weight: 0.0005
-      eepos_pred:
-        loss: "Pred_eepos_multistep"
-        loss_name: "eepos_pred_multistep"
-        weight: 0.0001
+      z:
+        loss: ""
+      # params:
+      #   loss:  "" #"KL_DIV_multistep"
+      #   loss_name: "kl_div_multistep"
+      #   weight: 0.0005
+      # image_pred:
+      #   loss:  "" #"Pred_image_multistep"
+      #   loss_name: "image_pred_multistep"
+      #   weight: 0.001
+      #   inputs:
+      #     image: "dataset"
+      # eepos_pred:
+      #   loss: "Pred_eepos_multistep"
+      #   loss_name: "eepos_pred_multistep"
+      #   weight: 0.0001
+      #   inputs:
+      #     proprio: "dataset"
+      # contact_pred:
+      #   loss: "BCE_multistep"
+      #   loss_name: "contact_pred_multistep"
+      #   weight: 1.0
+      # pairing_class:
+      #   loss: "BCE_multistep"
+      #   loss_name: "pairing_class_multistep"
+      #   weight: 1.0
+  Selfsupervised_Dynamics:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      action: "dataset"
+      z: "Selfsupervised_Multimodal"
+      epoch: "dataset"
+    outputs:
+      z_pred:
+        loss: "Pred_multistep_list"
+        loss_name: "dynamics_loss"
+        weight: 1.0
         inputs:
-          proprio: "dataset"
-      contact_pred:
-        loss: "BCE_multistep"
-        loss_name: "contact_pred_multistep"
+          z: "Selfsupervised_Multimodal"
+  VAE_Dynamics:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      action: "dataset"
+      z: "VAE_Multimodal"
+      epoch: "dataset"
+    outputs:
+      z_pred:
+        loss: "Pred_multistep_list"
+        loss_name: "dynamics_loss"
         weight: 1.0
-      pairing_class:
-        loss: "BCE_multistep"
-        loss_name: "pairing_class_multistep"
+        inputs:
+          z: "Relational_Multimodal"
+  Relational_Dynamics:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      action: "dataset"
+      z: "Relational_Multimodal"
+      epoch: "dataset"
+    outputs:
+      z_pred:
+        loss: "Pred_multistep_list"
+        loss_name: "dynamics_loss"
         weight: 1.0
-
+        inputs:
+          z: "Relational_Multimodal"
 
 
 

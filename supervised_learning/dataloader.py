@@ -8,6 +8,8 @@ import sys
 import yaml
 import copy
 import random
+import pickle
+
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -38,7 +40,7 @@ class H5_DataLoader(Dataset):
         self.train_length = 0
         self.val_length = 0
 
-        self.up_thresh = 0.035
+        self.up_thresh = 0.05
 
         if idx_dict == None:
             self.idx_dict = {}
@@ -78,7 +80,14 @@ class H5_DataLoader(Dataset):
             train_eepos = np.concatenate(train_eepos_list, axis = 0)
 
             val_dist = np.linalg.norm(val_eepos, axis = 1)
+
+            print("Validation Min: ", val_dist.min())
+            print("Validation Max: ", val_dist.max())
+
             train_dist = np.linalg.norm(train_eepos, axis = 1)
+
+            print("Training Min: ", train_dist.min())
+            print("Training Max: ", train_dist.max())
 
             for idx in range(self.train_length):
                 if idx % 10000 == 0:
