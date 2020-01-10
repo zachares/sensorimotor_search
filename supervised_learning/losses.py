@@ -66,11 +66,12 @@ class Proto_MultiStep_Loss(object):
 
 		return loss
 
-class Proto_MultiStep_Hist_Loss(object):
-	def __init__(self, loss_function, max_idx = -1, offset = 1):
+class Proto_MultiStep_Hist_Loss_List(object):
+	def __init__(self, loss_function, max_idx = -1, offset = 1, hyperparameter = 1.0):
 		self.loss_function = loss_function
 		self.max_idx = max_idx
 		self.offset = offset
+		self.hyperparameter = hyperparameter
 
 	def loss(self, input_tuple, logging_dict, weight, label):
 		net_est_list = input_tuple[0]
@@ -80,22 +81,32 @@ class Proto_MultiStep_Hist_Loss(object):
 			targets = input_tuple[1][:,:,:self.max_idx]
 
 		for idx, net_est in enumerate(net_est_list):
-			target = targets[:,idx + self.offset]
-			errors = self.loss_function(net_est, target)
+			target = targets[idx + self.offset]
+			errors = self.loss_function(net_est, target).sum(1)
 
 			mu_err = errors.mean()
+
+			# print("Mu ", mu_err.item())
+
 			std_err = errors.std()
 
-			num_batch = errors.size() * torch.max(0.1, torch.sigmoid(torch.log(std_err / mu_err)))
+			# print("STD ", std_err.item())
 
-			print(num_batch)
+			if 1 - torch.sigmoid(torch.log(self.hyperparameter * std_err / mu_err)) < 0.1:
+				num_batch = np.round(0.1 * errors.size(0)).astype(np.int32)
+			else:
+				num_batch = torch.round((1 - torch.sigmoid(torch.log( self.hyperparameter * std_err / mu_err))) * errors.size(0)).type(torch.int32)
+
+			# print(num_batch)
 
 			errors_sorted, indices = torch.sort(errors)
 
+			# print(errors_sorted)
+
 			if idx == 0:
-				loss = weight * errors_sorted[-num_batch:]
+				loss = weight * errors_sorted[-num_batch:].mean()
 			else:
-				loss += weight * errors_sorted[-num_batch:]
+				loss += weight * errors_sorted[-num_batch:].mean()
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
 
@@ -113,6 +124,9 @@ class Proto_MultiStep_Loss_List(object):
 			targets = input_tuple[1]
 		else:
 			targets = input_tuple[1][:,:,:self.max_idx]
+
+		# print("Target Length: ", len(targets))
+		# print("Estimates Length: ", len(net_est_list))
 
 		for idx, net_est in enumerate(net_est_list):
 			target = targets[idx + self.offset]
@@ -216,8 +230,24 @@ class BinaryEst_MultiStep(Proto_MultiStep_Loss):
 			logits = input_element[0]
 			labels = input_element[1]
 			probs = torch.sigmoid(logits)
+			# if idx == 0:
+			# 	print("Probs")
+			# 	print("Probs Size: ", probs.size())
+			# 	print(probs)
+
+			# 	print("Labels")
+			# 	print("Labels Size: ", labels.size())
+			# 	print(labels)
+
+
 			samples = torch.where(probs > 0.5, torch.ones_like(probs), torch.zeros_like(probs))
+
+			# print(samples)
+
+			# print(labels)
 			accuracy = torch.where(samples == labels, torch.ones_like(probs), torch.zeros_like(probs))
+
+
 			# if accuracy.mean() != 0.5:
 			# 	print(accuracy.mean())
 			# print("Accuracy: ", accuracy.mean())

@@ -5,6 +5,7 @@ import scipy.misc
 import time
 import h5py
 import sys
+import copy
 import os
 import datacollection_util as dc_T
 import keyboard
@@ -115,7 +116,7 @@ if __name__ == '__main__':
 
 			if logging_data_bool == 1:
 				num_points += 1
-				dc_T.save_obs(obs, prev_obs, obs_keys, obs_dict)
+				dc_T.save_obs(copy.deepcopy(obs), copy.deepcopy(prev_obs), obs_keys, obs_dict)
 
 			prev_obs = obs
 
@@ -125,6 +126,10 @@ if __name__ == '__main__':
 			if logging_data_bool == 1 and num_points >= 200:
 				print("On ", point_idx + 1, " of ", len(points_list), " points")
 				file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+
+				# print("DIctionary")
+				# print(obs_dict['force'])
+				# print(obs_dict['proprio'])
 
 				dataset = h5py.File(file_name, 'w')
 

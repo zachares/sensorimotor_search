@@ -71,18 +71,16 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["Relational_Multimodal"] = Relational_Multimodal(models_folder, "Relational_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
+		self.model_dict["Simple_Multimodal_Hist1"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist1", self.info_flow, image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["VAE_Multimodal"] = VAE_Multimodal(models_folder, "VAE_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
+		self.model_dict["Simple_Multimodal_Hist5"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist5", self.info_flow, image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Selfsupervised_Multimodal"] = Selfsupervised_Multimodal(models_folder, "Selfsupervised_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
+		self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
 		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Selfsupervised_Dynamics"] = Dynamics_DetModel(models_folder, "Selfsupervised_Dynamics", self.info_flow, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)	
-		self.model_dict["VAE_Dynamics"] = Dynamics_DetModel(models_folder, "VAE_Dynamics", self.info_flow, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Relational_Dynamics"] = Dynamics_DetModel(models_folder, "Relational_Dynamics", self.info_flow, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)				 	
+		# self.model_dict["Contact_Multimodal"] = Contact_Multimodal(models_folder, "Contact_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
+		#  action_dim, device = device, curriculum = self.curriculum).to(device)
+		# self.model_dict["Contact_Force_Multimodal"] = Contact_Force_Multimodal(models_folder, "Contact_Force_Multimodal", self.info_flow, image_size, proprio_size, force_size, z_dim,\
+		#  action_dim, device = device, curriculum = self.curriculum).to(device)		 	
 		###############################################
 		###### Code ends here ########################
 		################################################
@@ -120,6 +118,8 @@ class Trainer(object):
 		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep()
 		self.loss_dict["Pred_eepos_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), max_idx = 3)
 		self.loss_dict["Prior_multistep"] = Prior_Multistep()
+		self.loss_dict["Hist1_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 1)
+		self.loss_dict["Hist5_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 5)
 		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
 		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
 		###################################

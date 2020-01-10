@@ -18,7 +18,10 @@ def save_obs(obs_dict, prev_obs_dict, keys, array_dict):
 			obs = resize(obs, (128, 128))
 			obs = np.transpose(obs, (2, 1, 0))
 			obs = np.expand_dims(obs, axis = 0)
-
+		elif key == "depth":
+			obs = np.rot90(prev_obs_dict[key], k = 2)
+			obs = resize(obs, (128, 128))
+			obs = np.expand_dims(obs, axis = 0)
 		else:
 			obs = np.expand_dims(prev_obs_dict[key], axis = 0)
 

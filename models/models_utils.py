@@ -572,11 +572,15 @@ class ResNetFCN(Proto_Macromodel):
             else:
                 self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.output_channels, self.output_channels, 2, device = self.device).to(self.device))
 
-    def forward(self, x, residual_0):
+    def forward(self, x, input_tens):
         for idx, model in enumerate(self.model_list):
             if idx == 0:
-                output = model(x) + residual_0
+                output = model(x) + input_tens
                 residual = output.clone()
+
+            elif idx == (len(self.model_list) - 1):
+                output = model(output) + input_tens
+
             else:
                 output = model(output) + residual
                 residual = output.clone()
