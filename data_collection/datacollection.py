@@ -9,6 +9,7 @@ import copy
 import os
 import datacollection_util as dc_T
 import matplotlib.pyplot as plt
+import random
 
 
 sys.path.insert(0, "../robosuite/") 
@@ -30,6 +31,10 @@ if __name__ == '__main__':
 	workspace = np.array(cfg['datacollection_params']['workspace'])
 
 	workspace_dim = cfg['datacollection_params']['workspace_dim']
+	seed = cfg['datacollection_params']['seed']
+
+	random.seed(seed)
+	np.random.seed(seed)
 
 	if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
 		os.mkdir(logging_folder )
@@ -51,7 +56,7 @@ if __name__ == '__main__':
 	offset = np.array([0, 0, 0.005])
 	top_goal = np.concatenate([env._get_sitepos(peg_top_site) + offset, np.array([np.pi, 0, np.pi])])
 	bottom_goal = np.concatenate([env._get_sitepos(peg_bottom_site) + offset, np.array([np.pi, 0, np.pi])])
-	fp_array = dc_T.gridpoints_b(workspace_dim, top_goal, 11)
+	fp_array = dc_T.gridpoints_b(workspace_dim, top_goal, 10)
 
 	fp_idx = 0
 
@@ -63,7 +68,7 @@ if __name__ == '__main__':
 	# moving to first initial position
 	points_list = []
 	point_idx = 0
-	kp = 15
+	kp = 10
 
 	for idx in range(fp_array.shape[0]):
 		point = fp_array[idx]
@@ -78,11 +83,14 @@ if __name__ == '__main__':
 
 	goal = points_list[point_idx][0]
 
-	while env._check_poserr(goal, tol, tol_ang) == False:
+	counter = 0
+
+	while env._check_poserr(goal, tol, tol_ang) == False and counter < 100:
 		action, action_euler = env._pose_err(goal)
 		pos_err = kp * action_euler[:3]
 		obs, reward, done, info = env.step(pos_err)
 		obs['action'] = env.controller.transform_action(pos_err)
+		counter += 1
 
 	# dc_T.plot_image(obs['image'])
 	# a = input("")
@@ -104,12 +112,12 @@ if __name__ == '__main__':
 		goal = points_list[point_idx][0]
 		point_type = points_list[point_idx][1]
 
-		# if point_type == 1:
-		# 	print("exploring")
-		# elif point_type == 2:
-		# 	print("insertion")
-		# else:
-		# 	print("ontop of hole")
+		if point_type == 1:
+			print("exploring")
+		elif point_type == 2:
+			print("insertion")
+		else:
+			print("ontop of hole")
 
 
 		# if logging_data_bool == 1 and point_type == 0 and point_idx != initial_point_idx:
@@ -147,8 +155,15 @@ if __name__ == '__main__':
 
 			# if obs['force'][2] > 200:
 			# 	print(obs['force'][2])
-			# plt.scatter(glb_ts, obs['force'][2])
-			# plt.pause(0.001)
+			if display_bool:
+				# plt.scatter(glb_ts, obs['force'][2])
+				plt.scatter(glb_ts, obs['contact'])
+				plt.pause(0.001)
+
+			# if obs['contact'] == 1:
+			# 	print("contact")
+			# else:
+			# 	print(obs['contact'])
 
 			point_num_steps += 1
 

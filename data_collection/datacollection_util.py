@@ -94,15 +94,27 @@ def gridpoints_b(workspace_dim, peg_top_site, num_points = 10):
 	ymin = peg_top_site[1] - workspace_dim
 	ymax = peg_top_site[1] + workspace_dim
 
-	zmin = peg_top_site[2] - 0.01
+	zmin = peg_top_site[2] - 0.008
 	zmax = peg_top_site[2] + 2 * workspace_dim
 
 	print("Zs: ", zmin, " ",zmax)
-	x = np.linspace(xmin, xmax, num = num_points, endpoint = True)
-	y = np.linspace(ymin, ymax, num = num_points, endpoint = True)
-	z = np.linspace(zmin, zmax, num = num_points, endpoint = True)
+	x = np.random.uniform(low=xmin, high=xmax, size = num_points)#np.linspace(xmin, xmax, num = num_points, endpoint = True)
+	y = np.random.uniform(low=ymin, high=ymax, size=num_points)#np.linspace(ymin, ymax, num = num_points, endpoint = True)
+	z = np.random.uniform(low=zmin, high=zmax, size=num_points)#np.linspace(zmin, zmax, num = num_points, endpoint = True)
 
-	point_list = []
+	xfloor = np.random.uniform(low=xmin, high=xmax, size = int(0.5 *(num_points**(3/2))))
+	yfloor = np.random.uniform(low=ymin, high=ymax, size= int(0.5 * (num_points**(3/2))))
+
+	nc_point_list = []
+	c_point_list = []
+
+
+	for idx_x in range(xfloor.size):
+		for idx_y in range(yfloor.size):
+				x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+				y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+				z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+				c_point_list.append(np.expand_dims(np.array([xfloor[idx_x], yfloor[idx_y], zmin, x_ang, y_ang, z_ang]), axis = 0))
 
 	for idx_x in range(num_points):
 		for idx_y in range(num_points):
@@ -110,11 +122,10 @@ def gridpoints_b(workspace_dim, peg_top_site, num_points = 10):
 				x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
 				y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
 				z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+				nc_point_list.append(np.expand_dims(np.array([x[idx_x], y[idx_y], z[idx_z], x_ang, y_ang, z_ang]), axis = 0))
 
-				point_list.append(np.expand_dims(np.array([x[idx_x], y[idx_y], z[idx_z], x_ang, y_ang, z_ang]), axis = 0))
+	point_list = c_point_list + nc_point_list
 
-	random.shuffle(point_list)
-
-	return np.concatenate( point_list, axis = 0)
+	return np.concatenate(point_list, axis = 0)
 
 

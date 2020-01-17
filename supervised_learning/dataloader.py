@@ -66,12 +66,16 @@ class H5_DataLoader(Dataset):
 
                     if train_val_bool == 1:
                         self.idx_dict['train'][self.train_length] = (filename, (min_idx, max_idx))
-                        train_eepos_list.append(np.expand_dims(proprios[dataset_idx], axis = 0))
+                        train_eepos_list.append(np.expand_dims(proprios[dataset_idx,:3], axis = 0))
+
                         self.train_length += 1  
+
+                        # if np.linalg.norm(proprios[dataset_idx]) > 5:
+                        #     print(filename)
 
                     else:
                         self.idx_dict['val'][self.val_length] = (filename, (min_idx, max_idx)) 
-                        val_eepos_list.append(np.expand_dims(proprios[dataset_idx], axis = 0))
+                        val_eepos_list.append(np.expand_dims(proprios[dataset_idx, :3], axis = 0))
                         self.val_length += 1                         
 
                 dataset.close()
@@ -89,37 +93,37 @@ class H5_DataLoader(Dataset):
             print("Training Min: ", train_dist.min())
             print("Training Max: ", train_dist.max())
 
-            for idx in range(self.train_length):
-                if idx % 10000 == 0:
-                    print("Training idx: ", idx)
+            # for idx in range(self.train_length):
+            #     if idx % 10000 == 0:
+            #         print("Training idx: ", idx)
 
-                train_distance = train_dist[idx]
-                train_error = 0
+            #     train_distance = train_dist[idx]
+            #     train_error = 0
 
-                while train_error < self.up_thresh:
-                    idx_up = np.random.choice(self.train_length)
-                    compare_distance = train_dist[idx_up]
-                    train_error = abs(train_distance - compare_distance)
+            #     while train_error < self.up_thresh:
+            #         idx_up = np.random.choice(self.train_length)
+            #         compare_distance = train_dist[idx_up]
+            #         train_error = abs(train_distance - compare_distance)
 
-                paired_tuple = self.idx_dict['train'][idx]
-                unpaired_tuple = self.idx_dict['train'][idx_up]
-                self.idx_dict['train'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])   
+            #     paired_tuple = self.idx_dict['train'][idx]
+            #     unpaired_tuple = self.idx_dict['train'][idx_up]
+            #     self.idx_dict['train'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])   
 
-            for idx in range(self.val_length):
-                if idx % 10000 == 0:
-                    print("Validation idx: ", idx)
+            # for idx in range(self.val_length):
+            #     if idx % 10000 == 0:
+            #         print("Validation idx: ", idx)
 
-                val_distance = val_dist[idx]
-                val_error = 0
+            #     val_distance = val_dist[idx]
+            #     val_error = 0
 
-                while val_error < self.up_thresh:
-                    idx_up = np.random.choice(self.val_length)
-                    compare_distance = val_dist[idx_up]
-                    val_error = abs(val_distance - compare_distance)
+            #     while val_error < self.up_thresh:
+            #         idx_up = np.random.choice(self.val_length)
+            #         compare_distance = val_dist[idx_up]
+            #         val_error = abs(val_distance - compare_distance)
 
-                paired_tuple = self.idx_dict['val'][idx]
-                unpaired_tuple = self.idx_dict['val'][idx_up]
-                self.idx_dict['val'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])                    
+            #     paired_tuple = self.idx_dict['val'][idx]
+            #     unpaired_tuple = self.idx_dict['val'][idx_up]
+            #     self.idx_dict['val'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])                    
 
         else:
             self.idx_dict = idx_dict
@@ -149,8 +153,8 @@ class H5_DataLoader(Dataset):
 
         dataset = self.load_file(self.idx_dict[key_set][idx][0])
         idxs_p = self.idx_dict[key_set][idx][1]
-        dataset_up = self.load_file(self.idx_dict[key_set][idx][2])
-        idxs_up = self.idx_dict[key_set][idx][3]
+        # dataset_up = self.load_file(self.idx_dict[key_set][idx][2])
+        # idxs_up = self.idx_dict[key_set][idx][3]
 
         sample = {}
 
@@ -159,12 +163,12 @@ class H5_DataLoader(Dataset):
                 sample[key] = np.array(dataset[key])[idxs_p[0]:(idxs_p[1]-1)]
             elif key == 'force' or key == 'proprio':   
                 sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
-                sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]]  
+                # sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]]  
             else:
                 sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]                         
 
         dataset.close()
-        dataset_up.close()
+        # dataset_up.close()
 
         if self.transform:
             sample = self.transform(sample)

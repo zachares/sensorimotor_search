@@ -6,7 +6,7 @@ dataloading_params:
   num_workers: 6
   batch_size: 128
   num_steps: 10
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202001140932_debugging_5_inital_testing/val_train_split.pkl"
+  idx_dict_path: ""
 
 training_params:
   seed: 1234
@@ -32,7 +32,8 @@ info_flow:
   dataset:
     outputs:
       image: [3, 128, 128]
-      joints: [7]
+      joint_pos: [7]
+      joint_vel: [7]
       force: [6]
       action: [3]
       proprio: [12]
@@ -47,6 +48,7 @@ info_flow:
       action: "dataset"
       joint_pos: "dataset"
       joint_vel: "dataset"
+      contact: "dataset"
       epoch: "dataset"
     outputs:
       contact:
