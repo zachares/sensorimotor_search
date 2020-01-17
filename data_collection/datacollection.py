@@ -8,7 +8,7 @@ import sys
 import copy
 import os
 import datacollection_util as dc_T
-import keyboard
+import matplotlib.pyplot as plt
 
 
 sys.path.insert(0, "../robosuite/") 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 		os.mkdir(logging_folder )
 
 	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs=False, gripper_visualization=True, control_freq=100,\
+	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=100,\
 	  gripper_type = peg_type + "PegwForce", controller='position', camera_depth=True)
 
 	obs = env.reset()
@@ -71,10 +71,10 @@ if __name__ == '__main__':
 		if idx != fp_array.shape[0] - 1:
 			points_list.append((point, 1))
 
-			if np.random.binomial(1, 1) == 1:
-				points_list.append((top_goal, 0))
+			if np.random.binomial(1, 0.1) == 1:
+				points_list.append((top_goal, 3))
 				points_list.append((bottom_goal, 2))
-				points_list.append((top_goal, 2))
+				points_list.append((top_goal, 3))
 
 	goal = points_list[point_idx][0]
 
@@ -83,10 +83,9 @@ if __name__ == '__main__':
 		pos_err = kp * action_euler[:3]
 		obs, reward, done, info = env.step(pos_err)
 		obs['action'] = env.controller.transform_action(pos_err)
+
 	# dc_T.plot_image(obs['image'])
 	# a = input("")
-
-
 		if display_bool:
 			env.render()
 
@@ -99,30 +98,38 @@ if __name__ == '__main__':
 	obs_dict = {}
 	file_num = 0
 	prev_obs = obs
-	save_file = False
+	glb_ts = 0
 
 	while point_idx != len(points_list) - 1:
 		goal = points_list[point_idx][0]
 		point_type = points_list[point_idx][1]
 
-		if logging_data_bool == 1 and point_type == 0 and point_idx != initial_point_idx:
-			print("On ", point_idx + 1, " of ", len(points_list), " points")
-			file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+		# if point_type == 1:
+		# 	print("exploring")
+		# elif point_type == 2:
+		# 	print("insertion")
+		# else:
+		# 	print("ontop of hole")
 
-			dataset = h5py.File(file_name, 'w')
 
-			for key in obs_dict.keys():
-				key_list = obs_dict[key]
-				key_array = np.concatenate(key_list, axis = 0)
-				chunk_size = (1,) + key_array[0].shape
-				dataset.create_dataset(key, data= key_array, chunks = chunk_size)
+		# if logging_data_bool == 1 and point_type == 0 and point_idx != initial_point_idx:
+		# 	print("On ", point_idx + 1, " of ", len(points_list), " points")
+		# 	file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
 
-			dataset.close()
-			print("Saving to file: ", file_name)
-			file_num += 1
+		# 	dataset = h5py.File(file_name, 'w')
 
-			obs_dict = {}
-			num_points = 0
+		# 	for key in obs_dict.keys():
+		# 		key_list = obs_dict[key]
+		# 		key_array = np.concatenate(key_list, axis = 0)
+		# 		chunk_size = (1,) + key_array[0].shape
+		# 		dataset.create_dataset(key, data= key_array, chunks = chunk_size)
+
+		# 	dataset.close()
+		# 	print("Saving to file: ", file_name)
+		# 	file_num += 1
+
+		# 	obs_dict = {}
+		# 	num_points = 0
 
 		while env._check_poserr(goal, tol, tol_ang) == False:
 			action, action_euler = env._pose_err(goal)
@@ -137,6 +144,12 @@ if __name__ == '__main__':
 
 			obs, reward, done, info = env.step(pos_err)
 			obs['action'] = env.controller.transform_action(pos_err)
+
+			# if obs['force'][2] > 200:
+			# 	print(obs['force'][2])
+			# plt.scatter(glb_ts, obs['force'][2])
+			# plt.pause(0.001)
+
 			point_num_steps += 1
 
 			if logging_data_bool == 1:
@@ -148,29 +161,24 @@ if __name__ == '__main__':
 			if display_bool:
 				env.render()
         	
-			# if logging_data_bool == 1 and num_points >= 200:
-			# if logging_data_bool == 1 and save_file:
-			# 	print("On ", point_idx + 1, " of ", len(points_list), " points")
-			# 	file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+			if logging_data_bool == 1 and num_points >= 200:
+				print("On ", point_idx + 1, " of ", len(points_list), " points")
+				file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
 
-			# 	# print("DIctionary")
-			# 	# print(obs_dict['force'])
-			# 	# print(obs_dict['proprio'])
+				dataset = h5py.File(file_name, 'w')
 
-			# 	dataset = h5py.File(file_name, 'w')
+				for key in obs_dict.keys():
+					key_list = obs_dict[key]
+					key_array = np.concatenate(key_list, axis = 0)
+					chunk_size = (1,) + key_array[0].shape
+					dataset.create_dataset(key, data= key_array, chunks = chunk_size)
 
-			# 	for key in obs_dict.keys():
-			# 		key_list = obs_dict[key]
-			# 		key_array = np.concatenate(key_list, axis = 0)
-			# 		chunk_size = (1,) + key_array[0].shape
-			# 		dataset.create_dataset(key, data= key_array, chunks = chunk_size)
+				dataset.close()
+				print("Saving to file: ", file_name)
+				file_num += 1
 
-			# 	dataset.close()
-			# 	print("Saving to file: ", file_name)
-			# 	file_num += 1
-
-			# 	obs_dict = {}
-			# 	num_points = 0
+				obs_dict = {}
+				num_points = 0
 
 			if point_num_steps >= 300:
 				if point_type == 0:
@@ -182,11 +190,13 @@ if __name__ == '__main__':
 				point_type = points_list[point_idx][1]
 				point_num_steps = 0
 
-				if point_type == 0:
-					break
+				# if point_type == 0:
+				# 	break
 
 			if file_num > 5000:
 				break
+
+			glb_ts += 1
 
 		if file_num > 5000:
 			break

@@ -73,8 +73,8 @@ class Trainer(object):
 		##### Note if a path has been provided then the model will load a previous model
 		# self.model_dict["Simple_Multimodal_Hist1"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist1", self.info_flow, image_size, proprio_size, z_dim,\
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["LSTM_Multimodal"] = LSTM_Multimodal(models_folder, "LSTM_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["EEFRC_Dynamics"] = EEFRC_Dynamics(models_folder, "EEFRC_Dynamics", self.info_flow, force_size, proprio_size, action_dim,\
+		 device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Contact_Multimodal"] = Contact_Multimodal(models_folder, "Contact_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
@@ -121,7 +121,8 @@ class Trainer(object):
 		self.loss_dict["Hist1_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 1)
 		self.loss_dict["Hist5_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 5)
 		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
-		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
+		self.loss_dict["BCE_class_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss(), offset = 0)
+		self.loss_dict["BCE_pred_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
 		###################################
 		####### Code ends here ###########
 		####################################

@@ -32,45 +32,53 @@ info_flow:
   dataset:
     outputs:
       image: [3, 128, 128]
+      joints: [7]
       force: [6]
       action: [3]
       proprio: [12]
       contact: [1]
-  # Simple_Multimodal_Reg:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
-  #   inputs:
-  #     image: "dataset"
-  #     proprio: "dataset"
-  #     action: "dataset"
-  #     contact: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     z:
-  #       loss: ""
-  #     z_dist:
-  #       loss: "Prior_multistep"
-  #       loss_name: "real_dist_loss"
-  #       weight: 0.01
-  #     z_pred:
-  #       loss: "Pred_multistep_list"
-  #       loss_name: "dynamics_loss"
-  #       weight: 500.0
-  #       inputs:
-  #         z: "Simple_Multimodal_Reg"
-  #     image_dec:
-  #       loss: "Rec_image_multistep"
-  #       loss_name: "image_rec_multistep"
-  #       weight: 0.0001
-  #       inputs:
-  #         image: "dataset"
-  #     prop_dec:
-  #       loss: "Rec_multistep"
-  #       loss_name: "proprio_rec_multistep"
-  #       weight: 10
-  #       inputs:
-  #         proprio: "dataset"
+  EEFRC_Dynamics:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      proprio: "dataset"
+      force: "dataset"
+      action: "dataset"
+      joint_pos: "dataset"
+      joint_vel: "dataset"
+      epoch: "dataset"
+    outputs:
+      contact:
+        loss: "BCE_pred_multistep"
+        loss_name: "contact_pred_multistep"
+        weight: 1
+        inputs:
+          contact: "dataset"
+      force_pred:
+        loss: "Pred_multistep"
+        loss_name: "force_pred_multistep"
+        weight: 1
+        inputs:
+          force: "dataset"
+      prop_pred:
+        loss: "Pred_multistep"
+        loss_name: "proprio_pred_multistep"
+        weight: 1
+        inputs:
+          proprio: "dataset"
+      joint_pos_pred:
+        loss: "Pred_multistep"
+        loss_name: "joint_pos_pred_multistep"
+        weight: 1
+        inputs:
+          joint_pos: "dataset"
+      joint_vel_pred:
+        loss: "Pred_multistep"
+        loss_name: "joint_vel_pred_multistep"
+        weight: 1
+        inputs:
+          joint_vel: "dataset"
   # Simple_Multimodal_Hist1:
   #   train: 1
   #   model_folder: ""
@@ -106,41 +114,41 @@ info_flow:
   #       weight: 10
   #       inputs:
   #         proprio: "dataset"
-  LSTM_Multimodal:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      image: "dataset"
-      proprio: "dataset"
-      action: "dataset"
-      contact: "dataset"
-      epoch: "dataset"
-    outputs:
-      z:
-        loss: ""
-      # z_dist:
-      #   loss: "Prior_multistep"
-      #   loss_name: "relative_random"
-      #   weight: 0.01
-      z_pred:
-        loss: "Pred_multistep_list"
-        loss_name: "dynamics_loss"
-        weight: 500.0
-        inputs:
-          z: ""
-      image_dec:
-        loss: "Rec_image_multistep"
-        loss_name: "image_rec_multistep"
-        weight: 0.0001
-        inputs:
-          image: "dataset"
-      prop_dec:
-        loss: "Rec_multistep"
-        loss_name: "proprio_rec_multistep"
-        weight: 10
-        inputs:
-          proprio: "dataset"
+  # LSTM_Multimodal:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     image: "dataset"
+  #     proprio: "dataset"
+  #     action: "dataset"
+  #     contact: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     z:
+  #       loss: ""
+  #     # z_dist:
+  #     #   loss: "Prior_multistep"
+  #     #   loss_name: "relative_random"
+  #     #   weight: 0.01
+  #     z_pred:
+  #       loss: "Pred_multistep_list"
+  #       loss_name: "dynamics_loss"
+  #       weight: 500.0
+  #       inputs:
+  #         z: ""
+  #     image_dec:
+  #       loss: "Rec_image_multistep"
+  #       loss_name: "image_rec_multistep"
+  #       weight: 0.0001
+  #       inputs:
+  #         image: "dataset"
+  #     prop_dec:
+  #       loss: "Rec_multistep"
+  #       loss_name: "proprio_rec_multistep"
+  #       weight: 10
+  #       inputs:
+  #         proprio: "dataset"
 
   # Contact_Force_Multimodal:
   #   train: 1

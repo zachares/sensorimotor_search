@@ -224,11 +224,12 @@ class Image_Reconstruction_MultiStep(Proto_MultiStep_Loss):
 
 class BinaryEst_MultiStep(Proto_MultiStep_Loss):
 	def loss(self, input_tuple, logging_dict, weight, label):
-		inputs_list = input_tuple[0]
+		logits_list = input_tuple[0]
+		labels_array = input_tuple[1]
 
-		for idx, input_element in enumerate(inputs_list):
-			logits = input_element[0]
-			labels = input_element[1]
+		for idx, logit in enumerate(logits_list):
+			logits = logits[idx]
+			labels = labels_array[:,idx + self.offset]
 			probs = torch.sigmoid(logits)
 			# if idx == 0:
 			# 	print("Probs")

@@ -567,10 +567,10 @@ class ResNetFCN(Proto_Macromodel):
         self.model_list = []
 
         for idx in range(self.num_layers):
-            if idx == 0:
+            if idx == self.num_layers - 1:
                 self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.input_channels, self.output_channels, 2, device = self.device).to(self.device))
             else:
-                self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.output_channels, self.output_channels, 2, device = self.device).to(self.device))
+                self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.input_channels, self.input_channels, 2, device = self.device).to(self.device))
 
     def forward(self, x, input_tens):
         for idx, model in enumerate(self.model_list):
@@ -578,7 +578,7 @@ class ResNetFCN(Proto_Macromodel):
                 output = model(x) + input_tens
                 residual = output.clone()
 
-            elif idx == (len(self.model_list) - 1):
+            elif idx == len(self.model_list) - 1:
                 output = model(output)
             else:
                 output = model(output) + residual
