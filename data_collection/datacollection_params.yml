@@ -1,7 +1,8 @@
 datacollection_params:
-  logging_folder: "/juno/group/muj_multimod_dataset/"
+  logging_folder: "/juno/group/muj_multimod_dataset1/"
   collection_details: "multimodal_op_space"
-  logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
   peg_type: Cross # Options Cross, Rect, Square
-  display_bool: 0 # 1 if display should be on, 0 if display should be off
+  display_bool: 1 # 1 if display should be on, 0 if display should be off
   workspace: [[0.37, -0.16, 0.92], [0.53, 0.16, 1.0]]
+  workspace_dim: 0.04

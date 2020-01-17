@@ -2,11 +2,11 @@ model_params:
   z_dim: 128
 
 dataloading_params:
-  dataset_path: "/juno/group/muj_multimod_dataset/"
+  dataset_path: "/juno/group/muj_multimod_dataset1/"
   num_workers: 6
   batch_size: 128
   num_steps: 10
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202001092027_debugging_32_inital_testing/val_train_split.pkl"
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202001140932_debugging_5_inital_testing/val_train_split.pkl"
 
 training_params:
   seed: 1234
@@ -36,7 +36,77 @@ info_flow:
       action: [3]
       proprio: [12]
       contact: [1]
-  Simple_Multimodal_Reg:
+  # Simple_Multimodal_Reg:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     image: "dataset"
+  #     proprio: "dataset"
+  #     action: "dataset"
+  #     contact: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     z:
+  #       loss: ""
+  #     z_dist:
+  #       loss: "Prior_multistep"
+  #       loss_name: "real_dist_loss"
+  #       weight: 0.01
+  #     z_pred:
+  #       loss: "Pred_multistep_list"
+  #       loss_name: "dynamics_loss"
+  #       weight: 500.0
+  #       inputs:
+  #         z: "Simple_Multimodal_Reg"
+  #     image_dec:
+  #       loss: "Rec_image_multistep"
+  #       loss_name: "image_rec_multistep"
+  #       weight: 0.0001
+  #       inputs:
+  #         image: "dataset"
+  #     prop_dec:
+  #       loss: "Rec_multistep"
+  #       loss_name: "proprio_rec_multistep"
+  #       weight: 10
+  #       inputs:
+  #         proprio: "dataset"
+  # Simple_Multimodal_Hist1:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     image: "dataset"
+  #     proprio: "dataset"
+  #     action: "dataset"
+  #     contact: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     z:
+  #       loss: ""
+  #     # z_dist:
+  #     #   loss: "Prior_multistep"
+  #     #   loss_name: "relative_random"
+  #     #   weight: 0.01
+  #     z_pred:
+  #       loss: "Hist1_pred_multistep"
+  #       loss_name: "dynamics_loss"
+  #       weight: 100.0
+  #       inputs:
+  #         z: "Simple_Multimodal_Hist1"
+  #     image_dec:
+  #       loss: "Rec_image_multistep"
+  #       loss_name: "image_rec_multistep"
+  #       weight: 0.0001
+  #       inputs:
+  #         image: "dataset"
+  #     prop_dec:
+  #       loss: "Rec_multistep"
+  #       loss_name: "proprio_rec_multistep"
+  #       weight: 10
+  #       inputs:
+  #         proprio: "dataset"
+  LSTM_Multimodal:
     train: 1
     model_folder: ""
     epoch_num: 0
@@ -49,86 +119,16 @@ info_flow:
     outputs:
       z:
         loss: ""
-      z_dist:
-        loss: "Prior_multistep"
-        loss_name: "real_dist_loss"
-        weight: 0.01
+      # z_dist:
+      #   loss: "Prior_multistep"
+      #   loss_name: "relative_random"
+      #   weight: 0.01
       z_pred:
         loss: "Pred_multistep_list"
         loss_name: "dynamics_loss"
-        weight: 1.0
+        weight: 500.0
         inputs:
-          z: "Simple_Multimodal_Reg"
-      image_dec:
-        loss: "Rec_image_multistep"
-        loss_name: "image_rec_multistep"
-        weight: 0.0001
-        inputs:
-          image: "dataset"
-      prop_dec:
-        loss: "Rec_multistep"
-        loss_name: "proprio_rec_multistep"
-        weight: 10
-        inputs:
-          proprio: "dataset"
-  Simple_Multimodal_Hist1:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      image: "dataset"
-      proprio: "dataset"
-      action: "dataset"
-      contact: "dataset"
-      epoch: "dataset"
-    outputs:
-      z:
-        loss: ""
-      # z_dist:
-      #   loss: "Prior_multistep"
-      #   loss_name: "relative_random"
-      #   weight: 0.01
-      z_pred:
-        loss: "Hist1_pred_multistep"
-        loss_name: "dynamics_loss"
-        weight: 1.0
-        inputs:
-          z: "Simple_Multimodal_Hist1"
-      image_dec:
-        loss: "Rec_image_multistep"
-        loss_name: "image_rec_multistep"
-        weight: 0.0001
-        inputs:
-          image: "dataset"
-      prop_dec:
-        loss: "Rec_multistep"
-        loss_name: "proprio_rec_multistep"
-        weight: 10
-        inputs:
-          proprio: "dataset"
-  Simple_Multimodal_Hist5:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      image: "dataset"
-      proprio: "dataset"
-      action: "dataset"
-      contact: "dataset"
-      epoch: "dataset"
-    outputs:
-      z:
-        loss: ""
-      # z_dist:
-      #   loss: "Prior_multistep"
-      #   loss_name: "relative_random"
-      #   weight: 0.01
-      z_pred:
-        loss: "Hist5_pred_multistep"
-        loss_name: "dynamics_loss"
-        weight: 1.0
-        inputs:
-          z: "Simple_Multimodal_Hist5"
+          z: ""
       image_dec:
         loss: "Rec_image_multistep"
         loss_name: "image_rec_multistep"

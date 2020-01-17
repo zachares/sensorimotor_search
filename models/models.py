@@ -23,6 +23,7 @@ from models_utils import *
 ### test bayes filter with model uncertainty
 
 ### test training dynamics model seperately
+### collect a dataset with random actions and decrease the size of the state space
 
 def sample_gaussian(m, v, device):
     epsilon = Normal(0, 1).sample(m.size())
@@ -47,8 +48,10 @@ def product_of_experts(m_vect, v_vect):
 #######################################
 
 #### see LSTM in models_utils for example of how to set up a macromodel
-class Simple_Multimodal(Proto_Macromodel):
-    def __init__(self, model_folder, model_name, info_flow, image_size, proprio_size, z_dim, action_dim, device = None, curriculum = None):
+
+
+class EEFRC_Dynamics(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, image_size, proprio_size, force_size, action_dim, device = None, curriculum = None):
         super().__init__()
 
         if info_flow[model_name]["model_folder"] != "":
@@ -64,52 +67,45 @@ class Simple_Multimodal(Proto_Macromodel):
 
         self.action_dim = action_dim[0]
         self.proprio_size = proprio_size[0]
+        self.force_size = force_size[0]
         self.z_dim = z_dim
 
-        self.proprio_enc = FCN(folder + "_proprio_enc", self.proprio_size, 2 * self.z_dim, 5, device = self.device)
+        self.ee_nc = ResNetFCN(folder + "_ee_resnet_nc", self.action_dim + self.proprio_size + self.force_size, self.proprio_size, 5, device = self.device)
 
-        self.proprio_dec = FCN(folder + "_proprio_dec", self.z_dim, self.proprio_size, 5, device = self.device)
+        self.ee_c = ResNetFCN(folder + "_ee_resnet_c", self.action_dim + self.proprio_size + self.force_size, self.proprio_size, 5, device = self.device)
 
-        self.img_enc = CONV2DN(folder + "_img_enc", image_size, (2 * self.z_dim, 1, 1), False, True, 3, device = self.device)
-        self.img_dec = DECONV2DN(folder + "_img_dec", (self.z_dim,  2, 2), (image_size[0], image_size[1] / 4, image_size[2] / 4), False, device = self.device)
+        self.frc_nc = ResNetFCN(folder + "_frc_resnet_nc", self.action_dim + self.proprio_size + self.force_size, self.force_size, 5, device = self.device) 
 
-        self.fusion_module = FCN(folder + "_fusion_unit", 4 * self.z_dim, self.z_dim, 5, device = self.device) 
+        self.frc_c = ResNetFCN(folder + "_frc_resnet_c", self.action_dim + self.proprio_size + self.force_size, self.force_size, 5, device = self.device) 
 
-        self.trans_model = ResNetFCN(folder + "_trans_resnet", self.z_dim + self.action_dim, self.z_dim, 3, device = self.device)
+        self.contact_class = ResNetFCN(folder + "_contact_class", self.proprio_size + self.force_size, 1, 3, device = self.device)    
 
-        self.model_list = [self.fusion_module, self.proprio_enc, self.proprio_dec, self.img_enc, self.img_dec, self.trans_model]
+        self.model_list = [self.ee_c, self.ee_nc, self.frc_nc, self.frc_c, self.contact_class]
 
         if info_flow[model_name]["model_folder"] != "":
             self.load(info_flow[model_name]["epoch_num"])
 
-    def get_z(self, image, proprio):
-        img_emb = self.img_enc(image)
-        proprio_emb = self.proprio_enc(proprio)
-        return self.fusion_module(torch.cat([img_emb, proprio_emb], dim = 1))
+    def get_ee_pred(self, proprio, force, action):
 
-    def get_z_pred(self, z, action):
-        return self.trans_model(torch.cat([z, action], dim = 1), z)
+        cont = torch.sigmoid(self.contact_class(torch.cat([proprio, force], dim = 1)))
 
-    def get_image(self, z):
-        img_dec = 255.0 * torch.sigmoid(self.img_dec(z))
-        return F.interpolate(img_dec, size=(self.image_size[1], self.image_size[2]), mode='bilinear')
+        contact = torch.where(cont > 0.5, torch.ones_like(cont), torch.zeros_like(cont))
+        
+        proprio_pred = self.ee_nc(torch.cat([proprio, force, action], dim = 1)) + contact * self.ee_c(torch.cat([proprio, force action], dim = 1)) + proprio
 
-    def get_proprio(self, z):
-        return self.proprio_dec(z)
+        force_pred = self.frc_nc(torch.cat([proprio, force, action], dim = 1)) + contact * self.frc_c(torch.cat([proprio, force action], dim = 1)) + force
+
+        return proprio_pred, force_pred
 
     def forward(self, input_dict):
-        images = (input_dict["image"] / 255.0).to(self.device)
         proprios = (input_dict["proprio"]).to(self.device)
         actions = input_dict["action"].to(self.device)
-        contacts = input_dict["contact"].to(self.device)
+        forces = input_dict["force"].to(self.device)
         epoch =  int(input_dict["epoch"].detach().item())
 
-        z_list = []
-        z_perm_list = []
-        eepos_list = []
-        z_pred_list = []
-        img_list = []
         prop_list = []
+        force_list = []
+        contact_list = []
 
         if self.curriculum is not None:
             steps = images.size(1)
@@ -118,55 +114,37 @@ class Simple_Multimodal(Proto_Macromodel):
         else:
             steps = images.size(1)
 
+            force = forces[:,0]
+            proprio = proprios[:,0]
+
         for idx in range(steps):
-            image = images[:,idx]
-            proprio = proprios[:, idx]
             action = actions[:,idx]
-            contact = contacts[:,idx]
 
-            z = self.get_z(image, proprio)
-            z_list.append(z)
+            cont_class = self.contact_class(torch.cat([proprio, force], dim = 1))
+            prop, force = self.get_ee(proprio, force, action)
 
-            if idx == 0:
-                z_pred = z.clone()
-
-            img = self.get_image(z)
-            img_list.append(img)
-            prop = self.get_proprio(z)
             prop_list.append(prop)
-
-            if idx != steps - 1:
-                z_pred = self.get_z_pred(z_pred, action)
-                z_pred_list.append(z_pred)
-
-            eepos_list.append(proprio[:,:3])
+            force_list.append(force)
+            contact_list.append(cont_class)
 
         return {
-            'z': z_list,
-            'z_pred': z_pred_list,
-            'z_dist': (z_list, eepos_list),
-            'image_dec': img_list,
-            'prop_dec': prop_list,
-        }
-
-    def encode(self, input_dict):
-        images = (input_dict["image"] / 255.0).to(self.device)
-        proprios = (input_dict["proprio"]).to(self.device)
-
-        return {
-            'latent_state': self.get_z(images[:,0], proprios[:,0]),
+            'contact': contact_list,
+            'prop_pred': prop_list,
+            'force_pred': force_list,
         }
 
     def trans(self, input_dict):
-        z = input_dict["z"].to(self.device).squeeze().unsqueeze(0)
+        proprio = input_dict["proprio"].to(self.device).squeeze().unsqueeze(0)
+        force = input_dict["force"].to(self.device).squeeze().unsqueeze(0)
         actions = (input_dict["action_sequence"]).to(self.device)
 
         steps = actions.size(0)
 
         for idx in range(steps):
             action = actions[idx].unsqueeze(0)
-            z = self.get_z_pred(z, action).squeeze().unsqueeze(0)
+            proprio, force = self.get_ee_pred(proprio, force, action)           
 
         return {
-            'latent_state': z,
+            'proprio': proprio,
+            'force': force,
         }

@@ -579,8 +579,7 @@ class ResNetFCN(Proto_Macromodel):
                 residual = output.clone()
 
             elif idx == (len(self.model_list) - 1):
-                output = model(output) + input_tens
-
+                output = model(output)
             else:
                 output = model(output) + residual
                 residual = output.clone()

@@ -40,7 +40,7 @@ class H5_DataLoader(Dataset):
         self.train_length = 0
         self.val_length = 0
 
-        self.up_thresh = 0.05
+        self.up_thresh = 0.0003
 
         if idx_dict == None:
             self.idx_dict = {}
