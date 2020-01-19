@@ -8,3 +8,5 @@ datacollection_params:
   violent_bool: 0.0 # 1 if you want violent motions, 0 if you don't
   workspace: [[0.37, -0.16, 0.92], [0.53, 0.16, 1.0]]
   workspace_dim: 0.04
+  start_position: [ 0.45, 0.10, 0.92]
+  num_trajectories: 50
