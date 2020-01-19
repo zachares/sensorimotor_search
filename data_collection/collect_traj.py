@@ -44,7 +44,7 @@ if __name__ == '__main__':
                          ignore_done=True, \
                          use_camera_obs=not display_bool,
                          gripper_visualization=True,
-                         control_freq=100, \
+                         control_freq=10, \
                          gripper_type=peg_type + "PegwForce",
                          controller='position',
                          camera_depth=True)
