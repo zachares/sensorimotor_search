@@ -18,7 +18,7 @@ import robosuite.utils.transform_utils as T
 
 if __name__ == '__main__':
 
-    with open("datacollection_params.yml", 'r') as ymlfile:
+    with open("traj_collection_params.yml", 'r') as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
     logging_folder = cfg['datacollection_params']['logging_folder']
@@ -40,17 +40,18 @@ if __name__ == '__main__':
         os.mkdir(logging_folder)
 
     env = robosuite.make("PandaPegInsertion",
-                         has_renderer=True,
                          ignore_done=True, \
                          use_camera_obs=not display_bool,
                          gripper_visualization=True,
                          control_freq=100, \
                          gripper_type=peg_type + "PegwForce",
                          controller='position',
-                         camera_depth=True)
+                         camera_depth=True,
+			 has_offscreen_renderer=True,
+		         has_renderer=False)
 
     obs = env.reset()
-    env.viewer.set_camera(camera_id=2)
+    #env.viewer.set_camera(camera_id=2)
     if display_bool:
         env.render()
 
@@ -63,7 +64,7 @@ if __name__ == '__main__':
     top_goal = np.concatenate([env._get_sitepos(peg_top_site) + offset, np.array([np.pi, 0, np.pi])])
     bottom_goal = np.concatenate([env._get_sitepos(peg_bottom_site) + offset, np.array([np.pi, 0, np.pi])])
     fp_array = dc_T.gridpoints_b(workspace_dim, top_goal, 10)
-
+    start_position_goal = np.concatenate([start_position, np.array([np.pi, 0, np.pi])])
     fp_idx = 0
 
     print("Top goal: ", top_goal)
@@ -86,7 +87,7 @@ if __name__ == '__main__':
 
     for i in range(num_trajs):
 
-        points_list.append((start_position,1))
+        points_list.append((start_position_goal,1))
         points_list.append((top_goal, 3))
         points_list.append((bottom_goal, 2))
         points_list.append((bottom_goal, 4))

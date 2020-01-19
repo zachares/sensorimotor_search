@@ -38,12 +38,12 @@ if __name__ == '__main__':
     if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
         os.mkdir(logging_folder)
 
-    env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True, \
+    env = robosuite.make("PandaPegInsertion", has_renderer=False, off_screen_renderer=True, ignore_done=True, \
                          use_camera_obs=not display_bool, gripper_visualization=True, control_freq=100, \
                          gripper_type=peg_type + "PegwForce", controller='position', camera_depth=True)
 
     obs = env.reset()
-    env.viewer.set_camera(camera_id=2)
+    #env.viewer.set_camera(camera_id=2)
     if display_bool:
         env.render()
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     print("Top goal: ", top_goal)
     print("Bottom_goal: ", bottom_goal)
 
-    obs_keys = ["image", "force", "proprio", "action", "contact", "joint_pos", "joint_vel", "depth"]
+    obs_keys = ["image", "force","force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", "depth"]
 
     # moving to first initial position
     points_list = []
