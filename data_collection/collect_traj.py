@@ -15,7 +15,13 @@ sys.path.insert(0, "../robosuite/")
 
 import robosuite
 import robosuite.utils.transform_utils as T
-from robosuite.wrappers import IKWrapper
+
+
+## define number of trajectories
+## each trajectory (after insertion completion) is one h5py
+## after each trajectory reset!
+
+
 
 if __name__ == '__main__':
 
@@ -28,6 +34,8 @@ if __name__ == '__main__':
     peg_type = cfg['datacollection_params']['peg_type']
     display_bool = cfg['datacollection_params']['display_bool']
     workspace = np.array(cfg['datacollection_params']['workspace'])
+    start_position = np.array(cfg['datacollection_params']['start_position'])
+    num_trajs = cfg['datacollection_params']['num_trajectories']
 
     workspace_dim = cfg['datacollection_params']['workspace_dim']
     seed = cfg['datacollection_params']['seed']
@@ -38,9 +46,15 @@ if __name__ == '__main__':
     if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
         os.mkdir(logging_folder)
 
-    env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True, \
-                         use_camera_obs=not display_bool, gripper_visualization=True, control_freq=100, \
-                         gripper_type=peg_type + "PegwForce", controller='position', camera_depth=True)
+    env = robosuite.make("PandaPegInsertion",
+                         has_renderer=True,
+                         ignore_done=True, \
+                         use_camera_obs=not display_bool,
+                         gripper_visualization=True,
+                         control_freq=100, \
+                         gripper_type=peg_type + "PegwForce",
+                         controller='position',
+                         camera_depth=True)
 
     obs = env.reset()
     env.viewer.set_camera(camera_id=2)
@@ -62,23 +76,27 @@ if __name__ == '__main__':
     print("Top goal: ", top_goal)
     print("Bottom_goal: ", bottom_goal)
 
-    obs_keys = ["image", "force", "proprio", "action", "contact", "joint_pos", "joint_vel", "depth"]
+    obs_keys = ["image",
+                "force",
+                "proprio",
+                "action",
+                "contact",
+                "joint_pos",
+                "joint_vel",
+                "depth",
+                "force_hi_freq"]
 
     # moving to first initial position
     points_list = []
     point_idx = 0
     kp = 10
 
-    for idx in range(fp_array.shape[0]):
-        point = fp_array[idx]
+    for i in range(num_trajs):
 
-        if idx != fp_array.shape[0] - 1:
-            points_list.append((point, 1))
-
-            if np.random.binomial(1, 0.1) == 1:
-                points_list.append((top_goal, 3))
-                points_list.append((bottom_goal, 2))
-                points_list.append((top_goal, 3))
+        points_list.append((start_position,1))
+        points_list.append((top_goal, 3))
+        points_list.append((bottom_goal, 2))
+        points_list.append((bottom_goal, 4))
 
     goal = points_list[point_idx][0]
 
@@ -100,6 +118,7 @@ if __name__ == '__main__':
     initial_point_idx = copy.deepcopy(point_idx)
     point_num_steps = 0
     num_points = 0
+    robot_initial_q = env._joint_positions
     print("moved to initial position")
 
     obs_dict = {}
@@ -118,50 +137,25 @@ if __name__ == '__main__':
         else:
             print("ontop of hole")
 
-        # if logging_data_bool == 1 and point_type == 0 and point_idx != initial_point_idx:
-        # 	print("On ", point_idx + 1, " of ", len(points_list), " points")
-        # 	file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
-
-        # 	dataset = h5py.File(file_name, 'w')
-
-        # 	for key in obs_dict.keys():
-        # 		key_list = obs_dict[key]
-        # 		key_array = np.concatenate(key_list, axis = 0)
-        # 		chunk_size = (1,) + key_array[0].shape
-        # 		dataset.create_dataset(key, data= key_array, chunks = chunk_size)
-
-        # 	dataset.close()
-        # 	print("Saving to file: ", file_name)
-        # 	file_num += 1
-
-        # 	obs_dict = {}
-        # 	num_points = 0
-
         while env._check_poserr(goal, tol, tol_ang) == False:
             action, action_euler = env._pose_err(goal)
             # print(action)
             pos_err = kp * action_euler[:3]
 
             # adding random noise
-            if point_type == 0:
-                pos_err += 0.2 * np.random.normal(0.0, 1.0, pos_err.size)
-            else:
-                pos_err += 0.2 * np.random.normal(0.0, 1.0, pos_err.size)
 
-            obs, reward, done, info = env.step(pos_err)
-            obs['action'] = env.controller.transform_action(pos_err)
+            noise = np.random.normal(0.0, 0.2, pos_err.size)
+            noise = np.clip(noise, -0.2, 0.2)
 
-            # if obs['force'][2] > 200:
-            # 	print(obs['force'][2])
+            action = noise + pos_err
+
+            obs, reward, done, info = env.step(action)
+            obs['action'] = np.array(env.controller.transform_action(action))
+
             if display_bool:
                 # plt.scatter(glb_ts, obs['force'][2])
                 plt.scatter(glb_ts, obs['contact'])
                 plt.pause(0.001)
-
-            # if obs['contact'] == 1:
-            # 	print("contact")
-            # else:
-            # 	print(obs['contact'])
 
             point_num_steps += 1
 
@@ -174,7 +168,7 @@ if __name__ == '__main__':
             if display_bool:
                 env.render()
 
-            if logging_data_bool == 1 and num_points >= 200:
+            if logging_data_bool == 4:
                 print("On ", point_idx + 1, " of ", len(points_list), " points")
                 file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
 
@@ -206,12 +200,12 @@ if __name__ == '__main__':
             # if point_type == 0:
             # 	break
 
-            if file_num > 5000:
+            if file_num > num_trajs:
                 break
 
             glb_ts += 1
 
-        if file_num > 5000:
+        if file_num > num_trajs:
             break
 
         point_idx += 1

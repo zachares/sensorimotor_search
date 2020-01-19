@@ -57,12 +57,25 @@ class Proto_MultiStep_Loss(object):
 
 		for idx, net_est in enumerate(net_est_list):
 			target = targets[:,idx + self.offset]
+
+			if self.offset == 1:
+				prev_target = targets[:,idx]
+				change = (target - prev_target)
+				change_mean_norm = change.norm(p=2, dim=1).mean()
+
 			if idx == 0:
 				loss = weight * self.loss_function(net_est, target)
+				if self.offset == 1:
+					change_mean_norm_total = change_mean_norm.item()
 			else:
 				loss += weight * self.loss_function(net_est, target)
+				if self.offset == 1:
+					change_mean_norm_total += change_mean_norm.item()
 
-		logging_dict['scalar']["loss/" + label] = loss.item()
+		if self.offset == 1:
+			logging_dict['scalar']["loss/" + label] = loss.item() / change_mean_norm_total
+		else:
+			logging_dict['scalar']["loss/" + label] = loss.item()
 
 		return loss
 
@@ -224,11 +237,11 @@ class Image_Reconstruction_MultiStep(Proto_MultiStep_Loss):
 
 class BinaryEst_MultiStep(Proto_MultiStep_Loss):
 	def loss(self, input_tuple, logging_dict, weight, label):
-		inputs_list = input_tuple[0]
+		logits_list = input_tuple[0]
+		labels_array = input_tuple[1]
 
-		for idx, input_element in enumerate(inputs_list):
-			logits = input_element[0]
-			labels = input_element[1]
+		for idx, logits in enumerate(logits_list):
+			labels = labels_array[:,idx + self.offset].unsqueeze(1)
 			probs = torch.sigmoid(logits)
 			# if idx == 0:
 			# 	print("Probs")
@@ -260,7 +273,7 @@ class BinaryEst_MultiStep(Proto_MultiStep_Loss):
 				accuracy_rate += accuracy.mean()
 		
 		# print(accuracy_rate)
-		accuracy_rate /= len(inputs_list)
+		accuracy_rate /= len(logits_list)
 
 		# # print(accuracy_rate)
 		# a = input(" ")

@@ -53,6 +53,7 @@ class Trainer(object):
 		image_size = self.info_flow['dataset']['outputs']['image']
 		force_size =self.info_flow['dataset']['outputs']['force'] 
 		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
+		joint_size = self.info_flow['dataset']['outputs']['joint_pos']
 		action_dim =self.info_flow['dataset']['outputs']['action']
 		z_dim = cfg["model_params"]["z_dim"] 
 		self.batch_size = batch_size
@@ -71,12 +72,12 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["Simple_Multimodal_Hist1"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist1", self.info_flow, image_size, proprio_size, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Simple_Multimodal_Hist5"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist5", self.info_flow, image_size, proprio_size, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
-		 action_dim, device = device, curriculum = self.curriculum).to(device)
+		# self.model_dict["Simple_Multimodal_Hist1"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist1", self.info_flow, image_size, proprio_size, z_dim,\
+		#  action_dim, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["EEFRC_Dynamics"] = EEFRC_Dynamics(models_folder, "EEFRC_Dynamics", self.info_flow, force_size, proprio_size, joint_size, action_dim,\
+		 device = device, curriculum = self.curriculum).to(device)
+		# self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
+		#  action_dim, device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Contact_Multimodal"] = Contact_Multimodal(models_folder, "Contact_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Contact_Force_Multimodal"] = Contact_Force_Multimodal(models_folder, "Contact_Force_Multimodal", self.info_flow, image_size, proprio_size, force_size, z_dim,\
@@ -115,13 +116,14 @@ class Trainer(object):
 		self.loss_dict["Pred_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss())
 		self.loss_dict["Pred_multistep_list"] = Proto_MultiStep_Loss_List(nn.MSELoss())
 		self.loss_dict["Rec_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), offset = 0)
+		self.loss_dict["Pred_multistep"] = Proto_MultiStep_Loss(nn.MSELoss())
 		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep()
 		self.loss_dict["Pred_eepos_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), max_idx = 3)
 		self.loss_dict["Prior_multistep"] = Prior_Multistep()
 		self.loss_dict["Hist1_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 1)
 		self.loss_dict["Hist5_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 5)
-		# self.loss_dict["Cross_Ent"] = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
-		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
+		self.loss_dict["BCE_class_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss(), offset = 0)
+		self.loss_dict["BCE_pred_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
 		###################################
 		####### Code ends here ###########
 		####################################
@@ -201,6 +203,9 @@ class Trainer(object):
 				if 'inputs' in list(self.info_flow[model_key]['outputs'][output_key].keys()):
 					for input_key in self.info_flow[model_key]['outputs'][output_key]['inputs'].keys():
 						input_source = self.info_flow[model_key]['outputs'][output_key]['inputs'][input_key]
+						if input_source == "":
+							input_source = model_key
+							
 						input_list.append(self.model_outputs[input_source][input_key])
 
 				loss_function = self.loss_dict[self.info_flow[model_key]['outputs'][output_key]['loss']]
