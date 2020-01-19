@@ -39,7 +39,7 @@ if __name__ == '__main__':
         os.mkdir(logging_folder)
 
     env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True, \
-                         use_camera_obs=not display_bool, gripper_visualization=True, control_freq=100, \
+                         use_camera_obs=not display_bool, gripper_visualization=True, control_freq=10, \
                          gripper_type=peg_type + "PegwForce", controller='position', camera_depth=True)
 
     obs = env.reset()
