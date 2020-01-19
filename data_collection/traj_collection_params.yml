@@ -1,0 +1,13 @@
+datacollection_params:
+
+  seed: 1234
+  logging_folder: "/juno/group/muj_multimod_dataset1/"
+  collection_details: "multimodal_traj"
+  logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  peg_type: Cross # Options Cross, Rect, Square
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  violent_bool: 0.0 # 1 if you want violent motions, 0 if you don't
+  workspace: [[0.37, -0.16, 0.92], [0.53, 0.16, 1.0]]
+  workspace_dim: 0.04
+  start_position: [ 0.45, 0.10, 0.92]
+  num_trajectories: 50

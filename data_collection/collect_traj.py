@@ -12,15 +12,8 @@ import matplotlib.pyplot as plt
 import random
 
 sys.path.insert(0, "../robosuite/")
-
 import robosuite
 import robosuite.utils.transform_utils as T
-
-
-## define number of trajectories
-## each trajectory (after insertion completion) is one h5py
-## after each trajectory reset!
-
 
 
 if __name__ == '__main__':
@@ -145,7 +138,7 @@ if __name__ == '__main__':
             # adding random noise
 
             noise = np.random.normal(0.0, 0.2, pos_err.size)
-            noise = np.clip(noise, -0.2, 0.2)
+            noise = np.clip(noise, -0.3, 0.3)
 
             action = noise + pos_err
 
@@ -186,6 +179,9 @@ if __name__ == '__main__':
 
                 obs_dict = {}
                 num_points = 0
+                env.reset()
+                env.set_robot_joint_positions(robot_initial_q)
+                continue
 
             if point_num_steps >= 300:
                 if point_type == 0:
@@ -196,9 +192,6 @@ if __name__ == '__main__':
                 goal = points_list[point_idx][0]
                 point_type = points_list[point_idx][1]
                 point_num_steps = 0
-
-            # if point_type == 0:
-            # 	break
 
             if file_num > num_trajs:
                 break
