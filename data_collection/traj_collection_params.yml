@@ -1,7 +1,7 @@
 datacollection_params:
 
   seed: 1235
-  logging_folder: "."
+  logging_folder: "/juno/group/muj_multimod_dataset_traj/"
   collection_details: "multimodal_test"
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   peg_type: Cross # Options Cross, Rect, Square
