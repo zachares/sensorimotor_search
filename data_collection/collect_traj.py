@@ -32,6 +32,10 @@ if __name__ == '__main__':
 
     workspace_dim = cfg['datacollection_params']['workspace_dim']
     seed = cfg['datacollection_params']['seed']
+    noisy_traj_percentage =  cfg['datacollection_params']['noisy_traj_percentage']
+
+    noise_free_traj_num = np.floor(noisy_traj_percentage*num_trajs)
+
 
     random.seed(seed)
     np.random.seed(seed)
@@ -43,7 +47,7 @@ if __name__ == '__main__':
                          ignore_done=True, \
                          use_camera_obs=not display_bool,
                          gripper_visualization=True,
-                         control_freq=10, \
+                         control_freq=20, \
                          gripper_type=peg_type + "PegwForce",
                          controller='position',
                          camera_depth=True,
@@ -86,10 +90,9 @@ if __name__ == '__main__':
     kp = 10
 
     for i in range(num_trajs):
-
         points_list.append((start_position_goal,1))
-        points_list.append((top_goal, 3))
-        points_list.append((bottom_goal, 2))
+        points_list.append((top_goal, 2))
+        points_list.append((bottom_goal, 3))
         points_list.append((bottom_goal, 4))
 
     goal = points_list[point_idx][0]
@@ -120,16 +123,45 @@ if __name__ == '__main__':
     prev_obs = obs
     glb_ts = 0
 
-    while point_idx != len(points_list) - 1:
+    while point_idx < len(points_list):
         goal = points_list[point_idx][0]
         point_type = points_list[point_idx][1]
+        print("idx: {}".format(point_idx))
 
         if point_type == 1:
             print("exploring")
         elif point_type == 2:
-            print("insertion")
-        else:
-            print("ontop of hole")
+            print("on top of hole")
+        elif point_type == 3:
+            print("inserting")
+
+        if logging_data_bool == 1 and point_type == 4:
+            print("Inserted!! :D ")
+            print("On ", point_idx + 1, " of ", len(points_list), " points")
+            file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+
+            dataset = h5py.File(file_name, 'w')
+
+            for key in obs_dict.keys():
+                key_list = obs_dict[key]
+                key_array = np.concatenate(key_list, axis=0)
+                chunk_size = (1,) + key_array[0].shape
+                dataset.create_dataset(key, data=key_array, chunks=chunk_size)
+
+            dataset.close()
+            print("Saving to file: ", file_name)
+            file_num += 1
+
+            obs_dict = {}
+            num_points = 0
+            point_idx +=1
+            point_num_steps = 0
+            env.reset()
+            env.set_robot_joint_positions(robot_initial_q)
+
+            # print("Next Point")
+
+            continue
 
         while env._check_poserr(goal, tol, tol_ang) == False:
             action, action_euler = env._pose_err(goal)
@@ -138,8 +170,16 @@ if __name__ == '__main__':
 
             # adding random noise
 
-            noise = np.random.normal(0.0, 0.2, pos_err.size)
-            noise = np.clip(noise, -0.3, 0.3)
+            noise = np.zeros(pos_err.size)
+            noise = np.random.normal(0.0, 0.01, pos_err.size)
+            noise = np.clip(noise, -0.01, 0.01)
+
+            if file_num > noise_free_traj_num:
+                noise = np.random.normal(0.0, 0.2, pos_err.size)
+                noise = np.clip(noise, -0.3, 0.3)
+                if point_type == 3:
+                    noise = np.random.normal(0.0, 0.05, pos_err.size)
+                    noise = np.clip(noise, -0.05, 0.05)
 
             action = noise + pos_err
 
@@ -162,49 +202,28 @@ if __name__ == '__main__':
             if display_bool:
                 env.render()
 
-            if logging_data_bool == 4:
-                print("On ", point_idx + 1, " of ", len(points_list), " points")
-                file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
-
-                dataset = h5py.File(file_name, 'w')
-
-                for key in obs_dict.keys():
-                    key_list = obs_dict[key]
-                    key_array = np.concatenate(key_list, axis=0)
-                    chunk_size = (1,) + key_array[0].shape
-                    dataset.create_dataset(key, data=key_array, chunks=chunk_size)
-
-                dataset.close()
-                print("Saving to file: ", file_name)
-                file_num += 1
-
-                obs_dict = {}
-                num_points = 0
-                env.reset()
-                env.set_robot_joint_positions(robot_initial_q)
-                continue
-
-            if point_num_steps >= 300:
-                if point_type == 0:
-                    print("Freespace")
-                elif point_type == 0 or point_type == 2:
-                    print("Insertion")
-                point_idx += 1
-                goal = points_list[point_idx][0]
-                point_type = points_list[point_idx][1]
-                point_num_steps = 0
+            if point_num_steps >= 500: #should just check if in hole
+                if point_type == 3:
+                    print("hm can't insert?")
+                    point_idx -=1
+                    goal = points_list[point_idx][0]
+                    point_type = points_list[point_idx][1]
+                    point_num_steps = 0
+                    print("point idx: ", point_idx)
 
             if file_num > num_trajs:
+                print("file num: ", file_num)
                 break
 
             glb_ts += 1
 
         if file_num > num_trajs:
+            print("file num: ", file_num)
             break
-
+        print("Finished point ", point_idx)
         point_idx += 1
         point_num_steps = 0
-        print("Next Point")
+        print("next point: ", point_idx)
 
     print("Finished Data Collection")
 

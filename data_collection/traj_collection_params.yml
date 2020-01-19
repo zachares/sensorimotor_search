@@ -1,8 +1,8 @@
 datacollection_params:
 
-  seed: 1234
-  logging_folder: "/juno/group/muj_multimod_dataset_traj/"
-  collection_details: "multimodal_traj"
+  seed: 1235
+  logging_folder: "."
+  collection_details: "multimodal_test"
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   peg_type: Cross # Options Cross, Rect, Square
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
@@ -11,3 +11,4 @@ datacollection_params:
   workspace_dim: 0.04
   start_position: [ 0.45, 0.10, 0.92]
   num_trajectories: 50
+  noisy_traj_percentage: 0.5
