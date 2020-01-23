@@ -73,9 +73,9 @@ class Proto_MultiStep_Loss(object):
 					change_mean_norm_total += change_mean_norm.item()
 
 		if self.offset == 1:
-			logging_dict['scalar']["loss/" + label] = loss.item() / change_mean_norm_total
+			logging_dict['scalar']["loss/" + label] = loss.item() / (change_mean_norm_total * len(net_est_list))
 		else:
-			logging_dict['scalar']["loss/" + label] = loss.item()
+			logging_dict['scalar']["loss/" + label] = loss.item() / len(net_est_list)
 
 		return loss
 

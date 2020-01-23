@@ -76,6 +76,8 @@ class Trainer(object):
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
 		self.model_dict["EEFRC_Dynamics"] = EEFRC_Dynamics(models_folder, "EEFRC_Dynamics", self.info_flow, force_size, proprio_size, joint_size, action_dim,\
 		 device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["EEFRC_Prob_Dynamics"] = EEFRC_Prob_Dynamics(models_folder, "EEFRC_Prob_Dynamics", self.info_flow, force_size, proprio_size, joint_size, action_dim,\
+		 device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Contact_Multimodal"] = Contact_Multimodal(models_folder, "Contact_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\

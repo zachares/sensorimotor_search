@@ -6,7 +6,7 @@ dataloading_params:
   num_workers: 6
   batch_size: 128
   num_steps: 10
-  idx_dict_path: ""
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202001171504_debugging_39_inital_testing/val_train_split.pkl"
 
 training_params:
   seed: 1234
@@ -38,6 +38,49 @@ info_flow:
       action: [3]
       proprio: [12]
       contact: [1]
+  EEFRC_Prob_Dynamics:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      proprio: "dataset"
+      force: "dataset"
+      action: "dataset"
+      joint_pos: "dataset"
+      joint_vel: "dataset"
+      contact: "dataset"
+      epoch: "dataset"
+    outputs:
+      contact:
+        loss: "BCE_pred_multistep"
+        loss_name: "contact_pred_multistep"
+        weight: 1
+        inputs:
+          contact: "dataset"
+      force_pred:
+        loss: "Pred_multistep"
+        loss_name: "force_pred_multistep"
+        weight: 1
+        inputs:
+          force: "dataset"
+      prop_pred:
+        loss: "Pred_multistep"
+        loss_name: "proprio_pred_multistep"
+        weight: 10
+        inputs:
+          proprio: "dataset"
+      joint_pos_pred:
+        loss: "Pred_multistep"
+        loss_name: "joint_pos_pred_multistep"
+        weight: 1
+        inputs:
+          joint_pos: "dataset"
+      joint_vel_pred:
+        loss: "Pred_multistep"
+        loss_name: "joint_vel_pred_multistep"
+        weight: 1
+        inputs:
+          joint_vel: "dataset"
   EEFRC_Dynamics:
     train: 1
     model_folder: ""
@@ -66,7 +109,7 @@ info_flow:
       prop_pred:
         loss: "Pred_multistep"
         loss_name: "proprio_pred_multistep"
-        weight: 1
+        weight: 10
         inputs:
           proprio: "dataset"
       joint_pos_pred:

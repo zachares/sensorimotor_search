@@ -10,7 +10,7 @@ import os
 import datacollection_util as dc_T
 import matplotlib.pyplot as plt
 import random
-
+import itertools
 
 sys.path.insert(0, "../robosuite/") 
 
@@ -20,15 +20,20 @@ from robosuite.wrappers import IKWrapper
 
 if __name__ == '__main__':
 
+	peg_types = ["Cross", "Rect", "Square"]
+	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel"] # 'image', 'depth' ]
+	peg_dict = {}
+
 	with open("datacollection_params.yml", 'r') as ymlfile:
 		cfg = yaml.safe_load(ymlfile)
 
 	logging_folder = cfg['datacollection_params']['logging_folder']
 	collection_details = cfg['datacollection_params']['collection_details']
 	logging_data_bool = cfg['datacollection_params']['logging_data_bool']
-	peg_type = cfg['datacollection_params']['peg_type']
 	display_bool = cfg['datacollection_params']['display_bool']
-	workspace = np.array(cfg['datacollection_params']['workspace'])
+	discretization = cfg['datacollection_params']['discretization']
+	kp = cfg['datacollection_params']['kp']
+	noise_parameter = cfg['datacollection_params']['noise_parameter']
 
 	workspace_dim = cfg['datacollection_params']['workspace_dim']
 	seed = cfg['datacollection_params']['seed']
@@ -40,187 +45,163 @@ if __name__ == '__main__':
 		os.mkdir(logging_folder )
 
 	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=100,\
-	  gripper_type = peg_type + "PegwForce", controller='position', camera_depth=True)
+	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=10,\
+	  gripper_type ="CrossPegwForce", controller='position', camera_depth=True)
 
 	obs = env.reset()
 	env.viewer.set_camera(camera_id=2)
-	if display_bool:
-		env.render()
 
 	tol = 0.002
-	tol_ang = 100
+	tol_ang = 100 #this is so high since we are only doing position control
 
-	peg_bottom_site = peg_type + "Peg_bottom_site"
-	peg_top_site = peg_type + "Peg_top_site"
-	offset = np.array([0, 0, 0.005])
-	top_goal = np.concatenate([env._get_sitepos(peg_top_site) + offset, np.array([np.pi, 0, np.pi])])
-	bottom_goal = np.concatenate([env._get_sitepos(peg_bottom_site) + offset, np.array([np.pi, 0, np.pi])])
-	fp_array = dc_T.gridpoints_b(workspace_dim, top_goal, 10)
+	for idx, peg_type in enumerate(peg_types):
+		peg_bottom_site = peg_type + "Peg_bottom_site"
+		peg_top_site = peg_type + "Peg_top_site"
 
-	fp_idx = 0
+		top = np.concatenate([env._get_sitepos(peg_top_site), np.array([np.pi, 0, np.pi])])
+		bottom = np.concatenate([env._get_sitepos(peg_bottom_site) + np.array([0, 0, 0.05]), np.array([np.pi, 0, np.pi])])
 
-	print("Top goal: ", top_goal)
-	print("Bottom_goal: ", bottom_goal)
+		peg_vector = np.zeros(len(peg_types))
+		peg_vector[idx] = 1.0
 
-	obs_keys = [ "image", "force", "proprio", "action", "contact", "joint_pos", "joint_vel", "depth"]
+		peg_dict[peg_type] = [top, bottom, peg_vector]
 
-	# moving to first initial position
-	points_list = []
-	point_idx = 0
-	kp = 10
+	peg_hole_options = list(itertools.product(*[peg_types, peg_types]))
 
-	for idx in range(fp_array.shape[0]):
-		point = fp_array[idx]
-
-		if idx != fp_array.shape[0] - 1:
-			points_list.append((point, 1))
-
-			if np.random.binomial(1, 0.1) == 1:
-				points_list.append((top_goal, 3))
-				points_list.append((bottom_goal, 2))
-				points_list.append((top_goal, 3))
-
-	goal = points_list[point_idx][0]
-
-	counter = 0
-
-	while env._check_poserr(goal, tol, tol_ang) == False and counter < 100:
-		action, action_euler = env._pose_err(goal)
-		pos_err = kp * action_euler[:3]
-		obs, reward, done, info = env.step(pos_err)
-		obs['action'] = env.controller.transform_action(pos_err)
-		counter += 1
-
-	# dc_T.plot_image(obs['image'])
-	# a = input("")
-		if display_bool:
-			env.render()
-
-	point_idx += 1
-	initial_point_idx = copy.deepcopy(point_idx)
-	point_num_steps = 0
-	num_points = 0
-	print("moved to initial position")
-
-	obs_dict = {}
 	file_num = 0
-	prev_obs = obs
-	glb_ts = 0
 
-	while point_idx != len(points_list) - 1:
-		goal = points_list[point_idx][0]
-		point_type = points_list[point_idx][1]
+	for peg_hole_option in peg_hole_options:
+		peg_type = peg_hole_option[0]
+		hole_type = peg_hole_option[1]
 
-		if point_type == 1:
-			print("exploring")
-		elif point_type == 2:
-			print("insertion")
+		env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
+		 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=10,\
+		  gripper_type = peg_type + "PegwForce", controller='position', camera_depth=True)
+
+		obs = env.reset()
+		env.viewer.set_camera(camera_id=2)
+
+		top_goal = peg_dict[hole_type][0]
+		bottom_goal = peg_dict[hole_type][1]
+
+		hole_vector = peg_dict[hole_type][2]
+		peg_vector = peg_dict[peg_type][2]
+
+		if peg_type == hole_type:
+			fit_bool = np.array([1.0])
 		else:
-			print("ontop of hole")
+			fit_bool = np.array([0.0])
 
+		# moving to first initial position
+		fp_array = dc_T.gridpoints(workspace_dim, top_goal, discretization)
+		num_files = fp_array.shape[0] * len(peg_hole_options)
 
-		# if logging_data_bool == 1 and point_type == 0 and point_idx != initial_point_idx:
-		# 	print("On ", point_idx + 1, " of ", len(points_list), " points")
-		# 	file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+		points_list = []
+		point_idx = 0
 
-		# 	dataset = h5py.File(file_name, 'w')
+		for idx in range(fp_array.shape[0]):
+			point = fp_array[idx]
 
-		# 	for key in obs_dict.keys():
-		# 		key_list = obs_dict[key]
-		# 		key_array = np.concatenate(key_list, axis = 0)
-		# 		chunk_size = (1,) + key_array[0].shape
-		# 		dataset.create_dataset(key, data= key_array, chunks = chunk_size)
+			points_list.append((point, 0, "freespace"))
+			points_list.append((top_goal, 1, "top goal"))
+			points_list.append((bottom_goal, 1, "insertion"))
+			points_list.append((top_goal, 0, "top_goal"))
 
-		# 	dataset.close()
-		# 	print("Saving to file: ", file_name)
-		# 	file_num += 1
+		goal = points_list[point_idx][0]
 
-		# 	obs_dict = {}
-		# 	num_points = 0
+		counter = 0
 
-		while env._check_poserr(goal, tol, tol_ang) == False:
+		while env._check_poserr(goal, tol, tol_ang) == False and counter < 100:
 			action, action_euler = env._pose_err(goal)
-			# print(action)
 			pos_err = kp * action_euler[:3]
-
-			# adding random noise
-			if point_type == 0:
-				pos_err += 0.2 * np.random.normal(0.0, 1.0, pos_err.size)
-			else:
-				pos_err += 0.2 * np.random.normal(0.0, 1.0, pos_err.size)
-
 			obs, reward, done, info = env.step(pos_err)
-			obs['action'] = env.controller.transform_action(pos_err)
-
-			# if obs['force'][2] > 200:
-			# 	print(obs['force'][2])
-			if display_bool:
-				# plt.scatter(glb_ts, obs['force'][2])
-				plt.scatter(glb_ts, obs['contact'])
-				plt.pause(0.001)
-
-			# if obs['contact'] == 1:
-			# 	print("contact")
-			# else:
-			# 	print(obs['contact'])
-
-			point_num_steps += 1
-
-			if logging_data_bool == 1:
-				num_points += 1
-				dc_T.save_obs(copy.deepcopy(obs), copy.deepcopy(prev_obs), obs_keys, obs_dict)
-
-			prev_obs = obs
+			obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
+			counter += 1
 
 			if display_bool:
 				env.render()
-        	
-			if logging_data_bool == 1 and num_points >= 200:
-				print("On ", point_idx + 1, " of ", len(points_list), " points")
-				file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
 
-				dataset = h5py.File(file_name, 'w')
-
-				for key in obs_dict.keys():
-					key_list = obs_dict[key]
-					key_array = np.concatenate(key_list, axis = 0)
-					chunk_size = (1,) + key_array[0].shape
-					dataset.create_dataset(key, data= key_array, chunks = chunk_size)
-
-				dataset.close()
-				print("Saving to file: ", file_name)
-				file_num += 1
-
-				obs_dict = {}
-				num_points = 0
-
-			if point_num_steps >= 300:
-				if point_type == 0:
-					print("Freespace")
-				elif point_type == 0 or point_type == 2:
-					print("Insertion")
-				point_idx += 1
-				goal = points_list[point_idx][0]
-				point_type = points_list[point_idx][1]
-				point_num_steps = 0
-
-				# if point_type == 0:
-				# 	break
-
-			if file_num > 5000:
-				break
-
-			glb_ts += 1
-
-		if file_num > 5000:
-			break
-
+		print("moved to initial position")
+		# dc_T.plot_image(obs['image'])
+		# a = input("")
+		goal = points_list[point_idx][0]
+		point_type = points_list[point_idx][1]
 		point_idx += 1
 		point_num_steps = 0
-		print("Next Point")	
+
+		obs_dict = {}
+
+		glb_ts = 0
+
+
+		while point_idx < len(points_list) :
+			prev_point_type = copy.deepcopy(point_type)
+			goal = points_list[point_idx][0]
+			point_type = points_list[point_idx][1]
+			print("Translation type is ", points_list[point_idx][2])
+
+			while env._check_poserr(goal, tol, tol_ang) == False:
+				action, action_euler = env._pose_err(goal)
+				pos_err = kp * action_euler[:3]
+				# adding random noise
+				pos_err += noise_parameter * np.random.normal(0.0, 1.0, pos_err.size)
+
+				obs['action'] = env.controller.transform_action(pos_err)
+
+				if logging_data_bool == 1 and point_type == 1:
+					dc_T.save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
+
+				obs, reward, done, info = env.step(pos_err)
+				obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
+
+
+				# if display_bool:
+				# 	# plt.scatter(glb_ts, obs['force'][2])
+				# 	plt.scatter(glb_ts, obs['contact'])
+				# 	plt.pause(0.001)
+				# glb_ts += 1
+
+				if display_bool:
+					env.render()
+	        	
+				if logging_data_bool == 1 and point_type == 0 and prev_point_type == 1:
+					print("On ", file_num + 1, " of ", num_files, " trajectories")
+					file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+					file_num += 1
+
+					dataset = h5py.File(file_name, 'w')
+
+					for key in obs_dict.keys():
+						key_list = obs_dict[key]
+						key_array = np.concatenate(key_list, axis = 0)
+						chunk_size = (1,) + key_array[0].shape
+						dataset.create_dataset(key, data= key_array, chunks = chunk_size)
+
+					dataset.create_dataset("hole_type", data = hole_vector)
+					dataset.create_dataset("peg_type", data = peg_vector)
+					dataset.create_dataset("fit", data = fit_bool)
+
+					dataset.close()
+					print("Saving to file: ", file_name)
+					obs_dict = {}
+					prev_point_type = -1
+
+				point_num_steps += 1
+
+				if point_num_steps >= 75:
+					point_idx += 1
+					if point_idx >= len(points_list):
+						break
+					goal = points_list[point_idx][0]
+					prev_point_type = copy.deepcopy(point_type)
+					point_type = points_list[point_idx][1]
+					point_num_steps = 0
+					print("Skipped Point")
+					print("Translation type is ", points_list[point_idx][2])
+
+			print("Number of Steps", point_num_steps)	
+			point_num_steps = 0
+			point_idx += 1
+
 
 	print("Finished Data Collection")
-
-	if display_bool == 1:
-		print("Closed Simulation")
