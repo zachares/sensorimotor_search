@@ -50,17 +50,20 @@ class Trainer(object):
 		beta_2 = cfg['training_params']['beta2']
 
 		self.info_flow = cfg['info_flow']
-		image_size = self.info_flow['dataset']['outputs']['image']
-		force_size =self.info_flow['dataset']['outputs']['force'] 
+		# image_size = self.info_flow['dataset']['outputs']['image']
+		force_size =self.info_flow['dataset']['outputs']['force_hi_freq'] 
 		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
 		joint_size = self.info_flow['dataset']['outputs']['joint_pos']
 		action_dim =self.info_flow['dataset']['outputs']['action']
-		z_dim = cfg["model_params"]["z_dim"] 
+		z_dim = cfg["model_params"]["z_dim"]
+		offset = cfg["model_params"]["offset"]
+		num_options = cfg["model_params"]["num_options"]
+
 		self.batch_size = batch_size
 
-		if 'curriculum' in cfg['training_params'].keys():
-			self.curriculum = cfg['training_params']['curriculum']
-		else:
+		self.curriculum = cfg['training_params']['curriculum']
+
+		if len(self.curriculum) == 0:
 			self.curriculum = None
 
 		### Initializing Model ####
@@ -74,10 +77,19 @@ class Trainer(object):
 		##### Note if a path has been provided then the model will load a previous model
 		# self.model_dict["Simple_Multimodal_Hist1"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist1", self.info_flow, image_size, proprio_size, z_dim,\
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["EEFRC_Dynamics"] = EEFRC_Dynamics(models_folder, "EEFRC_Dynamics", self.info_flow, force_size, proprio_size, joint_size, action_dim,\
-		 device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["EEFRC_Prob_Dynamics"] = EEFRC_Prob_Dynamics(models_folder, "EEFRC_Prob_Dynamics", self.info_flow, force_size, proprio_size, joint_size, action_dim,\
-		 device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["Fit_ClassifierLSTM"] = Fit_ClassifierLSTM(models_folder, "Fit_ClassifierLSTM", self.info_flow, force_size, proprio_size,\
+		 action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+
+		self.model_dict["Fit_ClassifierParticle"] = Fit_ClassifierParticle(models_folder, "Fit_ClassifierParticle", self.info_flow, force_size,\
+		 proprio_size, action_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+
+		self.model_dict["Options_ClassifierParticle"] = Options_ClassifierParticle(models_folder, "Options_ClassifierParticle", self.info_flow, force_size,\
+		 proprio_size, action_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+
+		self.model_dict["Options_ClassifierLSTM"] = Options_ClassifierLSTM(models_folder, "Options_ClassifierLSTM", self.info_flow, force_size,\
+		 proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+
+		print("Finished Initialization")
 		# self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
 		#  action_dim, device = device, curriculum = self.curriculum).to(device)
 		# self.model_dict["Contact_Multimodal"] = Contact_Multimodal(models_folder, "Contact_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
@@ -103,29 +115,24 @@ class Trainer(object):
 		#  lr=learning_rate, betas=(beta_1, beta_2), weight_decay = regularization_weight)
 		
 		##### Common Loss Function ####
-		# self.mse_loss = Proto_Loss(nn.MSELoss(), "mean_square_error")
-		# self.crent_loss = Proto_Loss(nn.CrossEntropyLoss(), "cross_ent")
-		# self.bcrent_loss = Proto_Loss(nn.BCEWithLogitsLoss(), "binary_cross_ent")
-		# self.kl_div = Gaussian_KL("kl_div")
-		# self.crent_loss = nn.CrossEntropyLoss(reduction = 'none')
-		# self.bcrent_loss = nn.BCEWithLogitsLoss(reduction = 'none')
+		# nn.MSELoss()
+		# nn.CrossEntropyLoss()
+		# nn.BCEWithLogitsLoss()
+		# nn.CrossEntropyLoss(reduction = 'none')
+		# nn.BCEWithLogitsLoss(reduction = 'none')
 
 		###############################################
 		##### Declaring loss functions for every term in the training objective
 		##############################################
 		self.loss_dict = {}
-		self.loss_dict["Rec_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss(), offset = 0)
-		self.loss_dict["Pred_image_multistep"] = Image_Reconstruction_MultiStep(nn.MSELoss())
-		self.loss_dict["Pred_multistep_list"] = Proto_MultiStep_Loss_List(nn.MSELoss())
-		self.loss_dict["Rec_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), offset = 0)
-		self.loss_dict["Pred_multistep"] = Proto_MultiStep_Loss(nn.MSELoss())
-		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep()
-		self.loss_dict["Pred_eepos_multistep"] = Proto_MultiStep_Loss(nn.MSELoss(), max_idx = 3)
-		self.loss_dict["Prior_multistep"] = Prior_Multistep()
-		self.loss_dict["Hist1_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 1)
-		self.loss_dict["Hist5_pred_multistep"] = Proto_MultiStep_Hist_Loss_List(nn.MSELoss(reduction = 'none'), hyperparameter = 5)
-		self.loss_dict["BCE_class_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss(), offset = 0)
-		self.loss_dict["BCE_pred_multistep"] = BinaryEst_MultiStep(nn.BCEWithLogitsLoss())
+		self.loss_dict["Image_multistep"] = Proto_MultiStep_Loss(record_function = record_image)
+		self.loss_dict["MSE_multistep"] = Proto_MultiStep_Loss()
+		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep_Loss()
+		self.loss_dict["KL_DIV"] = Gaussian_KL_Loss()
+		self.loss_dict["MSE"] = Proto_Loss()
+		self.loss_dict["Image_loss"] = Proto_Loss(record_function = record_image)
+		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep_Loss()
+		self.loss_dict["CE_multistep"] = CrossEnt_MultiStep_Loss()
 		###################################
 		####### Code ends here ###########
 		####################################
@@ -214,10 +221,18 @@ class Trainer(object):
 				loss_name = self.info_flow[model_key]["outputs"][output_key]["loss_name"]
 
 				if loss_bool == False:
-					loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
+					if "offset" in self.info_flow[model_key]["outputs"][output_key].keys():
+						offset = self.info_flow[model_key]["outputs"][output_key]["offset"]
+						loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name, offset)
+					else:
+						loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
 					loss_bool = True
 				else:
-					loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
+					if "offset" in self.info_flow[model_key]["outputs"][output_key].keys():
+						offset = self.info_flow[model_key]["outputs"][output_key]["offset"]
+						loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name, offset)
+					else:
+						loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
 
 		return loss
 

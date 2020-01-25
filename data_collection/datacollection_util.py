@@ -37,7 +37,7 @@ def gridpoints(workspace_dim, peg_top_site, num_points = 10):
 	ymin = peg_top_site[1] - workspace_dim
 	ymax = peg_top_site[1] + workspace_dim
 
-	zmin = peg_top_site[2] - 0.003
+	zmin = peg_top_site[2] - 0.008
 	zmax = peg_top_site[2] + 2 * workspace_dim
 
 	print("Zs: ", zmin, " ",zmax)

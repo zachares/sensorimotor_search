@@ -101,13 +101,13 @@ class Logger(object):
 
 	def save_dict(self, name, dictionary, yml_bool):
 		if self.debugging_flag == False and yml_bool:
-			print("Saving ", name, " to: ", self.runs_folder + name)
+			print("Saving ", name, " to: ", self.runs_folder + name + ".yml")
 
 			with open(self.runs_folder + name + ".yml", 'w') as ymlfile2:
 				yaml.dump(dictionary, ymlfile2)
 
 		elif self.debugging_flag == False:
-			print("Saving ", name, " to: ", self.runs_folder + name)
+			print("Saving ", name, " to: ", self.runs_folder + name + ".pkl")
 			with open(self.runs_folder + name + '.pkl', 'wb') as f:
 				pickle.dump(dictionary, f, pickle.HIGHEST_PROTOCOL)
 

@@ -32,8 +32,8 @@ if __name__ == '__main__':
 	logging_data_bool = cfg['datacollection_params']['logging_data_bool']
 	display_bool = cfg['datacollection_params']['display_bool']
 	discretization = cfg['datacollection_params']['discretization']
-	kp = cfg['datacollection_params']['kp']
-	noise_parameter = cfg['datacollection_params']['noise_parameter']
+	kp = np.array(cfg['datacollection_params']['kp'])
+	noise_parameter = np.array(cfg['datacollection_params']['noise_parameter'])
 
 	workspace_dim = cfg['datacollection_params']['workspace_dim']
 	seed = cfg['datacollection_params']['seed']
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 		peg_bottom_site = peg_type + "Peg_bottom_site"
 		peg_top_site = peg_type + "Peg_top_site"
 
-		top = np.concatenate([env._get_sitepos(peg_top_site), np.array([np.pi, 0, np.pi])])
+		top = np.concatenate([env._get_sitepos(peg_top_site) - np.array([0, 0, 0.01]), np.array([np.pi, 0, np.pi])])
 		bottom = np.concatenate([env._get_sitepos(peg_bottom_site) + np.array([0, 0, 0.05]), np.array([np.pi, 0, np.pi])])
 
 		peg_vector = np.zeros(len(peg_types))
@@ -68,10 +68,15 @@ if __name__ == '__main__':
 
 	peg_hole_options = list(itertools.product(*[peg_types, peg_types]))
 
+	# file_num = 3773
 	file_num = 0
 
 	for peg_hole_option in peg_hole_options:
 		peg_type = peg_hole_option[0]
+
+		# if peg_type == peg_types[0] or peg_type == peg_types[1]:
+		# 	continue
+
 		hole_type = peg_hole_option[1]
 
 		env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
@@ -104,8 +109,8 @@ if __name__ == '__main__':
 
 			points_list.append((point, 0, "freespace"))
 			points_list.append((top_goal, 1, "top goal"))
-			points_list.append((bottom_goal, 1, "insertion"))
-			points_list.append((top_goal, 0, "top_goal"))
+			# points_list.append((bottom_goal, 1, "insertion"))
+			# points_list.append((top_goal, 0, "top_goal"))
 
 		goal = points_list[point_idx][0]
 
@@ -125,7 +130,7 @@ if __name__ == '__main__':
 		# dc_T.plot_image(obs['image'])
 		# a = input("")
 		goal = points_list[point_idx][0]
-		point_type = points_list[point_idx][1]
+		point_type = -1
 		point_idx += 1
 		point_num_steps = 0
 
@@ -144,11 +149,13 @@ if __name__ == '__main__':
 				action, action_euler = env._pose_err(goal)
 				pos_err = kp * action_euler[:3]
 				# adding random noise
-				pos_err += noise_parameter * np.random.normal(0.0, 1.0, pos_err.size)
+				noise = np.random.normal(0.0, 1.0, pos_err.size)
+				# noise[2] = -1.0 * np.absolute(noise[2])
+				pos_err += noise_parameter * noise
 
 				obs['action'] = env.controller.transform_action(pos_err)
 
-				if logging_data_bool == 1 and point_type == 1:
+				if logging_data_bool == 1:
 					dc_T.save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
 
 				obs, reward, done, info = env.step(pos_err)
@@ -164,7 +171,7 @@ if __name__ == '__main__':
 				if display_bool:
 					env.render()
 	        	
-				if logging_data_bool == 1 and point_type == 0 and prev_point_type == 1:
+				if logging_data_bool == 1 and point_type == 1 and prev_point_type == 0:
 					print("On ", file_num + 1, " of ", num_files, " trajectories")
 					file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
 					file_num += 1
@@ -172,7 +179,12 @@ if __name__ == '__main__':
 					dataset = h5py.File(file_name, 'w')
 
 					for key in obs_dict.keys():
+
 						key_list = obs_dict[key]
+
+						if key == obs_keys[0]:
+							print("Number of points: ", len(key_list))
+
 						key_array = np.concatenate(key_list, axis = 0)
 						chunk_size = (1,) + key_array[0].shape
 						dataset.create_dataset(key, data= key_array, chunks = chunk_size)

@@ -2,9 +2,9 @@ datacollection_params:
   seed: 1234
   logging_folder: "/juno/group/muj_senssearch_dataset/"
   collection_details: "multimodal_op_space"
-  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
+  logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   workspace_dim: 0.04
-  discretization: 2
-  kp: 4
-  noise_parameter: 0.1
+  discretization: 8
+  kp: [4, 4, 4]
+  noise_parameter: [0.4, 0.4, 0.4]

@@ -50,7 +50,11 @@ class H5_DataLoader(Dataset):
             train_eepos_list = []
 
             #### assumes one dataset per file
+
+            print("Starting Train Val Split")
             for idx, filename in enumerate(self.filename_list):
+                if ((idx + 1) % 500) == 0:
+                    print("Processed ", idx + 1, "files out of", len(self.filename_list))
                 dataset = self.load_file(filename)
                 proprios = np.array(dataset['proprio'])
                 dataset_length = proprios.shape[0]
@@ -163,9 +167,11 @@ class H5_DataLoader(Dataset):
                 sample[key] = np.array(dataset[key])[idxs_p[0]:(idxs_p[1]-1)]
             elif key == 'force' or key == 'proprio':   
                 sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
-                # sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]]  
+                # sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]] 
+            elif key == 'peg_type' or key == 'hole_type' or key == 'fit':
+                sample[key] = np.repeat(np.expand_dims(np.array(dataset[key]), axis = 0), idxs_p[1] - idxs_p[0], axis = 0)
             else:
-                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]                         
+                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
 
         dataset.close()
         # dataset_up.close()
@@ -221,8 +227,9 @@ def init_dataloader(cfg, device, idx_dict_path = None):
     ###############################################
     filename_list = []
     for file in os.listdir(dataset_path):
-        if file.endswith(".h5"):
+        if file.endswith(".h5"): # and len(filename_list) < 20:
             filename_list.append(dataset_path + file)
+
 
     #### loading previous val_train split to continue training a model
     if idx_dict_path is not None:
