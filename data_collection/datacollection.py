@@ -13,7 +13,7 @@ import random
 
 sys.path.insert(0, "../robosuite/")
 
-import robosuitej
+import robosuite
 import robosuite.utils.transform_utils as T
 from robosuite.wrappers import IKWrapper
 
