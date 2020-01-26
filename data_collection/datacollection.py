@@ -148,15 +148,20 @@ if __name__ == '__main__':
             else:
                 pos_err += 0.2 * np.random.normal(0.0, 1.0, pos_err.size)
 
-            obs, reward, done, info = env.step(pos_err)
             obs['action'] = env.controller.transform_action(pos_err)
+            prev_obs = obs
+            if logging_data_bool == 1:
+                num_points += 1
+                dc_T.save_obs(copy.deepcopy(obs), copy.deepcopy(prev_obs), obs_keys, obs_dict)
+
+            obs, reward, done, info = env.step(pos_err)
 
             # if obs['force'][2] > 200:
             # 	print(obs['force'][2])
-            if display_bool:
-                # plt.scatter(glb_ts, obs['force'][2])
-                plt.scatter(glb_ts, obs['contact'])
-                plt.pause(0.001)
+            # if display_bool:
+            #     # plt.scatter(glb_ts, obs['force'][2])
+            #     plt.scatter(glb_ts, obs['contact'])
+            #     plt.pause(0.001)
 
             # if obs['contact'] == 1:
             # 	print("contact")
@@ -164,12 +169,6 @@ if __name__ == '__main__':
             # 	print(obs['contact'])
 
             point_num_steps += 1
-
-            if logging_data_bool == 1:
-                num_points += 1
-                dc_T.save_obs(copy.deepcopy(obs), copy.deepcopy(prev_obs), obs_keys, obs_dict)
-
-            prev_obs = obs
 
             if display_bool:
                 env.render()
