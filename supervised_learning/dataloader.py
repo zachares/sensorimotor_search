@@ -165,6 +165,8 @@ class H5_DataLoader(Dataset):
         for key in self.loading_dict.keys():
             if key == 'action':
                 sample[key] = np.array(dataset[key])[idxs_p[0]:(idxs_p[1]-1)]
+                sample[key + '_mag'] = np.linalg.norm(sample[key], axis = 1)
+                sample[key + '_dir'] = sample[key] / np.repeat(np.expand_dims(sample[key + '_mag'], axis = 1), sample[key].shape[1], axis = 1)
             elif key == 'force' or key == 'proprio':   
                 sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
                 # sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]] 

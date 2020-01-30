@@ -1,4 +1,23 @@
-    # EEFRC_Prob_Dynamics:
+  Fit_ClassifierParticle:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      proprio: "dataset"
+      force_hi_freq: "dataset"
+      action: "dataset"
+      peg_type: "dataset"
+      contact: "dataset"
+      epoch: "dataset"
+    outputs:
+      fit_class:
+        loss: "BCE_multistep"
+        loss_name: "fit_classification_multistep"
+        weight: 1
+        offset: 9
+        inputs:
+          fit: "dataset"
+              # EEFRC_Prob_Dynamics:
   #   train: 1
   #   model_folder: ""
   #   epoch_num: 0

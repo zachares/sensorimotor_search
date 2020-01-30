@@ -75,27 +75,17 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		# self.model_dict["Simple_Multimodal_Hist1"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Hist1", self.info_flow, image_size, proprio_size, z_dim,\
-		#  action_dim, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Fit_ClassifierLSTM"] = Fit_ClassifierLSTM(models_folder, "Fit_ClassifierLSTM", self.info_flow, force_size, proprio_size,\
-		 action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+		# self.model_dict["Options_ClassifierLSTM_woutlearnrep"] = Options_ClassifierLSTM(models_folder, "Options_ClassifierLSTM_woutlearnrep", self.info_flow,\
+		#  force_size, proprio_size, action_dim, z_dim, num_options, offset, learn_rep = False, device = device, curriculum = self.curriculum).to(device)
 
-		self.model_dict["Fit_ClassifierParticle"] = Fit_ClassifierParticle(models_folder, "Fit_ClassifierParticle", self.info_flow, force_size,\
-		 proprio_size, action_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
-
-		self.model_dict["Options_ClassifierParticle"] = Options_ClassifierParticle(models_folder, "Options_ClassifierParticle", self.info_flow, force_size,\
-		 proprio_size, action_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
-
-		self.model_dict["Options_ClassifierLSTM"] = Options_ClassifierLSTM(models_folder, "Options_ClassifierLSTM", self.info_flow, force_size,\
+		# self.model_dict["Options_UncertaintyQuantifier"] = Options_UncertaintyQuantifier(models_folder, "Options_UncertaintyQuantifier", self.info_flow,\
+		#  proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["DynamicswForce"] = DynamicswForce(models_folder, "DynamicswForce", self.info_flow,\
+		 force_size, proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["Dynamics"] = Dynamics(models_folder, "Dynamics", self.info_flow,\
 		 proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
-
-		print("Finished Initialization")
-		# self.model_dict["Simple_Multimodal_Reg"] = Simple_Multimodal(models_folder, "Simple_Multimodal_Reg", self.info_flow, image_size, proprio_size, z_dim,\
-		#  action_dim, device = device, curriculum = self.curriculum).to(device)
-		# self.model_dict["Contact_Multimodal"] = Contact_Multimodal(models_folder, "Contact_Multimodal", self.info_flow, image_size, proprio_size, z_dim,\
-		#  action_dim, device = device, curriculum = self.curriculum).to(device)
-		# self.model_dict["Contact_Force_Multimodal"] = Contact_Force_Multimodal(models_folder, "Contact_Force_Multimodal", self.info_flow, image_size, proprio_size, force_size, z_dim,\
-		#  action_dim, device = device, curriculum = self.curriculum).to(device)		 	
+		
+		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################
 		################################################
@@ -126,13 +116,17 @@ class Trainer(object):
 		##############################################
 		self.loss_dict = {}
 		self.loss_dict["Image_multistep"] = Proto_MultiStep_Loss(record_function = record_image)
-		self.loss_dict["MSE_multistep"] = Proto_MultiStep_Loss()
-		self.loss_dict["KL_DIV_multistep"] = Gaussian_KL_MultiStep_Loss()
-		self.loss_dict["KL_DIV"] = Gaussian_KL_Loss()
+		self.loss_dict["MSE_multistep"] = Proto_MultiStep_Loss(record_function = record_diff)
+		self.loss_dict["Gaussian_KL_multistep"] = Gaussian_KL_MultiStep_Loss()
+		self.loss_dict["Gaussian_KL"] = Gaussian_KL_Loss()
 		self.loss_dict["MSE"] = Proto_Loss()
 		self.loss_dict["Image_loss"] = Proto_Loss(record_function = record_image)
 		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep_Loss()
 		self.loss_dict["CE_multistep"] = CrossEnt_MultiStep_Loss()
+		self.loss_dict["GaussNegLogProb_multistep"] = GaussianNegLogProb_multistep_Loss()
+		self.loss_dict["Multinomial_KL_multistep"] = Multinomial_KL_MultiStep_Loss()
+		self.loss_dict["Mag_multistep"] = Proto_MultiStep_Loss(record_function = record_mag)
+		self.loss_dict["Angle_multistep"] = Proto_MultiStep_Loss(record_function = record_angle)
 		###################################
 		####### Code ends here ###########
 		####################################
@@ -202,6 +196,8 @@ class Trainer(object):
 		loss_idx = 0
 		loss_bool = False
 		for idx_model, model_key in enumerate(self.model_dict.keys()):
+			# if self.info_flow[model_key]["train"] == 0:
+			# 	continue
 			for idx_output, output_key in enumerate(self.info_flow[model_key]['outputs'].keys()):
 				if self.info_flow[model_key]['outputs'][output_key]['loss'] == "":
 					loss_idx += 1

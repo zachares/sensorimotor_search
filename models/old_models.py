@@ -27,6 +27,748 @@ def product_of_experts(m_vect, v_vect):
 
     return mu, var
 
+class Options_UncertaintyQuantifier(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, proprio_size, action_dim, z_dim, num_options, offset, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+        self.model_list = []
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.z_dim = z_dim
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.uncertainty_size = 1
+        self.frc_enc_size = 16
+
+        self.state_size = self.frc_enc_size + self.proprio_size + self.contact_size + self.action_dim + 2 * self.num_options + self.uncertainty_size
+
+        self.uncertainty_lstm = LSTMCell(folder + "_uncertainty_lstm", self.state_size, self.z_dim, device = self.device)
+        self.pre_lstm = FCN(folder + "_pre_lstm", self.state_size, self.state_size, 3, device = self.device)
+        self.uncertainty_est = FCN(folder + "_uncertainty_est", z_dim, 1, 3, device = self.device)
+
+        self.model_list.append(self.uncertainty_lstm)
+        self.model_list.append(self.pre_lstm)
+        self.model_list.append(self.uncertainty_est)
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_uncertainty(self, proprio, frc_enc, contact, action, peg_type, hole_type, uncertainty, h = None, c = None):
+        prestate = torch.cat([proprio, frc_enc, contact.unsqueeze(1), action, peg_type, hole_type, uncertainty], dim = 1)
+        state = self.pre_lstm(prestate)
+
+        if h is None or c is None:
+            h_pred, c_pred = self.uncertainty_lstm(state)
+        else:
+            h_pred, c_pred = self.uncertainty_lstm(state, h, c) 
+
+        uncertainty_logits = self.uncertainty_est(h_pred)
+
+        return uncertainty_logits, h_pred, c_pred
+
+    def forward(self, input_dict):
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        frc_encs = input_dict["frc_enc"].to(self.device)
+        hole_probs = input_dict["hole_probs"].to(self.device)
+
+        # print("Forces size: ", forces.size())
+        contacts = input_dict["contact"].to(self.device)
+        peg_types = input_dict["peg_type"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        uncertainty_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        uncertainty_probs = torch.ones_like(contacts[:,0]).unsqueeze(1) / 2
+
+        for idx in range(steps):
+            action = actions[:,idx]
+            proprio = proprios[:,idx]
+            frc_enc = frc_encs[:,idx]
+            contact = contacts[:,idx]
+            peg_type = peg_types[:,idx]
+            hole_prob = hole_probs[:, idx]
+
+            if idx == 0:
+                uncertainty_logits, h, c = self.get_uncertainty(proprio, frc_enc, contact, action, peg_type, hole_prob, uncertainty_probs)
+                uncertainty_probs = torch.sigmoid(uncertainty_logits).squeeze().unsqueeze(1)
+            # stops gradient after a certain number of steps
+            # elif idx != 0 and idx % 8 == 0:
+            #     h_clone = h.detach()
+            #     c_clone = c.detach()
+            #     uncertainty_logits, h, c = self.get_uncertainty(proprio, frc_enc, contact, action, peg_type, hole_prob, uncertainty_probs, h_clone, c_clone)
+            #     uncertainty_probs = torch.sigmoid(uncertainty_logits).squeeze().unsqueeze(1)
+            else:
+                uncertainty_logits, h, c = self.get_uncertainty(proprio, frc_enc, contact, action, peg_type, hole_prob, uncertainty_probs, h, c)
+                uncertainty_probs = torch.sigmoid(uncertainty_logits).squeeze().unsqueeze(1)
+
+            if idx >= self.offset:
+                uncertainty_list.append(uncertainty_logits.squeeze())
+
+        return {
+            'uncertainty_est': uncertainty_list,
+        }
+class Particle_Dynamics(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, z_dim, num_options, offset, heteroscedastic_noise = False, num_particles = 20, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+        self.model_list = []
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.force_size = force_size
+        self.num_particles = num_particles
+        self.num_options = num_options
+        self.frc_enc_size = 16
+        self.offset = offset
+
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 16
+        self.proprio_enc_size = 16
+        self.z_dim = z_dim
+        self.heteroscedastic_noise = heteroscedastic_noise
+
+        self.state_size = self.proprio_enc_size + self.frc_enc_size
+
+        if self.heteroscedastic_noise:
+            self.noise_model = ResNetFCN(folder + "_noise_model", self.state_size + 2 * self.num_options + self.action_dim + self.contact_size,\
+             self.state_size, 2, device = self.device)
+            self.model_list.append(self.noise_model)
+        else:
+            self.state_noise = Params(folder + "_state_noise", (self.state_size), device = self.device) 
+            self.model_list.append(self.state_noise)
+
+        self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+         (self.frc_enc_size, 1), False, True, 1, device = self.device)
+
+        self.proprio_enc = ResNetFCN(folder + "_proprio_enc", self.proprio_size, self.proprio_enc_size, 2, device = self.device)
+
+        self.dynamics = ResNetFCN(folder + "_dymamics_resnet", 2 * self.state_size + 2 * self.num_options + self.action_dim + self.contact_size, self.state_size, 4, device = self.device)
+        self.dynamics_flows = PlanarFlow(folder + "_dynamics_flows", self.state_size, 30, device = self.device)
+
+        self.contact_pred = FCN(folder + "_contact_pred", self.state_size + 2 * self.num_options + self.action_dim + self.contact_size, 1, 3, device = self.device)
+
+        self.model_list.append(self.frc_enc)
+        self.model_list.append(self.proprio_enc)
+
+        self.model_list.append(self.dynamics)
+        self.model_list.append(self.dynamics_flows)
+
+        self.model_list.append(self.contact_pred)
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_pred(self, proprio, force, action, contact, peg_type, hole_type):
+
+        pre_state = torch.cat([proprio, force, contact.unsqueeze(1), action, peg_type, hole_type], dim = 1).unsqueeze(1).repeat(1, self.num_particles, 1)
+
+        contact_logits = self.contact_pred(torch.cat([proprio, force, contact.unsqueeze(1), action, peg_type, hole_type], dim = 1))
+
+        if self.heteroscedastic_noise:
+            state_variance = self.noise_model(pre_state.view(pre_state.size(0) * pre_state.size(1), pre_state.size(2))).view(pre_state.size(0), pre_state.size(1), self.state_size)
+        else:
+            state_variance = self.state_noise.params.unsqueeze(0).unsqueeze(1).repeat(pre_state.size(0), pre_state.size(1), 1)
+
+        state_mean = torch.zeros_like(state_variance)
+
+        noise_samples = sample_gaussian(state_mean, state_variance, self.device)
+
+        state = torch.cat([pre_state, noise_samples], dim = 2).view(pre_state.size(0) * self.num_particles, pre_state.size(2) + noise_samples.size(2))
+
+        pre_particles = self.dynamics(state)#.view(pre_state.size(0), self.num_particles, self.state_size)
+        pred_particles = self.dynamics_flows(pre_particles).view(pre_state.size(0), self.num_particles, self.state_size)
+
+        pred_mean = pred_particles.mean(1).squeeze() + torch.cat([proprio, force], dim = 1)
+        pred_var = pred_particles.var(1).squeeze()
+
+        return (pred_mean[:, :self.proprio_enc_size], pred_var[:, :self.proprio_enc_size]), \
+        (pred_mean[:,self.proprio_enc_size:], pred_var[:,self.proprio_enc_size:]), \
+        contact_logits.squeeze()
+
+    def forward(self, input_dict):
+
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        
+        peg_types = input_dict["peg_type"].to(self.device)
+        hole_types = input_dict["hole_type"].to(self.device)
+
+        contacts = input_dict["contact"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        frc_enc_list = []
+        proprio_enc_list = []
+        force_params_list = []
+        proprio_params_list = []
+        contact_params_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        for idx in range(steps):
+            force = forces[:, idx]
+            proprio = proprios[:,idx]
+            force_next = forces[:, idx + 1]
+            proprio_next = proprios[:, idx + 1]
+            action = actions[:,idx]
+            contact = contacts[:,idx]
+            peg_type = peg_types[:,idx]
+            hole_type = hole_types[:,idx]
+
+            frc_enc = self.frc_enc(force)
+            frc_enc_list.append(frc_enc.unsqueeze(1))
+            proprio_enc = self.proprio_enc(proprio)
+            proprio_enc_list.append(proprio_enc.unsqueeze(1))
+
+            if idx == steps - 1:
+                frc_enc_next = self.frc_enc(force_next)
+                frc_enc_list.append(frc_enc_next.unsqueeze(1))
+                proprio_enc_next = self.proprio_enc(proprio_next)
+                proprio_enc_list.append(proprio_enc_next.unsqueeze(1))
+
+            proprio_params, force_params, contact_params = self.get_pred(proprio_enc, frc_enc, action, contact, peg_type, hole_type)
+
+            if idx >= self.offset:
+                proprio_params_list.append(proprio_params)
+                force_params_list.append(force_params)
+                contact_params_list.append(contact_params)
+
+        return {
+            'proprio_enc_array': torch.cat(proprio_enc_list, dim = 1),
+            'frc_enc_array': torch.cat(frc_enc_list, dim = 1),
+            'proprio_logprob': proprio_params_list,
+            'force_logprob': force_params_list,
+            'contact_logprob': contact_params_list,
+        }
+
+
+    # def trans(self, input_dict):
+    #     proprio = input_dict["proprio"].to(self.device)
+    #     force = input_dict["force"].to(self.device)
+    #     joint_pos = input_dict["joint_pos"].to(self.device).squeeze()
+    #     joint_vel = input_dict["joint_vel"].to(self.device).squeeze()
+    #     joint_proprio = torch.cat([joint_pos, joint_vel], dim = 0)
+    #     actions = (input_dict["action_sequence"]).to(self.device)
+
+    #     steps = actions.size(0)
+
+    #     for idx in range(steps):
+    #         action = actions[idx].unsqueeze(0)
+    #         proprio, joint_proprio, force = self.get_pred(proprio.squeeze().unsqueeze(0),\
+    #         joint_proprio.squeeze().unsqueeze(0), force.squeeze().unsqueeze(0), action)           
+
+    #     return {
+    #         'proprio': proprio.squeeze().unsqueeze(0),
+    #         'joint_pos': joint_proprio.squeeze().unsqueeze(0)[:, :self.joint_size],
+    #         'joint_vel': joint_proprio.squeeze().unsqueeze(0)[:, self.joint_size:],
+    #         'force': force.squeeze().unsqueeze(0),
+    #     }
+class Fit_ClassifierLSTM(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, z_dim, num_options, offset, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.force_size = force_size
+        self.z_dim = z_dim
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 16
+
+        self.state_size = self.frc_enc_size + self.proprio_size + self.contact_size + self.action_dim + self.num_options
+
+        self.fit_lstm = LSTMCell(folder + "_fit_lstm", self.state_size, self.z_dim, device = self.device) 
+
+        self.pre_lstm = FCN(folder + "_pre_lstm", self.state_size, self.state_size, 3, device = self.device)
+
+        self.fit_class = FCN(folder + "_fit_class", z_dim, 1, 3, device = self.device)  
+
+        self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+         (self.frc_enc_size, 1), False, True, 1, device = self.device)
+
+        self.model_list = [self.fit_lstm, self.fit_class, self.frc_enc, self.pre_lstm]
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_fit_class(self, proprio, force, contact, action, peg_type, h = None, c = None):
+        # print("Force size: ", force.size())
+        frc_enc = self.frc_enc(force)
+
+        # print("Proprio size: ", proprio.size())
+        # print("Force size: ", frc_enc.size())
+        # print("contact size: ", contact.size())
+        # print("action size: ", action.size())
+        # print("peg type size: ", peg_type.size())
+        prestate = torch.cat([proprio, frc_enc, contact.unsqueeze(1), action, peg_type], dim = 1)
+        state = self.pre_lstm(prestate)
+
+        if h is None or c is None:
+            h_pred, c_pred = self.fit_lstm(state)
+        else:
+            h_pred, c_pred = self.fit_lstm(state, h, c) 
+
+        fit_logits = self.fit_class(h_pred)
+
+        return fit_logits, h_pred, c_pred
+
+    def forward(self, input_dict):
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+
+        # print("Forces size: ", forces.size())
+        contacts = input_dict["contact"].to(self.device)
+        peg_types = input_dict["peg_type"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        fit_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        for idx in range(steps):
+            action = actions[:,idx]
+            proprio = proprios[:,idx]
+            force = forces[:,idx]
+            contact = contacts[:,idx]
+            peg_type = peg_types[:,idx]
+
+            if idx == 0:
+                fit_logits, h, c = self.get_fit_class(proprio, force, contact, action, peg_type)
+
+            # stops gradient after a certain number of steps
+            elif idx != 0 and idx % 8 == 0:
+                h_clone = h.detach()
+                c_clone = c.detach()
+                fit_logits, h, c = self.get_fit_class(proprio, force, contact, action, peg_type, h_clone, c_clone)
+            else:
+                fit_logits, h, c = self.get_fit_class(proprio, force, contact, action, peg_type, h, c)
+
+            if idx >= self.offset:
+                fit_list.append(fit_logits)
+
+        return {
+            'fit_class': fit_list,
+        }
+class Fit_ClassifierParticle(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, num_options, offset, num_particles = 20, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.force_size = force_size
+        self.num_particles = num_particles
+        self.num_options = num_options
+        self.frc_enc_size = 16
+        self.offset = offset
+
+        self.state_size_nc = self.action_dim + 2 * self.proprio_size + self.num_options
+        self.state_size_c = self.action_dim + 2 * self.proprio_size + self.frc_enc_size + self.num_options
+
+        self.ee_nc = ResNetFCN(folder + "_ee_resnet_nc", self.state_size_nc, self.proprio_size, 3, device = self.device)
+        self.ee_c = ResNetFCN(folder + "_ee_resnet_c", self.state_size_c, self.proprio_size, 3, device = self.device)
+
+        # self.contact_class = ResNetFCN(folder + "_contact_class", self.proprio_size + self.force_size, 1, 2, device = self.device)  
+
+        self.proprio_noise = Params(folder + "_noise", self.proprio_size, device = self.device)  
+
+        self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+         (self.frc_enc_size , 1), False, True, 1, device = self.device)
+
+        self.fit_lstm = LSTMCell(folder + "_fit_lstm", 16, 16, device = self.device) 
+
+        self.pre_lstm = FCN(folder + "_pre_lstm", 4, 16, 3, device = self.device)
+
+        self.fit_class = FCN(folder + "_fit_class", 16, 1, 3, device = self.device)  
+
+        self.model_list = [self.ee_c, self.ee_nc, self.proprio_noise, self.frc_enc, self.fit_lstm, self.pre_lstm, self.fit_class] #self.frc_nc, self.frc_c, self.joint_nc, self.joint_c, ]
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_pred(self, proprio, force, action, contact, peg_type):
+        frc_enc = self.frc_enc(force)
+        
+        nc_state = torch.cat([proprio, action, peg_type], dim = 1).unsqueeze(1).repeat(1, self.num_particles, 1)
+        c_state = torch.cat([proprio, frc_enc, action, peg_type], dim = 1).unsqueeze(1).repeat(1, self.num_particles, 1)
+
+        proprio_variance = self.proprio_noise.params.unsqueeze(0).unsqueeze(1).repeat(nc_state.size(0), nc_state.size(1), 1)
+        proprio_mean = torch.zeros_like(proprio_variance)
+
+        noise_samples = sample_gaussian(proprio_mean, proprio_variance, self.device)
+
+        nc_state = torch.cat([nc_state, noise_samples], dim = 2)
+        c_state = torch.cat([c_state, noise_samples], dim = 2)
+
+        proprio_particles = self.ee_nc(nc_state) + contact.unsqueeze(1).unsqueeze(2).repeat(1, c_state.size(1), proprio.size(1)) * self.ee_c(c_state) #+ proprio
+
+        proprio_mean = proprio_particles.mean(1).squeeze()
+        proprio_var = proprio_particles.var(1).squeeze()
+
+        return proprio_mean, proprio_var
+
+    def get_fit_class(self, log_prob, peg_type, h = None, c = None):
+        prestate = torch.cat([log_prob, peg_type], dim = 1)
+        state = self.pre_lstm(prestate)
+
+        if h is None or c is None:
+            h_pred, c_pred = self.fit_lstm(state)
+        else:
+            h_pred, c_pred = self.fit_lstm(state, h, c) 
+
+        fit_logits = self.fit_class(h_pred)
+
+        return fit_logits, h_pred, c_pred
+
+    def forward(self, input_dict):
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        contacts = input_dict["contact"].to(self.device)
+        peg_types = input_dict["peg_type"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        fit_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        for idx in range(steps):
+            force = forces[:, idx]
+            proprio = proprios[:,idx]
+            proprio_next = proprios[:,idx + 1]
+            action = actions[:,idx]
+            contact = contacts[:,idx]
+            peg_type = peg_types[:,idx]
+
+            proprio_mean, proprio_var = self.get_pred(proprio, force, action, contact, peg_type)
+
+            log_prob = log_normal(proprio_next, proprio_mean, proprio_var)
+
+            # print("Log prob size: ", log_prob.size())
+            # print("peg type size: ", peg_type.size())
+
+            if idx == 0:
+                fit_logits, h, c = self.get_fit_class(log_prob, peg_type)
+
+            # stops gradient after a certain number of steps
+            elif idx != 0 and idx % 4 == 0:
+                h_clone = h.detach()
+                c_clone = c.detach()
+                fit_logits, h, c = self.get_fit_class(log_prob, peg_type, h_clone, c_clone)
+            else:
+                fit_logits, h, c = self.get_fit_class(log_prob, peg_type, h, c)
+
+            if idx >= self.offset:
+                fit_list.append(fit_logits)
+
+        return {
+            'fit_class': fit_list,
+        }
+class Fit_ClassifierParticle(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, num_options, offset, num_particles = 20, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.force_size = force_size
+        self.num_particles = num_particles
+        self.num_options = num_options
+        self.frc_enc_size = 16
+        self.offset = offset
+
+        self.state_size_nc = self.action_dim + 2 * self.proprio_size + self.num_options
+        self.state_size_c = self.action_dim + 2 * self.proprio_size + self.frc_enc_size + self.num_options
+
+        self.ee_nc = ResNetFCN(folder + "_ee_resnet_nc", self.state_size_nc, self.proprio_size, 3, device = self.device)
+        self.ee_c = ResNetFCN(folder + "_ee_resnet_c", self.state_size_c, self.proprio_size, 3, device = self.device)
+
+        # self.contact_class = ResNetFCN(folder + "_contact_class", self.proprio_size + self.force_size, 1, 2, device = self.device)  
+
+        self.proprio_noise = Params(folder + "_noise", self.proprio_size, device = self.device)  
+
+        self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+         (self.frc_enc_size , 1), False, True, 1, device = self.device)
+
+        self.fit_lstm = LSTMCell(folder + "_fit_lstm", 16, 16, device = self.device) 
+
+        self.pre_lstm = FCN(folder + "_pre_lstm", 4, 16, 3, device = self.device)
+
+        self.fit_class = FCN(folder + "_fit_class", 16, 1, 3, device = self.device)  
+
+        self.model_list = [self.ee_c, self.ee_nc, self.proprio_noise, self.frc_enc, self.fit_lstm, self.pre_lstm, self.fit_class] #self.frc_nc, self.frc_c, self.joint_nc, self.joint_c, ]
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_pred(self, proprio, force, action, contact, peg_type):
+        frc_enc = self.frc_enc(force)
+        
+        nc_state = torch.cat([proprio, action, peg_type], dim = 1).unsqueeze(1).repeat(1, self.num_particles, 1)
+        c_state = torch.cat([proprio, frc_enc, action, peg_type], dim = 1).unsqueeze(1).repeat(1, self.num_particles, 1)
+
+        proprio_variance = self.proprio_noise.params.unsqueeze(0).unsqueeze(1).repeat(nc_state.size(0), nc_state.size(1), 1)
+        proprio_mean = torch.zeros_like(proprio_variance)
+
+        noise_samples = sample_gaussian(proprio_mean, proprio_variance, self.device)
+
+        nc_state = torch.cat([nc_state, noise_samples], dim = 2)
+        c_state = torch.cat([c_state, noise_samples], dim = 2)
+
+        proprio_particles = self.ee_nc(nc_state) + contact.unsqueeze(1).unsqueeze(2).repeat(1, c_state.size(1), proprio.size(1)) * self.ee_c(c_state) #+ proprio
+
+        proprio_mean = proprio_particles.mean(1).squeeze()
+        proprio_var = proprio_particles.var(1).squeeze()
+
+        return proprio_mean, proprio_var
+
+    def get_fit_class(self, log_prob, peg_type, h = None, c = None):
+        prestate = torch.cat([log_prob, peg_type], dim = 1)
+        state = self.pre_lstm(prestate)
+
+        if h is None or c is None:
+            h_pred, c_pred = self.fit_lstm(state)
+        else:
+            h_pred, c_pred = self.fit_lstm(state, h, c) 
+
+        fit_logits = self.fit_class(h_pred)
+
+        return fit_logits, h_pred, c_pred
+
+    def forward(self, input_dict):
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        contacts = input_dict["contact"].to(self.device)
+        peg_types = input_dict["peg_type"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        fit_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        for idx in range(steps):
+            force = forces[:, idx]
+            proprio = proprios[:,idx]
+            proprio_next = proprios[:,idx + 1]
+            action = actions[:,idx]
+            contact = contacts[:,idx]
+            peg_type = peg_types[:,idx]
+
+            proprio_mean, proprio_var = self.get_pred(proprio, force, action, contact, peg_type)
+
+            log_prob = log_normal(proprio_next, proprio_mean, proprio_var)
+
+            # print("Log prob size: ", log_prob.size())
+            # print("peg type size: ", peg_type.size())
+
+            if idx == 0:
+                fit_logits, h, c = self.get_fit_class(log_prob, peg_type)
+
+            # stops gradient after a certain number of steps
+            elif idx != 0 and idx % 4 == 0:
+                h_clone = h.detach()
+                c_clone = c.detach()
+                fit_logits, h, c = self.get_fit_class(log_prob, peg_type, h_clone, c_clone)
+            else:
+                fit_logits, h, c = self.get_fit_class(log_prob, peg_type, h, c)
+
+            if idx >= self.offset:
+                fit_list.append(fit_logits)
+
+        return {
+            'fit_class': fit_list,
+        }
+class Fit_ClassifierLSTM(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, z_dim, num_options, offset, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.force_size = force_size
+        self.z_dim = z_dim
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 16
+
+        self.state_size = self.frc_enc_size + self.proprio_size + self.contact_size + self.action_dim + self.num_options + 1
+
+        self.fit_lstm = LSTMCell(folder + "_fit_lstm", self.state_size, self.z_dim, device = self.device) 
+
+        self.pre_lstm = FCN(folder + "_pre_lstm", self.state_size, self.state_size, 3, device = self.device)
+
+        self.fit_class = FCN(folder + "_fit_class", z_dim, 1, 3, device = self.device)  
+
+        self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+         (self.frc_enc_size, 1), False, True, 1, device = self.device)
+
+        self.model_list = [self.fit_lstm, self.fit_class, self.frc_enc, self.pre_lstm]
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_fit_class(self, proprio, force, contact, action, peg_type, fit_probs, h = None, c = None):
+        # print("Force size: ", force.size())
+        frc_enc = self.frc_enc(force)
+
+        # print("Proprio size: ", proprio.size())
+        # print("Force size: ", frc_enc.size())
+        # print("contact size: ", contact.size())
+        # print("action size: ", action.size())
+        # print("peg type size: ", peg_type.size())
+        prestate = torch.cat([proprio, frc_enc, contact.unsqueeze(1), action, peg_type, fit_probs], dim = 1)
+        state = self.pre_lstm(prestate)
+
+        if h is None or c is None:
+            h_pred, c_pred = self.fit_lstm(state)
+        else:
+            h_pred, c_pred = self.fit_lstm(state, h, c) 
+
+        fit_logits = self.fit_class(h_pred)
+
+        return fit_logits, h_pred, c_pred
+
+    def forward(self, input_dict):
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+
+        # print("Forces size: ", forces.size())
+        contacts = input_dict["contact"].to(self.device)
+        peg_types = input_dict["peg_type"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        fit_probs = torch.ones_like(contacts[:,0]).squeeze().unsqueeze(1) / 2
+
+        # print(fit_probs.size())
+
+        fit_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        for idx in range(steps):
+            action = actions[:,idx]
+            proprio = proprios[:,idx]
+            force = forces[:,idx]
+            contact = contacts[:,idx]
+            peg_type = peg_types[:,idx]
+
+            if idx == 0:
+                fit_logits, h, c = self.get_fit_class(proprio, force, contact, action, peg_type, fit_probs)
+                fit_probs = torch.sigmoid(fit_logits).squeeze().unsqueeze(1)
+
+            # stops gradient after a certain number of steps
+            elif idx != 0 and idx % 8 == 0:
+                h_clone = h.detach()
+                c_clone = c.detach()
+                fit_logits, h, c = self.get_fit_class(proprio, force, contact, action, peg_type, fit_probs, h_clone, c_clone)
+                fit_probs = torch.sigmoid(fit_logits).squeeze().unsqueeze(1)
+            else:
+                fit_logits, h, c = self.get_fit_class(proprio, force, contact, action, peg_type, fit_probs, h, c)
+                fit_probs = torch.sigmoid(fit_logits).squeeze().unsqueeze(1)
+
+            if idx >= self.offset:
+                fit_list.append(fit_logits)
+
+        return {
+            'fit_class': fit_list,
+        }
+        
 class EEFRC_Prob_Dynamics(Proto_Macromodel):
     def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, joint_size, action_dim, device = None, curriculum = None):
         super().__init__()

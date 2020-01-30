@@ -1,17 +1,17 @@
 model_params:
-  z_dim: 32
-  offset: 9
+  z_dim: 64
+  offset: 0
   num_options: 3
 
 dataloading_params:
   dataset_path: "/juno/group/muj_senssearch_dataset/"
   num_workers: 6
   batch_size: 128
-  num_steps: 19
+  num_steps: 3
   idx_dict_path: "/scr-ssd/sens_search_logging/runs/202001241806_debugging_44_inital_testing/val_train_split.pkl"
 
 training_params:
-  seed: 1234
+  seed: 4321
   regularization_weight: 0.00001
   lrn_rate: 0.0001
   beta1: 0.9
@@ -19,8 +19,8 @@ training_params:
   max_training_epochs: 25
   val_ratio: 0.05
   use_GPU: True
-  curriculum: [10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
-
+  curriculum: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] #[10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
+# 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
   run_description: "debugging" #Options include: debugging, training, testing
@@ -39,10 +39,9 @@ info_flow:
       action: [3]
       proprio: [12]
       contact: [1]
-      fit: [1]
       peg_type: [3]
       hole_type: [3]
-  Fit_ClassifierLSTM:
+  DynamicswForce:
     train: 1
     model_folder: ""
     epoch_num: 0
@@ -51,71 +50,124 @@ info_flow:
       force_hi_freq: "dataset"
       action: "dataset"
       peg_type: "dataset"
+      hole_type: "dataset"
       contact: "dataset"
       epoch: "dataset"
     outputs:
-      fit_class:
+      action_mag:
+        loss: "Mag_multistep"
+        loss_name: "action_magnitude_multistep"
+        weight: 1
+        offset: 0
+        inputs:
+          action_mag: "dataset"
+      action_dir:
+        loss: "Angle_multistep"
+        loss_name: "action_direction_multistep"
+        weight: 1
+        offset: 0
+        inputs:
+          action_dir: "dataset"
+      contact_class:
         loss: "BCE_multistep"
-        loss_name: "fit_classification_multistep"
+        loss_name: "contact_classification"
         weight: 1
-        offset: 9
+        offset: 0
         inputs:
-          fit: "dataset"
-  Fit_ClassifierParticle:
+          contact: "dataset"
+      frc_enc_pred:
+        loss: "MSE_multistep"
+        loss_name: "frc_enc_prediction"
+        weight: 1
+        offset: 1
+        inputs:
+          frc_enc: ""
+      proprio_pred:
+        loss: "MSE_multistep"
+        loss_name: "proprio_prediction"
+        weight: 1
+        offset: 1
+        inputs:
+          proprio: "dataset"
+  Dynamics:
     train: 1
     model_folder: ""
     epoch_num: 0
     inputs:
       proprio: "dataset"
-      force_hi_freq: "dataset"
       action: "dataset"
       peg_type: "dataset"
+      hole_type: "dataset"
       contact: "dataset"
       epoch: "dataset"
     outputs:
-      fit_class:
+      action_mag:
+        loss: "Mag_multistep"
+        loss_name: "action_magnitude_multistep"
+        weight: 1
+        offset: 0
+        inputs:
+          action_mag: "dataset"
+      action_dir:
+        loss: "Angle_multistep"
+        loss_name: "action_direction_multistep"
+        weight: 1
+        offset: 0
+        inputs:
+          action_dir: "dataset"
+      contact_class:
         loss: "BCE_multistep"
-        loss_name: "fit_classification_multistep"
+        loss_name: "contact_classification"
         weight: 1
-        offset: 9
+        offset: 0
         inputs:
-          fit: "dataset"
-  Options_ClassifierParticle:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      proprio: "dataset"
-      force_hi_freq: "dataset"
-      action: "dataset"
-      peg_type: "dataset"
-      contact: "dataset"
-      epoch: "dataset"
-    outputs:
-      options_class:
-        loss: "CE_multistep"
-        loss_name: "options_classification_multistep"
+          contact: "dataset"
+      proprio_pred:
+        loss: "MSE_multistep"
+        loss_name: "proprio_prediction"
         weight: 1
-        offset: 9
+        offset: 1
         inputs:
-          hole_type: "dataset"
-  Options_ClassifierLSTM:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      proprio: "dataset"
-      force_hi_freq: "dataset"
-      action: "dataset"
-      peg_type: "dataset"
-      contact: "dataset"
-      epoch: "dataset"
-    outputs:
-      options_class:
-        loss: "CE_multistep"
-        loss_name: "options_classification_multistep"
-        weight: 1
-        offset: 9
-        inputs:
-          hole_type: "dataset"
-
+          proprio: "dataset"
+  # Options_ClassifierLSTM_woutlearnrep:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     proprio: "dataset"
+  #     force_hi_freq: "dataset"
+  #     action: "dataset"
+  #     peg_type: "dataset"
+  #     hole_type: "dataset"
+  #     contact: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     options_class:
+  #       loss: "CE_multistep"
+  #       loss_name: "options_classification_multistep"
+  #       weight: 1
+  #       offset: 9
+  #       inputs:
+  #         hole_type: "dataset"
+  # Options_UncertaintyQuantifier:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     proprio: "dataset"
+  #     action: "dataset"
+  #     peg_type: "dataset"
+  #     hole_type: "dataset"
+  #     contact: "dataset"
+  #     epoch: "dataset"
+  #     hole_probs: "Options_ClassifierLSTM_woutlearnrep"
+  #     frc_enc: "Options_ClassifierLSTM_woutlearnrep"
+  #   outputs:
+  #     uncertainty_est:
+  #       loss: "BCE_multistep"
+  #       loss_name: "uncertainty_est_multistep"
+  #       weight: 1
+  #       offset: 9
+  #       inputs:
+  #         hole_accuracy: "Options_ClassifierLSTM_woutlearnrep"
+    

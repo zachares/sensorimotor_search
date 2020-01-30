@@ -33,6 +33,34 @@ def record_image(net_est, target, label, logging_dict):
 	logging_dict['image'][label].append(net_est[0])
 	logging_dict['image'][label].append(target[0])
 
+def record_angle(net_est, target, label, logging_dict):
+	ang = torch.abs(torch.acos((net_est * target).sum(1) / (net_est.norm(p=2, dim =1) * target.norm(p=2, dim=1))))
+	angle = (ang * 180 / np.pi)
+	logging_dict['scalar']['accuracy/anglemean_err_' + label] = angle.mean().item()
+	logging_dict['scalar']['accuracy/anglevar_err_' + label] = angle.var().item()
+
+def record_mag(mag_est, mag_tar, label, logging_dict):
+	magnitude_error = (1 - (torch.abs(mag_est - mag_tar) / mag_tar))
+	logging_dict['scalar']['accuracy/magmean_err_' + label] = magnitude_error.mean().item()
+	logging_dict['scalar']['accuracy/magvar_err_' + label] = magnitude_error.var().item()
+
+
+def record_diff(mag_est, mag_tar, label, logging_dict):
+	magnitude_error = (1 - ((mag_est - mag_tar).norm(p=2, dim=1) / mag_tar.norm(p=2, dim=1)))
+	logging_dict['scalar']['accuracy/magmean_err_' + label] = magnitude_error.mean().item()
+	logging_dict['scalar']['accuracy/magvar_err_' + label] = magnitude_error.var().item()
+
+def log_normal(x, m, v):
+    return -0.5 * ((x - m).pow(2)/ v + torch.log(2 * np.pi * v)).sum(-1).unsqueeze(-1)
+
+def multinomial_KL(p, logq):
+	p_soft = p + 1e-8
+	p_soft_norm = p_soft / p_soft.sum(1).unsqueeze(1).repeat(1,p_soft.size(1))
+	return - (p_soft_norm * (logq - torch.log(p_soft_norm))).sum(1).mean()
+
+def gaussian_KL(mu_est, var_est, mu_tar, var_tar):
+	return 0.5 * (torch.log(var_tar) - torch.log(var_est) + var_est / var_tar + (mu_est - mu_tar).pow(2) / var_tar - 1).sum(1).mean()
+
 class Proto_Loss(object):
 	def __init__(self, loss_function = nn.MSELoss(), transform_target_function = None, record_function = None):
 		self.loss_function = loss_function
@@ -84,47 +112,57 @@ class Proto_MultiStep_Loss(object):
 
 		return loss
 
-class Gaussian_KL_Loss(Proto_Loss):
+class GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
 	def __init__(self):
 	    super().__init__()
 
-	def loss(self, input_tuple, logging_dict, weight, label):
-		params = input_tuple[0]
-		mu_est, var_est, mu_tar, var_tar = params
+	def loss(self, input_tuple, logging_dict, weight, label, offset):
+		logits_list = input_tuple[0]
+		labels_array = input_tuple[1]
 
-		element_wise = 0.5 * (torch.log(var_tar) - torch.log(var_est) + var_est / var_tar + (mu_est - mu_tar).pow(2) / var_tar - 1)
+		for idx, logits in enumerate(logits_list):
+			labels = labels_array[:,idx + offset]
+			means, varis = logits
 
-		loss = weight * element_wise.sum(1).sum(0)
+			if offset > 0:
+				mean_error_mag = ((labels - means).norm(p=2, dim = 1) / (labels - labels_array[:, idx + offset - 1]).norm(p=2, dim =1)).mean()				
+			else:
+				mean_error_mag = (labels - means).norm(p=2, dim = 1).mean()
+
+			if idx == 0:
+				loss = -1.0 * weight * log_normal(labels, means, varis).sum(1).mean()
+			else:
+				loss += -1.0 * weight * log_normal(labels, means, varis).sum(1).mean()
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
-
-		if self.record_function is not None:
-			self.record_function((mu_est, var_est), (mu_tar, var_tar), label, logging_dict)
+		logging_dict['scalar']['average_error/' + label] = mean_error_mag.item()
+		logging_dict['scalar']['max_variance/' + label] = varis.max().item()
 
 		return loss
 
-class Gaussian_KL_MultiStep_Loss(Proto_Loss):
+class Multinomial_KL_MultiStep_Loss(Proto_MultiStep_Loss):
 
-	def __init__(self):
-	    super().__init__()
+	def __init__(self, record_function = None):
+	    super().__init__(record_function = record_function)
+	    self.logsoftmax = nn.LogSoftmax(dim = 1)
 
-	def loss(self, input_tuple, logging_dict, weight, label):
-		params_list = input_tuple[0]
+	def loss(self, input_tuple, logging_dict, weight, label, offset):
+		logits_list = input_tuple[0]
+		targets = input_tuple[1]
 
-		for idx, params in enumerate(params_list):
-			mu_est, var_est, mu_tar, var_tar = params
-
-			element_wise = 0.5 * (torch.log(var_tar) - torch.log(var_est) + var_est / var_tar + (mu_est - mu_tar).pow(2) / var_tar - 1)
+		for idx, logits in enumerate(logits_list):
+			log_est = self.logsoftmax(logits)
+			target = targets[:,idx + offset]
 
 			if idx == 0:
-				loss = weight * element_wise.sum()
+				loss = weight * multinomial_KL(log_est, target)
 			else:
-				loss += weight * element_wise.sum()
+				loss += weight * multinomial_KL(log_est, target)
 
 			if self.record_function is not None:
-				self.record_function((mu_est, var_est), (mu_tar, var_tar), label, logging_dict)
+				self.record_function(torch.exp(log_est), target, label, logging_dict)
 
-		logging_dict['scalar']["loss/" + label] = torch.tensor([loss]).detach().item()
+		logging_dict['scalar']["loss/" + label] = loss.item() / len(logits_list)
 		
 		return loss
 
@@ -155,7 +193,7 @@ class BinaryEst_MultiStep_Loss(Proto_MultiStep_Loss):
 		logging_dict['scalar']["loss/" + label] = loss.item()
 		logging_dict['scalar']['accuracy/' + label] = accuracy_rate.item()	
 
-		return loss
+		return loss / len(logits_list)
 
 class CrossEnt_MultiStep_Loss(Proto_MultiStep_Loss):
 	def __init__(self):
@@ -257,3 +295,41 @@ class Distance_Multistep_Loss(Proto_MultiStep_Loss):
 
 		return loss
 		
+class Gaussian_KL_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		params = input_tuple[0]
+		mu_est, var_est, mu_tar, var_tar = params
+
+		loss = weight * gaussian_KL(mu_est, var_est, mu_tar, var_tar)
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+
+		if self.record_function is not None:
+			self.record_function((mu_est, var_est), (mu_tar, var_tar), label, logging_dict)
+
+		return loss
+		
+class Gaussian_KL_MultiStep_Loss(Proto_Loss):
+
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		params_list = input_tuple[0]
+
+		for idx, params in enumerate(params_list):
+			mu_est, var_est, mu_tar, var_tar = params
+			if idx == 0:
+				loss = weight * gaussian_KL(mu_est, var_est, mu_tar, var_tar)
+			else:
+				loss += weight * gaussian_KL(mu_est, var_est, mu_tar, var_tar)
+
+			if self.record_function is not None:
+				self.record_function((mu_est, var_est), (mu_tar, var_tar), label, logging_dict)
+
+		logging_dict['scalar']["loss/" + label] = torch.tensor([loss]).detach().item()
+		
+		return loss
