@@ -7,7 +7,7 @@ dataloading_params:
   dataset_path: "/juno/group/muj_senssearch_dataset/"
   num_workers: 6
   batch_size: 128
-  num_steps: 3
+  num_steps: 15
   idx_dict_path: "/scr-ssd/sens_search_logging/runs/202001241806_debugging_44_inital_testing/val_train_split.pkl"
 
 training_params:
@@ -19,12 +19,12 @@ training_params:
   max_training_epochs: 25
   val_ratio: 0.05
   use_GPU: True
-  curriculum: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] #[10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
-# 
+  curriculum: [1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10,11,11,11,11,12,12,12,12,12] #[10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
+#  # 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_description: "debugging" #Options include: debugging, training, testing
-  run_notes: "_inital_testing"
+  run_description: "training" #Options include: debugging, training, testing
+  run_notes: "_dynamics_inspired"
 
 debugging_params:
   debugging_val: 1.0 ### 1.0 for True,  0.0 for False
@@ -41,7 +41,7 @@ info_flow:
       contact: [1]
       peg_type: [3]
       hole_type: [3]
-  DynamicswForce:
+  Dynamics:
     train: 1
     model_folder: ""
     epoch_num: 0
@@ -49,90 +49,59 @@ info_flow:
       proprio: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
+      joint_pos: "dataset"
+      joint_vel: "dataset"
       peg_type: "dataset"
       hole_type: "dataset"
       contact: "dataset"
       epoch: "dataset"
     outputs:
-      action_mag:
-        loss: "Mag_multistep"
-        loss_name: "action_magnitude_multistep"
-        weight: 1
-        offset: 0
-        inputs:
-          action_mag: "dataset"
-      action_dir:
-        loss: "Angle_multistep"
-        loss_name: "action_direction_multistep"
-        weight: 1
-        offset: 0
-        inputs:
-          action_dir: "dataset"
-      contact_class:
-        loss: "BCE_multistep"
-        loss_name: "contact_classification"
-        weight: 1
-        offset: 0
-        inputs:
-          contact: "dataset"
-      frc_enc_pred:
+      joint_pose_pred:
         loss: "MSE_multistep"
-        loss_name: "frc_enc_prediction"
-        weight: 1
+        loss_name: "joint_pose_pred"
+        weight: 0.5
+        offset: 1
+        inputs:
+          joint_pos: "dataset"
+      joint_vel_pred:
+        loss: "MSE_multistep"
+        loss_name: "joint_vel_pred"
+        weight: 50
+        offset: 1
+        inputs:
+          joint_vel: "dataset"
+      pose_pred:
+        loss: "MSE_multistep"
+        loss_name: "proprio_pose_pred"
+        weight: 0.5
+        offset: 1
+        inputs:
+          proprio_pose: "dataset"
+      frc_pred:
+        loss: "MSE_multistep"
+        loss_name: "frc_enc_pred"
+        weight: 10
         offset: 1
         inputs:
           frc_enc: ""
-      proprio_pred:
+      vel_pred:
         loss: "MSE_multistep"
-        loss_name: "proprio_prediction"
-        weight: 1
+        loss_name: "proprio_vel_pred"
+        weight: 5
         offset: 1
         inputs:
-          proprio: "dataset"
-  Dynamics:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      proprio: "dataset"
-      action: "dataset"
-      peg_type: "dataset"
-      hole_type: "dataset"
-      contact: "dataset"
-      epoch: "dataset"
-    outputs:
-      action_mag:
-        loss: "Mag_multistep"
-        loss_name: "action_magnitude_multistep"
-        weight: 1
-        offset: 0
-        inputs:
-          action_mag: "dataset"
-      action_dir:
-        loss: "Angle_multistep"
-        loss_name: "action_direction_multistep"
-        weight: 1
-        offset: 0
-        inputs:
-          action_dir: "dataset"
-      contact_class:
+          proprio_vel: "dataset"
+      contact_pred:
         loss: "BCE_multistep"
-        loss_name: "contact_classification"
-        weight: 1
-        offset: 0
+        loss_name: "contact_pred"
+        weight: 0.1
+        offset: 1
         inputs:
           contact: "dataset"
-      proprio_pred:
-        loss: "MSE_multistep"
-        loss_name: "proprio_prediction"
-        weight: 1
-        offset: 1
-        inputs:
-          proprio: "dataset"
-  # Options_ClassifierLSTM_woutlearnrep:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
+  # Options_ClassifierLSTM:
+  #   train: 0
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202002012006_debugging_79_options_classifier/"
+  #   epoch_num: 18
   #   inputs:
   #     proprio: "dataset"
   #     force_hi_freq: "dataset"
@@ -146,7 +115,7 @@ info_flow:
   #       loss: "CE_multistep"
   #       loss_name: "options_classification_multistep"
   #       weight: 1
-  #       offset: 9
+  #       offset: 29
   #       inputs:
   #         hole_type: "dataset"
   # Options_UncertaintyQuantifier:

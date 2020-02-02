@@ -138,56 +138,79 @@ if __name__ == '__main__':
     ####### Training ########
     ##################################################################################
     global_cnt = 0
+    i_epoch = 0
     val_global_cnt = 0
     prev_time = time.time()
-    for i_epoch in range(max_epoch):
-        current_time = time.time()
 
-        if i_epoch != 0:
-            print("Epoch took ", current_time - prev_time, " seconds")
-            prev_time = time.time()
+    if not test_run:
+        for i_epoch in range(max_epoch):
+            current_time = time.time()
 
-        print('Training epoch #{}...'.format(i_epoch))
-        
+            if i_epoch != 0:
+                print("Epoch took ", current_time - prev_time, " seconds")
+                prev_time = time.time()
+
+            print('Training epoch #{}...'.format(i_epoch))
+            
+            for i_iter, sample_batched in enumerate(data_loader):
+                sample_batched['epoch'] = torch.from_numpy(np.array([[i_epoch]])).float()
+                sample_batched['iteration'] = torch.from_numpy(np.array([[i_iter]])).float()
+
+                logging_dict = trainer.train(sample_batched)
+                global_cnt += 1
+
+                if global_cnt % 50 == 0 or global_cnt == 1:
+                    print(global_cnt, " Updates to the model have been performed ")
+                    logger.save_images2D(logging_dict, global_cnt, 'train/')
+
+                logger.save_scalars(logging_dict, global_cnt, 'train/')
+            ##################################################################################
+            ##### Validation #########
+            ##################################################################################
+            # performed at the end of each epoch
+            if val_ratio is not 0:
+                
+                print("Calculating validation results after #{} epochs".format(i_epoch))
+
+                for i_iter, sample_batched in enumerate(val_data_loader):
+                    sample_batched['epoch'] = torch.from_numpy(np.array([[i_epoch]])).float()
+                    sample_batched['iteration'] = torch.from_numpy(np.array([[i_iter]])).float()
+
+                    logging_dict= trainer.eval(sample_batched)
+
+                    logger.save_scalars(logging_dict, val_global_cnt, 'val/')
+
+                    val_global_cnt += 1
+
+                logger.save_images2D(logging_dict, val_global_cnt, 'val/')
+
+            ###############################################
+            ##### Saving models every epoch ################
+            ##############################################
+            if save_model_flag and i_epoch == 0:
+                if os.path.isdir(logger.models_folder) == False:
+                    os.mkdir(logger.models_folder)
+                trainer.save(i_epoch)
+
+            elif save_model_flag:
+                trainer.save(i_epoch)
+
+    else:
+        print("Starting Testing")
+
         for i_iter, sample_batched in enumerate(data_loader):
             sample_batched['epoch'] = torch.from_numpy(np.array([[i_epoch]])).float()
             sample_batched['iteration'] = torch.from_numpy(np.array([[i_iter]])).float()
 
-            logging_dict = trainer.train(sample_batched)
+            logging_dict= trainer.eval(sample_batched)
+
+            logger.save_scalars(logging_dict, global_cnt, 'test/')
+
+            if (global_cnt + 1) % 50 == 0 or (global_cnt + 1) == 1:
+                print(global_cnt + 1, " samples tested")
+
             global_cnt += 1
 
-            if global_cnt % 50 == 0 or global_cnt == 1:
-                print(global_cnt, " Updates to the model have been performed ")
-                logger.save_images2D(logging_dict, global_cnt, 'train/')
+        logger.save_images2D(logging_dict, global_cnt, 'test/')
 
-            logger.save_scalars(logging_dict, global_cnt, 'train/')
-        ##################################################################################
-        ##### Validation #########
-        ##################################################################################
-        # performed at the end of each epoch
-        if val_ratio is not 0:
-            
-            print("Calculating validation results after #{} epochs".format(i_epoch))
-
-            for i_iter, sample_batched in enumerate(val_data_loader):
-                sample_batched['epoch'] = torch.from_numpy(np.array([[i_epoch]])).float()
-                sample_batched['iteration'] = torch.from_numpy(np.array([[i_iter]])).float()
-
-                logging_dict= trainer.eval(sample_batched)
-
-                logger.save_scalars(logging_dict, val_global_cnt, 'val/')
-
-                val_global_cnt += 1
-
-            logger.save_images2D(logging_dict, val_global_cnt, 'val/')
-
-        ###############################################
-        ##### Saving models every epoch ################
-        ##############################################
-        if save_model_flag and i_epoch == 0:
-            if os.path.isdir(logger.models_folder) == False:
-                os.mkdir(logger.models_folder)
-            trainer.save(i_epoch)
-
-        elif save_model_flag:
-            trainer.save(i_epoch)
+        print("Finished Testing")

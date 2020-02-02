@@ -38,8 +38,8 @@ if __name__ == '__main__':
 	workspace_dim = cfg['datacollection_params']['workspace_dim']
 	seed = cfg['datacollection_params']['seed']
 
-	random.seed(seed)
-	np.random.seed(seed)
+	random.seed(seed + 10)
+	np.random.seed(seed + 10)
 
 	if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
 		os.mkdir(logging_folder )
@@ -149,6 +149,7 @@ if __name__ == '__main__':
 				action, action_euler = env._pose_err(goal)
 				pos_err = kp * action_euler[:3]
 				# adding random noise
+				# var = np.random.uniform(0.1, 1.5)
 				noise = np.random.normal(0.0, 1.0, pos_err.size)
 				# noise[2] = -1.0 * np.absolute(noise[2])
 				pos_err += noise_parameter * noise

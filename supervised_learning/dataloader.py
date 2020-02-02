@@ -84,18 +84,18 @@ class H5_DataLoader(Dataset):
 
                 dataset.close()
 
-            val_eepos = np.concatenate(val_eepos_list, axis = 0)
-            train_eepos = np.concatenate(train_eepos_list, axis = 0)
+            # val_eepos = np.concatenate(val_eepos_list, axis = 0)
+            # train_eepos = np.concatenate(train_eepos_list, axis = 0)
 
-            val_dist = np.linalg.norm(val_eepos, axis = 1)
+            # val_dist = np.linalg.norm(val_eepos, axis = 1)
 
-            print("Validation Min: ", val_dist.min())
-            print("Validation Max: ", val_dist.max())
+            # print("Validation Min: ", val_dist.min())
+            # print("Validation Max: ", val_dist.max())
 
-            train_dist = np.linalg.norm(train_eepos, axis = 1)
+            # train_dist = np.linalg.norm(train_eepos, axis = 1)
 
-            print("Training Min: ", train_dist.min())
-            print("Training Max: ", train_dist.max())
+            # print("Training Min: ", train_dist.min())
+            # print("Training Max: ", train_dist.max())
 
             # for idx in range(self.train_length):
             #     if idx % 10000 == 0:
@@ -167,8 +167,12 @@ class H5_DataLoader(Dataset):
                 sample[key] = np.array(dataset[key])[idxs_p[0]:(idxs_p[1]-1)]
                 sample[key + '_mag'] = np.linalg.norm(sample[key], axis = 1)
                 sample[key + '_dir'] = sample[key] / np.repeat(np.expand_dims(sample[key + '_mag'], axis = 1), sample[key].shape[1], axis = 1)
-            elif key == 'force' or key == 'proprio':   
+            elif key == 'force':   
                 sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
+            elif key == 'proprio':   
+                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
+                sample[key + "_pose"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], :6] 
+                sample[key + "_vel"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], 6:] 
                 # sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]] 
             elif key == 'peg_type' or key == 'hole_type' or key == 'fit':
                 sample[key] = np.repeat(np.expand_dims(np.array(dataset[key]), axis = 0), idxs_p[1] - idxs_p[0], axis = 0)

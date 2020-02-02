@@ -75,16 +75,11 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		# self.model_dict["Options_ClassifierLSTM_woutlearnrep"] = Options_ClassifierLSTM(models_folder, "Options_ClassifierLSTM_woutlearnrep", self.info_flow,\
+		# self.model_dict["Options_ClassifierLSTM"] = Options_ClassifierLSTM(models_folder, "Options_ClassifierLSTM", self.info_flow,\
 		#  force_size, proprio_size, action_dim, z_dim, num_options, offset, learn_rep = False, device = device, curriculum = self.curriculum).to(device)
-
-		# self.model_dict["Options_UncertaintyQuantifier"] = Options_UncertaintyQuantifier(models_folder, "Options_UncertaintyQuantifier", self.info_flow,\
-		#  proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["DynamicswForce"] = DynamicswForce(models_folder, "DynamicswForce", self.info_flow,\
-		 force_size, proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
-		self.model_dict["Dynamics"] = Dynamics(models_folder, "Dynamics", self.info_flow,\
-		 proprio_size, action_dim, z_dim, num_options, offset, device = device, curriculum = self.curriculum).to(device)
 		
+		self.model_dict["Dynamics"] = Dynamics(models_folder, "Dynamics", self.info_flow,\
+		 force_size, proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = device, curriculum = self.curriculum).to(device)		
 		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################

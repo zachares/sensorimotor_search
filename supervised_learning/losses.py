@@ -41,15 +41,17 @@ def record_angle(net_est, target, label, logging_dict):
 
 def record_mag(mag_est, mag_tar, label, logging_dict):
 	magnitude_error = (1 - (torch.abs(mag_est - mag_tar) / mag_tar))
-	logging_dict['scalar']['accuracy/magmean_err_' + label] = magnitude_error.mean().item()
-	logging_dict['scalar']['accuracy/magvar_err_' + label] = magnitude_error.var().item()
+	logging_dict['scalar']['mean/mag_err_' + label] = magnitude_error.mean().item()
+	logging_dict['scalar']['var/mag_err_' + label] = magnitude_error.var().item()
 
 
-def record_diff(mag_est, mag_tar, label, logging_dict):
-	magnitude_error = (1 - ((mag_est - mag_tar).norm(p=2, dim=1) / mag_tar.norm(p=2, dim=1)))
-	logging_dict['scalar']['accuracy/magmean_err_' + label] = magnitude_error.mean().item()
-	logging_dict['scalar']['accuracy/magvar_err_' + label] = magnitude_error.var().item()
-
+def record_diff(est, tar, prev_tar, label, logging_dict):
+	tar_error = (1 - ((est - tar).norm(p=2, dim=1) / (tar).norm(p=2, dim=1)))
+	diff_error = (1 - ((est - tar).norm(p=2, dim=1) / (tar - prev_tar).norm(p=2, dim=1)))
+	logging_dict['scalar']['acc_mean/err_' + label] = tar_error.mean().item()
+	logging_dict['scalar']['var/err_' + label] = tar_error.var().item()
+	logging_dict['scalar']['z/differr_' + label] = diff_error.mean().item()
+	
 def log_normal(x, m, v):
     return -0.5 * ((x - m).pow(2)/ v + torch.log(2 * np.pi * v)).sum(-1).unsqueeze(-1)
 
@@ -99,6 +101,7 @@ class Proto_MultiStep_Loss(object):
 
 		for idx, net_est in enumerate(net_est_list):
 			target = targets[:,idx + offset]
+			prev_target = targets[:,idx + offset - 1]
 
 			if idx == 0:
 				loss = weight * self.loss_function(net_est, target)
@@ -106,7 +109,7 @@ class Proto_MultiStep_Loss(object):
 				loss += weight * self.loss_function(net_est, target)
 
 			if self.record_function is not None:
-				self.record_function(net_est, target, label, logging_dict)
+				self.record_function(net_est, target, prev_target, label, logging_dict)
 
 		logging_dict['scalar']["loss/" + label] = loss.item() / len(net_est_list)
 
@@ -124,19 +127,18 @@ class GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
 			labels = labels_array[:,idx + offset]
 			means, varis = logits
 
-			if offset > 0:
-				mean_error_mag = ((labels - means).norm(p=2, dim = 1) / (labels - labels_array[:, idx + offset - 1]).norm(p=2, dim =1)).mean()				
-			else:
-				mean_error_mag = (labels - means).norm(p=2, dim = 1).mean()
+			mean_error_mag = 1 - ((labels - means).norm(p=2, dim = 1) / (labels).norm(p=2, dim =1)).mean()				
 
 			if idx == 0:
 				loss = -1.0 * weight * log_normal(labels, means, varis).sum(1).mean()
+				mean_error = mean_error_mag.item()
 			else:
 				loss += -1.0 * weight * log_normal(labels, means, varis).sum(1).mean()
+				mean_error = mean_error_mag.item()
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
-		logging_dict['scalar']['average_error/' + label] = mean_error_mag.item()
-		logging_dict['scalar']['max_variance/' + label] = varis.max().item()
+		logging_dict['scalar']['accuracy/average_error/' + label] = mean_error_mag / len(logits_list)
+		logging_dict['scalar']['accuracy/max_variance/' + label] = torch.abs(varis).max().item()
 
 		return loss
 
@@ -223,7 +225,7 @@ class CrossEnt_MultiStep_Loss(Proto_MultiStep_Loss):
 		accuracy_rate /= len(logits_list)
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
-		logging_dict['scalar']['accuracy/' + label] = accuracy_rate.item()	
+		logging_dict['scalar']['accuracy/' + label] = accuracy.mean().item()	
 
 		return loss
 
