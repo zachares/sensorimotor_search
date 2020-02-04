@@ -51,8 +51,8 @@ if __name__ == '__main__':
                          gripper_type=peg_type + "PegwForce",
                          controller='position',
                          camera_depth=True,
-			 has_offscreen_renderer=True,
-		         has_renderer=False)
+                         has_offscreen_renderer=True,
+		                 has_renderer=True)
 
     obs = env.reset()
     #env.viewer.set_camera(camera_id=2)
@@ -163,7 +163,16 @@ if __name__ == '__main__':
 
             continue
 
-        while env._check_poserr(goal, tol, tol_ang) == False:
+        while True:
+
+            if point_type==3:
+                #todo: magic number
+                #todo: check if tolerance is ok
+                tolerance = 0.008
+            else:
+                tolerance = tol
+            if env._check_poserr(goal, tolerance, tol_ang):
+                break
             action, action_euler = env._pose_err(goal)
             # print(action)
             pos_err = kp * action_euler[:3]
