@@ -21,7 +21,7 @@ from robosuite.wrappers import IKWrapper
 if __name__ == '__main__':
 
 	peg_types = ["Cross", "Rect", "Square"]
-	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel"] # 'image', 'depth' ]
+	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", 'rgbd' ]
 	peg_dict = {}
 
 	with open("datacollection_params.yml", 'r') as ymlfile:
@@ -34,6 +34,7 @@ if __name__ == '__main__':
 	discretization = cfg['datacollection_params']['discretization']
 	kp = np.array(cfg['datacollection_params']['kp'])
 	noise_parameter = np.array(cfg['datacollection_params']['noise_parameter'])
+	ctrl_freq = np.array(cfg['datacollection_params']['control_freq'])
 
 	workspace_dim = cfg['datacollection_params']['workspace_dim']
 	seed = cfg['datacollection_params']['seed']
@@ -44,8 +45,9 @@ if __name__ == '__main__':
 	if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
 		os.mkdir(logging_folder )
 
+	print("Robot operating with control frequency: ", ctrl_freq)
 	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=10,\
+	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
 	  gripper_type ="CrossPegwForce", controller='position', camera_depth=True)
 
 	obs = env.reset()
@@ -68,7 +70,8 @@ if __name__ == '__main__':
 
 	peg_hole_options = list(itertools.product(*[peg_types, peg_types]))
 
-	# file_num = 3773
+	fp_array = dc_T.gridpoints(workspace_dim, np.array([0,0,0]), discretization)
+
 	file_num = 0
 
 	for peg_hole_option in peg_hole_options:
@@ -80,7 +83,7 @@ if __name__ == '__main__':
 		hole_type = peg_hole_option[1]
 
 		env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-		 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=10,\
+		 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
 		  gripper_type = peg_type + "PegwForce", controller='position', camera_depth=True)
 
 		obs = env.reset()
@@ -98,7 +101,7 @@ if __name__ == '__main__':
 			fit_bool = np.array([0.0])
 
 		# moving to first initial position
-		fp_array = dc_T.gridpoints(workspace_dim, top_goal, discretization)
+
 		num_files = fp_array.shape[0] * len(peg_hole_options)
 
 		points_list = []
@@ -106,10 +109,10 @@ if __name__ == '__main__':
 
 		for idx in range(fp_array.shape[0]):
 			point = fp_array[idx]
-
-			points_list.append((point, 0, "freespace"))
-			points_list.append((top_goal, 1, "top goal"))
-			# points_list.append((bottom_goal, 1, "insertion"))
+			points_list.append((point + top_goal, 0, "freespace"))
+			points_list.append((top_goal, 0, "top goal"))
+			points_list.append((bottom_goal, 1, "insertion"))
+			points_list.append((top_goal + np.array([0, 0, 0.02, 0,0,0]), 1, "top plus"))
 			# points_list.append((top_goal, 0, "top_goal"))
 
 		goal = points_list[point_idx][0]
@@ -119,6 +122,10 @@ if __name__ == '__main__':
 		while env._check_poserr(goal, tol, tol_ang) == False and counter < 100:
 			action, action_euler = env._pose_err(goal)
 			pos_err = kp * action_euler[:3]
+			noise = np.random.normal(0.0, 0.1, pos_err.size)
+			noise[2] = 0.0
+			# noise[2] = -1.0 * np.absolute(noise[2])
+			pos_err += noise_parameter * noise
 			obs, reward, done, info = env.step(pos_err)
 			obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
 			counter += 1
@@ -150,7 +157,8 @@ if __name__ == '__main__':
 				pos_err = kp * action_euler[:3]
 				# adding random noise
 				# var = np.random.uniform(0.1, 1.5)
-				noise = np.random.normal(0.0, 1.0, pos_err.size)
+				noise = np.random.normal(0.0, 0.1, pos_err.size)
+				noise[2] = 0.0
 				# noise[2] = -1.0 * np.absolute(noise[2])
 				pos_err += noise_parameter * noise
 
@@ -172,7 +180,7 @@ if __name__ == '__main__':
 				if display_bool:
 					env.render()
 	        	
-				if logging_data_bool == 1 and point_type == 1 and prev_point_type == 0:
+				if logging_data_bool == 1 and point_type == 1 and prev_point_type == 1:
 					print("On ", file_num + 1, " of ", num_files, " trajectories")
 					file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
 					file_num += 1

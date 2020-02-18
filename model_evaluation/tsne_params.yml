@@ -1,0 +1,28 @@
+model_params:
+  z_dim: 128
+
+logging_params:
+  logging_folder: "/scr-ssd/sens_search_logging/tsne_evaluation/" # Place your logging folder in a seperate location then your local code repository
+  run_description: "testing" #Options include: debugging, training, testing
+  run_notes: "_init_planeval"
+
+dataloading_params:
+  dataset_path: "/scr2/dataset_senssearch/"
+  num_workers: 6
+  batch_size: 128
+  num_steps: 10
+  val_ratio: 0
+
+debugging_params:
+  debugging_val: 0.0 ### 1.0 for True,  0.0 for False
+
+evaluation_params:
+  seed: 1234
+  epoch_num: 20
+  model_folder: "/scr-ssd/sens_search_logging/models/201911161934_training_27_inital_testing/"
+  parameters_dictionary: "/scr-ssd/sens_search_logging/runs/201911161934_training_27_inital_testing/config_params.yml"
+  train_val_split_path: "/scr-ssd/sens_search_logging/runs/201911161934_training_27_inital_testing/val_train_split.yml"
+  use_GPU: True
+  small_k: 10
+  medium_k: 100
+  large_k: 1000

@@ -26,6 +26,404 @@ def product_of_experts(m_vect, v_vect):
     var = (1/T_vect.sum(2))
 
     return mu, var
+
+class Options_ClassifierLSTM(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, z_dim, num_options, offset, use_fft = True, learn_rep = True, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = False
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+        self.model_list = []
+
+        self.action_dim = action_dim[0]
+        self.proprio_size = proprio_size[0]
+        self.force_size = force_size
+        self.z_dim = z_dim
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 48
+        self.learn_rep = learn_rep
+        self.use_fft = use_fft
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        if self.learn_rep:  
+            self.state_size = self.frc_enc_size + self.proprio_size + self.contact_size + self.action_dim + 3 * self.num_options
+
+            self.cross_params = Params(folder + "_cross_rep", (2 * self.num_options), device = self.device)
+            self.rect_params = Params(folder + "_rect_rep", (2 * self.num_options), device = self.device)
+            self.square_params = Params(folder + "_square_rep", (2 * self.num_options), device = self.device)
+
+            self.model_list.append(self.cross_params)
+            self.model_list.append(self.rect_params)
+            self.model_list.append(self.square_params)
+        else:
+            self.state_size = self.frc_enc_size + self.proprio_size + self.contact_size + self.action_dim + 2 * self.num_options
+
+        self.options_lstm = LSTMCell(folder + "_options", self.state_size, self.z_dim, device = self.device)
+        self.pre_lstm = FCN(folder + "_pre_lstm", self.state_size, self.state_size, 3, device = self.device)
+        self.options_class = FCN(folder + "_options_class", z_dim, 3, 3, device = self.device)
+
+        self.options_transformer = Transformer(folder + "_options", self.z_dim, 2, 2, self.z_dim, device = self.device)
+
+        if self.use_fft:
+            self.frc_enc = CONV2DN(folder + "_fft_enc", (self.force_size[0], 27, 2), (8, 3, 2), False, True, 1, device = self.device)
+        else:
+            self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+             (self.frc_enc_size, 1), False, True, 1, device = self.device)
+
+        self.model_list.append(self.options_lstm)
+        self.model_list.append(self.options_transformer)
+        self.model_list.append(self.pre_lstm)
+        self.model_list.append(self.options_class)
+
+        self.model_list.append(self.frc_enc)
+
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_pegtype(self, peg_type_idx):
+
+        if self.learn_rep:
+            cross_idx = peg_type_idx[:,0].unsqueeze(1).repeat(1, self.num_options * 2)
+            rect_idx = peg_type_idx[:,1].unsqueeze(1).repeat(1, self.num_options * 2)
+            square_idx = peg_type_idx[:,2].unsqueeze(1).repeat(1, self.num_options * 2)
+
+            cross_rep = self.cross_params.params.unsqueeze(0).repeat(peg_type_idx.size(0), 1)
+            rect_rep = self.rect_params.params.unsqueeze(0).repeat(peg_type_idx.size(0), 1)
+            square_rep = self.square_params.params.unsqueeze(0).repeat(peg_type_idx.size(0), 1)
+
+            return cross_idx * cross_rep + rect_idx * rect_rep + square_idx * square_rep
+        else:
+            return peg_type_idx
+
+
+    def get_frc(self, force):
+        if self.use_fft:
+            fft = torch.rfft(force, 2, normalized=False, onesided=True)
+            frc_enc = self.frc_enc(torch.cat([fft, torch.zeros_like(fft[:,:,0,:]).unsqueeze(2)], dim = 2))
+        else:
+            frc_enc = self.frc_enc(force)
+
+        return frc_enc
+
+    def get_options_class(self, proprio, frc_enc, contact, action, peg_type, hole_type, h = None, c = None, h_list = None, calc_logits = False):
+        prestate = torch.cat([proprio, frc_enc, contact.unsqueeze(1), action, peg_type, hole_type], dim = 1)
+        state = self.pre_lstm(prestate)
+
+        if h is None or c is None:
+            h_pred, c_pred = self.options_lstm(state)
+        else:
+            h_pred, c_pred = self.options_lstm(state, h, c) 
+
+        if len(h_list) < 2:
+            options_logits = self.options_class(h_pred)
+        else:
+            hidden = self.options_transformer(torch.cat(h_list, dim = 0),\
+                h_pred.unsqueeze(0)).view(h_pred.size(0), h_pred.size(1))
+
+            options_logits = self.options_class(hidden)
+
+        return options_logits, h_pred, c_pred
+
+    def forward(self, input_dict):
+        proprios = input_dict["proprio"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+
+        # print("Forces size: ", forces.size())
+        contacts = input_dict["contact"].to(self.device)
+        peg_types = input_dict["peg_type"].to(self.device)
+        hole_types = input_dict["hole_type"].to(self.device)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        options_list = []
+        hole_accuracy_list = []
+        hole_probs_list = []
+        frc_enc_list = []
+        h_list = []
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        hole_probs = torch.ones_like(peg_types[:,0]) / peg_types[:,0].size(0)
+
+        for idx in range(steps):
+            action = actions[:,idx]
+            proprio = proprios[:,idx]
+            force = forces[:,idx]
+            contact = contacts[:,idx]
+            peg_type_idx = peg_types[:,idx]
+            hole_type = hole_types[:,idx]
+
+            peg_type = self.get_pegtype(peg_type_idx)
+
+            frc_enc = self.get_frc(force)
+            frc_enc_list.append(frc_enc.unsqueeze(1))
+
+            if idx == 0:
+                options_logits, h, c = self.get_options_class(proprio, frc_enc, contact, action, peg_type, hole_probs, h_list = h_list)
+                hole_probs = self.softmax(options_logits)
+            # stops gradient after a certain number of steps
+            # elif idx != 0 and idx % 8 == 0:
+            #     h_clone = h.detach()
+            #     c_clone = c.detach()
+            #     options_logits, h, c = self.get_options_class(proprio, frc_enc, contact, action, peg_type, hole_probs, h_clone, c_clone)
+            #     hole_probs = self.softmax(options_logits)
+            else:
+                options_logits, h, c = self.get_options_class(proprio, frc_enc, contact, action, peg_type, hole_probs, h = h, c = c, h_list = h_list)
+                hole_probs = self.softmax(options_logits)
+
+            h_list.append(h.unsqueeze(0))
+
+            samples = torch.zeros_like(hole_type)
+            samples[torch.arange(samples.size(0)), hole_probs.max(1)[1]] = 1.0
+            test = torch.where(samples == hole_type, torch.zeros_like(hole_probs), torch.ones_like(hole_probs)).sum(1)
+            accuracy = torch.where(test > 0, torch.zeros_like(test), torch.ones_like(test))
+
+            hole_accuracy_list.append(accuracy.squeeze().unsqueeze(1))
+            hole_probs_list.append(hole_probs.unsqueeze(1))
+
+            if idx >= self.offset:
+                options_list.append(options_logits)
+
+        return {
+            'hole_accuracy': torch.cat(hole_accuracy_list, dim = 1),
+            'hole_probs': torch.cat(hole_probs_list, dim = 1),
+            'frc_enc': torch.cat(frc_enc_list, dim = 1),
+            'options_class': options_list,
+        }
+        
+class Dynamics(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, image_size, depth_size, force_size, proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = True
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+        self.model_list = []
+
+        self.action_dim = action_dim[0]
+        self.pose_size = int(proprio_size[0] / 2)
+        self.vel_size = int(proprio_size[0] / 2)
+        self.joint_pose_size = joint_size[0]
+        self.joint_vel_size = joint_size[0]
+        self.force_size = force_size
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 8 * 3 * 2
+        self.image_size = image_size
+        self.img_enc_size = 8 * 4 * 2
+        self.dpth_enc_size = 8 * 4 * 2
+        self.np = 20
+        self.use_fft = use_fft
+
+        self.normalization = simple_normalization
+        self.softmax = nn.Softmax(dim=1)
+
+        self.latent_state_size = int(self.pose_size / 2) + self.vel_size + self.joint_pose_size + self.joint_vel_size
+        self.state_size = self.frc_enc_size + int(self.pose_size / 2) + + self.latent_state_size + self.contact_size + self.img_enc_size
+        self.surr_state_size = self.latent_state_size + self.frc_enc_size + self.contact_size + 2 * self.num_options + self.img_enc_size
+        self.idxs = [int(self.pose_size / 2), int(self.pose_size / 2) + self.latent_state_size, int(self.pose_size / 2) + self.latent_state_size + self.frc_enc_size]
+
+        if self.use_fft:
+            self.frc_enc = CONV2DN(folder + "_fft_enc", (self.force_size[0], 126, 2), (8, 3, 2), False, True, 4, device = self.device) #10 HZ - 27 # 2 HZ - 126
+        else:
+            self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+             (self.frc_enc_size, 1), False, True, 1, device = self.device)
+
+        self.rgbd_enc = CONV2DN(folder + "_img_enc", image_size, (8, 4, 2), False, True, 3, device = self.device)
+
+        # self.latent_enc = ResNetFCN(folder + "_latent_enc", self.latent_state_size, self.latent_state_size, 5, device = self.device)
+
+        self.dyn = ResNetFCN(folder + "_dynamics", self.state_size + self.action_dim + 2 * self.num_options, int(self.pose_size / 2), 10, device = self.device)
+
+        self.surrogate = ResNetFCN(folder + "_surrogate", self.surr_state_size, int(self.pose_size / 2), 3, device = self.device)
+
+        self.model_list.append(self.dyn)
+        self.model_list.append(self.frc_enc)
+        self.model_list.append(self.rgbd_enc)
+        # self.model_list.append(self.depth_enc)
+        # self.model_list.append(self.latent_enc)
+        self.model_list.append(self.surrogate)
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_frc(self, force):
+        if self.use_fft:
+            # print(force.size())
+            fft = torch.rfft(force, 2, normalized=False, onesided=True)
+            # print(fft.size())
+            # frc_enc = self.frc_enc(torch.cat([fft, torch.zeros_like(fft[:,:,0,:]).unsqueeze(2)], dim = 2))
+            frc_enc = self.frc_enc(fft)
+        else:
+            frc_enc = self.frc_enc(force)
+
+        return frc_enc
+
+    def get_latent(self, state):
+        return self.latent_enc(state)
+
+    def forward(self, input_dict):
+        actions = input_dict["action"].to(self.device)
+        images = input_dict["image"].to(self.device) / 255.0
+        depths = input_dict["depth"].to(self.device).unsqueeze(2) / 255.0
+        proprios = input_dict["proprio"].to(self.device)
+        joint_poses = input_dict["joint_pos"].to(self.device)
+        joint_vels = input_dict["joint_vel"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        peg_types = input_dict["peg_type"].to(self.device)
+        hole_types = input_dict["hole_type"].to(self.device)
+        contacts = input_dict["contact"].to(self.device).unsqueeze(2)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        frc_enc_diff_list = []
+        latent_state_diff_list = []
+
+        frc_enc_diff_est_list = []
+        latent_state_diff_est_list = []
+
+        pos_diff_dir_list = []
+        pos_diff_mag_list = []
+        pos_surr_est_list = []
+
+        contact_pred_list = []
+
+        peg_type = peg_types[:,0]
+        hole_type = hole_types[:,0]
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        proprio = proprios[:,0]
+
+        pos_pred = proprio[:,:3]
+        
+        ang_pred = proprio[:,3:6]
+        vel_pred = proprio[:,6:12]
+        joint_pos_pred = joint_poses[:,0]
+        joint_vel_pred = joint_vels[:,0]
+
+        latent_state_pred = torch.cat([ang_pred, vel_pred, joint_pos_pred, joint_vel_pred], dim = 1)
+
+        force = forces[:,0]
+        frc_enc_pred = self.get_frc(force)
+
+        depth = depths[:,0]
+        image = images[:,0]
+        # print(torch.cat([image, depth] dim = 1).size())
+        rgbd_enc_pred = self.rgbd_enc(torch.cat([image, depth] dim = 1))
+
+        contact = contacts[:,0]
+
+        state = torch.cat([pos_pred, latent_state_pred, frc_enc_pred, rgbd_enc_pred, contact], dim =1)
+        surr_state = torch.cat([latent_state_pred, frc_enc_pred, rgbd_enc_pred, contact, peg_type, hole_type], dim = 1)
+
+        for idx in range(steps):
+            action = actions[:,idx]
+
+            # ### encoding force
+            # force = forces[:,idx]
+            # frc_enc = self.get_frc(force)
+
+            # force_next = forces[:,idx+1]
+            # frc_enc_next = self.get_frc(force_next)
+
+            # frc_enc_diff = frc_enc_next - frc_enc
+
+            # frc_enc_diff_list.append(frc_enc_diff.unsqueeze(1))
+
+            # ### encoding vel
+            # proprio = proprios[:,idx]
+            # ang = proprio[:,3:6]
+            # vel = proprio[:,6:12]
+            # joint_pos = joint_poses[:,idx]
+            # joint_vel = joint_vels[:,idx]
+
+            # latent_state = self.get_latent(torch.cat([ang, vel, joint_pos, joint_vel], dim = 1))
+
+            # proprio_next = proprios[:,idx + 1]
+            # ang_next = proprio_next[:,3:6]
+            # vel_next = proprio_next[:,6:12]
+            # joint_pos_next = joint_poses[:,idx + 1]
+            # joint_vel_next = joint_vels[:,idx + 1]
+
+            # latent_state_next = self.get_latent(torch.cat([ang_next, vel_next, joint_pos_next, joint_vel_next], dim = 1))
+
+            # latent_state_diff = latent_state_next - latent_state
+
+            # latent_state_diff_list.append(latent_state_diff.unsqueeze(1))
+
+            # #### surrogate model calculatinges
+            # pos_sur_est = self.surrogate(surr_state)
+
+            #### dynamics
+            next_state = self.dyn(torch.cat([state, action, peg_type, hole_type], dim = 1))
+
+            pos_diff_pred = next_state[:,:self.idxs[0]]
+            # latent_state_diff_pred = next_state[:,self.idxs[0]:self.idxs[1]]
+            # frc_enc_diff_pred = next_state[:, self.idxs[1]:self.idxs[2]]
+            # rgbd_enc_diff_pred = next_state[:, self.idxs[2]:-1]
+            # contact_logits = next_state[:, -1]
+
+            # contact_probs = torch.sigmoid(contact_logits)
+            # contact_pred = torch.where(contact_probs > 0.5, torch.ones_like(contact_probs), torch.zeros_like(contact_probs))
+
+            pos_pred = pos_diff_pred + pos_pred
+            # latent_state_pred = latent_state_diff_pred + latent_state_pred
+            # frc_enc_pred = frc_enc_diff_pred + frc_enc_pred
+            # rgbd_enc_pred = rgbd_enc_diff_pred + rgbd_enc_pred
+
+            state = torch.cat([pos_pred, latent_state_pred, frc_enc_pred, rgbd_enc_pred, contact_pred.unsqueeze(1)], dim = 1)
+            # surr_state = torch.cat([latent_state_pred, frc_enc_pred, rgbd_enc_pred, contact, peg_type, hole_type], dim = 1)
+
+            if idx >= self.offset:
+                pos_diff_dir_list.append(self.normalization(pos_diff_pred))
+                pos_diff_mag_list.append(pos_diff_pred.norm(2,dim = 1))
+
+                # frc_enc_diff_est_list.append(frc_enc_diff_pred)
+                # latent_state_diff_est_list.append(latent_state_diff_pred)
+
+                # pos_surr_est_list.append(pos_sur_est)
+
+                # contact_pred_list.append(contact_logits.squeeze())
+
+        return {
+            "pos_diff_dir": pos_diff_dir_list,
+            "pos_diff_mag": pos_diff_mag_list,
+            # "contact_pred": contact_pred_list,
+            # "latent_state_diff_est": latent_state_diff_est_list,
+            # "latent_state_diff": torch.cat(latent_state_diff_list, dim = 1),
+            # "frc_enc_diff_est": frc_enc_diff_est_list,
+            # "frc_enc_diff": torch.cat(frc_enc_diff_list, dim = 1),
+            # "pos_surr_est": pos_surr_est_list,
+        }
+
 class DynamicswForce(Proto_Macromodel):
     def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, num_options, offset, use_fft = True, device = None, curriculum = None):
         super().__init__()
@@ -2426,4 +2824,249 @@ class Contact_Multimodal(Proto_Macromodel):
 
         return {
             'latent_state': z,
+        }
+class Latent_Dynamics(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            folder = info_flow[model_name]["model_folder"] + model_name
+            self.save_bool = True
+        else:
+            folder = model_folder + model_name
+            self.save_bool = True
+
+        self.curriculum = curriculum
+        self.device = device
+        self.model_list = []
+
+        self.action_dim = action_dim[0]
+        self.pose_size = int(proprio_size[0] / 2)
+        self.vel_size = int(proprio_size[0] / 2)
+        self.joint_pose_size = joint_size[0]
+        self.joint_vel_size = joint_size[0]
+        self.force_size = force_size
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 8 * 3 * 2
+        self.np = 20
+        self.use_fft = use_fft
+
+        self.normalization = simple_normalization #nn.Softmax(dim=1)
+        self.prob_calc = nn.Softmax(dim=1)
+        self.idxs = [12, 24, 52, 100, 101, 102, 103, 104]
+
+        if self.use_fft:
+            self.frc_enc = CONV2DN(folder + "_fft_enc", (self.force_size[0], 126, 2), (8, 3, 2), False, True, 1, device = self.device)
+        else:
+            self.frc_enc = CONV1DN(folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+             (self.frc_enc_size, 1), False, True, 1, device = self.device)
+
+        self.ang_enc = ResNetFCN(folder + "_ang_enc", self.pose_size, 2 * self.pose_size, 3, device = self.device)
+        self.pos_enc = ResNetFCN(folder + "_pos_enc", self.pose_size, 2 * self.pose_size, 3, device = self.device)
+        self.joint_enc = ResNetFCN(folder + "_ang_enc", 2 * self.joint_pose_size, 4 * self.joint_pose_size, 3, device = self.device)
+
+        self.state_size = (self.frc_enc_size + 2 * self.pose_size + 2 * self.pose_size + 4 * self.joint_pose_size + self.contact_size) 
+
+        self.dyn = ResNetFCN(folder + "_dynamics", self.state_size + self.action_dim + 2 * self.num_options, self.state_size + 4, 10, device = self.device)
+
+        self.pos_dec = ResNetFCN(folder + "_pos_dec", self.state, )
+
+        self.model_list.append(self.dyn)
+        self.model_list.append(self.frc_enc)
+        self.model_list.append(self.ang_enc)
+        self.model_list.append(self.pos_enc)
+        self.model_list.append(self.joint_enc)
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_frc(self, force):
+        if self.use_fft:
+            # print(force.size())
+            fft = torch.rfft(force, 2, normalized=False, onesided=True)
+            # print(fft.size())
+            # frc_enc = self.frc_enc(torch.cat([fft, torch.zeros_like(fft[:,:,0,:]).unsqueeze(2)], dim = 2))
+            frc_enc = self.frc_enc(fft)
+        else:
+            frc_enc = self.frc_enc(force)
+
+        return frc_enc
+
+    def forward(self, input_dict):
+        actions = input_dict["action"].to(self.device)
+        proprios = input_dict["proprio"].to(self.device)
+        joint_poses = input_dict["joint_pos"].to(self.device)
+        joint_vels = input_dict["joint_vel"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        peg_types = input_dict["peg_type"].to(self.device)
+        hole_types = input_dict["hole_type"].to(self.device)
+        contacts = input_dict["contact"].to(self.device).unsqueeze(2)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        pos_enc_diff_m_list = []
+        pos_enc_diff_d_list = []
+        pos_enc_diff_dir_list = []
+        pos_enc_diff_mag_list = []
+
+        ang_enc_diff_m_list = []
+        ang_enc_diff_d_list = []
+        ang_enc_diff_dir_list = []
+        ang_enc_diff_mag_list = []
+
+        joint_enc_diff_m_list = []
+        joint_enc_diff_d_list = []
+        joint_enc_diff_dir_list = []
+        joint_enc_diff_mag_list = []
+
+        frc_enc_diff_m_list = []
+        frc_enc_diff_d_list = []
+        frc_enc_diff_dir_list = []
+        frc_enc_diff_mag_list = []
+
+        contact_pred_list = []
+
+        peg_type = peg_types[:,0]
+        hole_type = hole_types[:,0]
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        proprio = proprios[:,0]
+        pos = proprio[:,:3]
+        ang = proprio[:,3:6]
+        vel = proprio[:,6:9]
+        ang_vel = proprio[:,9:12]
+        pos_enc_pred = self.pos_enc(torch.cat([pos, vel], dim = 1))
+        ang_enc_pred = self.ang_enc(torch.cat([ang, ang_vel], dim =1))
+
+        joint_pos = joint_poses[:,0]
+        joint_vel = joint_vels[:,0]
+
+        joint_enc_pred = self.joint_enc(torch.cat([joint_pos, joint_vel], dim = 1))
+        
+        force = forces[:,0]
+        frc_enc_pred = self.get_frc(force)
+
+        contact = contacts[:,0]
+
+        state = torch.cat([pos_enc_pred, ang_enc_pred, joint_enc_pred, frc_enc_pred, contact], dim =1)
+
+        for idx in range(steps):
+            action = actions[:,idx]
+
+            ### encoding proprioception
+            proprio = proprios[:,idx]
+            pos = proprio[:,:3]
+            ang = proprio[:,3:6]
+            vel = proprio[:,6:9]
+            ang_vel = proprio[:,9:12]
+            pos_enc = self.pos_enc(torch.cat([pos, vel], dim = 1))
+            ang_enc = self.ang_enc(torch.cat([ang, ang_vel], dim =1))
+
+            proprio_next = proprios[:,idx + 1]
+            pos_next = proprio_next[:,:3]
+            ang_next = proprio_next[:,3:6]
+            vel_next = proprio_next[:,6:9]
+            ang_vel_next = proprio_next[:,9:12]
+            pos_enc_next = self.pos_enc(torch.cat([pos_next, vel_next], dim = 1))
+            ang_enc_next = self.ang_enc(torch.cat([ang_next, ang_vel_next], dim =1))
+
+            pos_enc_diff = pos_enc_next - pos_enc
+            ang_enc_diff = ang_enc_next - ang_enc
+
+            pos_enc_diff_m_list.append(pos_enc_diff.norm(2,dim=1).unsqueeze(1))
+            pos_enc_diff_d_list.append((pos_enc_diff / pos_enc_diff.norm(2,dim=1).unsqueeze(1).repeat_interleave(pos_enc.size(1), 1)).unsqueeze(1))
+
+            ang_enc_diff_m_list.append(ang_enc_diff.norm(2,dim=1).unsqueeze(1))
+            ang_enc_diff_d_list.append((ang_enc_diff / ang_enc_diff.norm(2,dim=1).unsqueeze(1).repeat_interleave(ang_enc.size(1), 1)).unsqueeze(1))
+
+            ### encoding joint state
+            joint_pos = joint_poses[:,idx]
+            joint_vel = joint_vels[:,idx]
+
+            joint_enc = self.joint_enc(torch.cat([joint_pos, joint_vel], dim = 1))
+
+            joint_pos_next = joint_poses[:,idx+1]
+            joint_vel_next = joint_vels[:,idx+1]
+
+            joint_enc_next = self.joint_enc(torch.cat([joint_pos_next, joint_vel_next], dim = 1))
+
+            joint_enc_diff = joint_enc_next - joint_enc
+
+            joint_enc_diff_m_list.append(joint_enc_diff.norm(2,dim=1).unsqueeze(1))
+            joint_enc_diff_d_list.append((joint_enc_diff / joint_enc_diff.norm(2,dim=1).unsqueeze(1).repeat_interleave(joint_enc.size(1), 1)).unsqueeze(1))
+
+            ### encoding force
+            force = forces[:,idx]
+            frc_enc = self.get_frc(force)
+
+            force_next = forces[:,idx+1]
+            frc_enc_next = self.get_frc(force_next)
+
+            frc_enc_diff = frc_enc_next - frc_enc
+
+            frc_enc_diff_m_list.append(frc_enc_diff.norm(2,dim=1).unsqueeze(1))
+            frc_enc_diff_d_list.append((frc_enc_diff / frc_enc_diff.norm(2,dim=1).unsqueeze(1).repeat_interleave(frc_enc.size(1), 1)).unsqueeze(1))
+
+            #### running through dynamics model
+            next_state = self.dyn(torch.cat([state, action, peg_type, hole_type], dim = 1))
+
+            pos_enc_diff_est_dir = self.normalization(next_state[:,:self.idxs[0]])
+            ang_enc_diff_est_dir = self.normalization(next_state[:,self.idxs[0]:self.idxs[1]])
+            joint_enc_diff_est_dir = self.normalization(next_state[:,self.idxs[1]:self.idxs[2]])
+            frc_enc_diff_est_dir = self.normalization(next_state[:,self.idxs[2]:self.idxs[3]])
+
+            contact_logits = next_state[:, self.idxs[3]]
+
+            pos_enc_diff_est_mag = next_state[:,self.idxs[4]]
+            ang_enc_diff_est_mag = next_state[:,self.idxs[5]]
+            joint_enc_diff_est_mag = next_state[:,self.idxs[6]]
+            frc_enc_diff_est_mag = next_state[:,self.idxs[7]]
+
+            contact_probs = torch.sigmoid(contact_logits)
+            contact_pred = torch.where(contact_probs > 0.5, torch.ones_like(contact_probs), torch.zeros_like(contact_probs))
+
+            pos_enc_pred = pos_enc_diff_est_dir * pos_enc_diff_est_mag.unsqueeze(1).repeat_interleave(pos_enc_diff_est_dir.size(1), 1) + pos_enc_pred
+            ang_enc_pred = ang_enc_diff_est_dir * ang_enc_diff_est_mag.unsqueeze(1).repeat_interleave(ang_enc_diff_est_dir.size(1), 1) + ang_enc_pred
+            joint_enc_pred = joint_enc_diff_est_dir * joint_enc_diff_est_mag.unsqueeze(1).repeat_interleave(joint_enc_diff_est_dir.size(1), 1) + joint_enc_pred
+            frc_enc_pred = frc_enc_diff_est_dir * frc_enc_diff_est_mag.unsqueeze(1).repeat_interleave(frc_enc_diff_est_dir.size(1), 1) + frc_enc_pred
+
+            state = torch.cat([pos_enc_pred, ang_enc_pred, joint_enc_pred, frc_enc_pred, contact_pred.unsqueeze(1)], dim = 1)
+
+            if idx >= self.offset:
+                pos_enc_diff_dir_list.append(pos_enc_diff_est_dir)
+                pos_enc_diff_mag_list.append(pos_enc_diff_est_mag)
+                ang_enc_diff_dir_list.append(ang_enc_diff_est_dir)
+                ang_enc_diff_mag_list.append(ang_enc_diff_est_mag)
+                joint_enc_diff_dir_list.append(joint_enc_diff_est_dir)
+                joint_enc_diff_mag_list.append(joint_enc_diff_est_mag)
+                frc_enc_diff_dir_list.append(frc_enc_diff_est_dir)
+                frc_enc_diff_mag_list.append(frc_enc_diff_est_mag)
+
+                contact_pred_list.append(contact_logits.squeeze())
+
+        return {
+            "pos_enc_diff_m": torch.cat(pos_enc_diff_m_list, dim = 1),
+            "pos_enc_diff_d": torch.cat(pos_enc_diff_d_list, dim = 1),
+            "ang_enc_diff_m": torch.cat(ang_enc_diff_m_list, dim = 1),
+            "ang_enc_diff_d": torch.cat(ang_enc_diff_d_list, dim = 1),
+            "joint_enc_diff_m": torch.cat(joint_enc_diff_m_list, dim = 1),
+            "joint_enc_diff_d": torch.cat(joint_enc_diff_d_list, dim = 1),
+            "frc_enc_diff_m": torch.cat(frc_enc_diff_m_list, dim = 1),
+            "frc_enc_diff_d": torch.cat(frc_enc_diff_d_list, dim = 1),
+            "pos_enc_diff_mag": pos_enc_diff_mag_list,
+            "pos_enc_diff_dir": pos_enc_diff_dir_list,
+            "ang_enc_diff_mag": ang_enc_diff_mag_list,
+            "ang_enc_diff_dir": ang_enc_diff_dir_list,
+            "joint_enc_diff_mag": joint_enc_diff_mag_list,
+            "joint_enc_diff_dir": joint_enc_diff_dir_list,
+            "frc_enc_diff_mag": frc_enc_diff_mag_list,
+            "frc_enc_diff_dir": frc_enc_diff_dir_list,
+            "contact_pred": contact_pred_list,
         }

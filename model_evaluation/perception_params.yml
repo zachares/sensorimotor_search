@@ -1,0 +1,32 @@
+perception_params:
+  seed: 1234
+  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
+  workspace_dim: 0.04
+  discretization: 8
+  kp: [4, 4, 4]
+  noise_parameter: [0.4, 0.4, 0.4]
+  control_freq: 2
+  step_threshold: 50
+  use_GPU: True
+  num_trials: 50
+  
+logging_params:
+  logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
+  run_description: "testing" #Options include: debugging, training, testing
+  run_notes: "_winter_testing"
+
+debugging_params:
+  debugging_val: 0.0 ### 1.0 for True,  0.0 for False 
+
+info_flow:
+  dataset:
+    outputs:
+      force_hi_freq: [6, 250]
+      action: [3]
+      proprio: [12]
+      contact: [1]
+      num_options: 3
+  Options_ClassifierTransformer:
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/202002111612_debugging_35_2HZ_wrgbd/"
+    epoch_num: 11

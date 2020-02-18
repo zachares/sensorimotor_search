@@ -22,6 +22,80 @@ from torchvision import transforms, utils
 ### dataloader only supports single file datasets or multifile datasets where each file 
 ### only contains a single subset of the full dataset
 
+def T_angle(angle):
+    TWO_PI = 2 * np.pi
+    ones = np.ones_like(angle)
+    zeros = np.zeros_like(angle)
+
+    case1 = np.where(angle < -TWO_PI, angle + TWO_PI * np.ceil(abs(angle) / TWO_PI), zeros)
+    case2 = np.where(angle > TWO_PI, angle - TWO_PI * np.floor(angle / TWO_PI), zeros)
+    case3 = np.where(angle > -TWO_PI, ones, zeros) * np.where(angle < 0, TWO_PI + angle, zeros)
+    case4 = np.where(angle < TWO_PI, ones, zeros) * np.where(angle > 0, angle, zeros)
+
+    return case1 + case2 + case3 + case4
+
+def calc_angerr(target, current):
+    TWO_PI = 2 * np.pi
+    ones = np.ones_like(target)
+    zeros = np.zeros_like(target)
+
+    targ = np.where(target < 0, TWO_PI + target, target)
+    curr = np.where(current < 0, TWO_PI + current, current)
+
+    curr0 = np.where(abs(targ - (curr + TWO_PI)) < abs(targ - curr), ones , zeros) # curr + TWO_PI
+    curr1 = np.where(abs(targ - (curr - TWO_PI)) < abs(targ - curr), ones, zeros) # curr - TWO_PI
+    curr2 = ones - curr0 - curr1
+
+    curr_fin = curr0 * (curr + TWO_PI) + curr1 * (curr - TWO_PI) + curr2 * curr
+
+    error = targ - curr_fin
+
+    error0 = np.where(abs(error + TWO_PI) < abs(error), ones, zeros)
+    error1 = np.where(abs(error - TWO_PI) < abs(error), ones, zeros)
+    error2 = ones - error0 - error1
+
+    return error * error2 + (error + TWO_PI) * error0 + (error - TWO_PI) * error1
+
+def selfsupervised_filenum(filenum):
+    offset = 633
+    idx_list = [634, 1267, 1900, 2533, 3166, 3799, 4432, 5065,  5698]
+    choice = np.random.choice(2) + 1
+
+    if filenum < 1900:
+        if filenum < 634:
+            return filenum + offset * choice
+
+        elif filenum >= 634 and filenum < 1267:
+            if choice == 1:
+                return filenum - offset
+            else:
+                return filenum + offset
+        else:
+            return filenum - offset * choice
+
+    elif filenum >= 1900 and filenum < 3799:
+        if filenum < 2533:
+            return filenum + offset * choice
+
+        elif filenum >= 2533 and filenum < 3166:
+            if choice == 1:
+                return filenum - offset
+            else:
+                return filenum + offset
+        else:
+            return filenum - offset * choice
+    else:
+        if filenum < 4432:
+            return filenum + offset * choice
+
+        elif filenum >= 4432 and filenum < 5065:
+            if choice == 1:
+                return filenum - offset
+            else:
+                return filenum + offset
+        else:
+            return filenum - offset * choice
+
 class H5_DataLoader(Dataset):
     ### h5py file type dataloader dataset ###
     def __init__(self, filename_list, loading_dict, val_ratio, num_steps = 1, idx_dict = None, device = None, transform=None):
@@ -59,6 +133,12 @@ class H5_DataLoader(Dataset):
                 proprios = np.array(dataset['proprio'])
                 dataset_length = proprios.shape[0]
 
+                filenum = int(filename_list[-7:-3])
+                ss_filenum = selfsupervised_filenum(filenum)
+
+                ss_filename = filename[:-7] + str(ss_filenum) + ".h5"
+                dataset_ss = 
+
                 for dataset_idx in range(dataset_length):
                     min_idx = dataset_idx
                     max_idx = dataset_idx + self.num_steps + 1
@@ -70,70 +150,20 @@ class H5_DataLoader(Dataset):
 
                     if train_val_bool == 1:
                         self.idx_dict['train'][self.train_length] = (filename, (min_idx, max_idx))
-                        train_eepos_list.append(np.expand_dims(proprios[dataset_idx,:3], axis = 0))
-
                         self.train_length += 1  
-
-                        # if np.linalg.norm(proprios[dataset_idx]) > 5:
-                        #     print(filename)
 
                     else:
                         self.idx_dict['val'][self.val_length] = (filename, (min_idx, max_idx)) 
-                        val_eepos_list.append(np.expand_dims(proprios[dataset_idx, :3], axis = 0))
                         self.val_length += 1                         
 
-                dataset.close()
-
-            # val_eepos = np.concatenate(val_eepos_list, axis = 0)
-            # train_eepos = np.concatenate(train_eepos_list, axis = 0)
-
-            # val_dist = np.linalg.norm(val_eepos, axis = 1)
-
-            # print("Validation Min: ", val_dist.min())
-            # print("Validation Max: ", val_dist.max())
-
-            # train_dist = np.linalg.norm(train_eepos, axis = 1)
-
-            # print("Training Min: ", train_dist.min())
-            # print("Training Max: ", train_dist.max())
-
-            # for idx in range(self.train_length):
-            #     if idx % 10000 == 0:
-            #         print("Training idx: ", idx)
-
-            #     train_distance = train_dist[idx]
-            #     train_error = 0
-
-            #     while train_error < self.up_thresh:
-            #         idx_up = np.random.choice(self.train_length)
-            #         compare_distance = train_dist[idx_up]
-            #         train_error = abs(train_distance - compare_distance)
-
-            #     paired_tuple = self.idx_dict['train'][idx]
-            #     unpaired_tuple = self.idx_dict['train'][idx_up]
-            #     self.idx_dict['train'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])   
-
-            # for idx in range(self.val_length):
-            #     if idx % 10000 == 0:
-            #         print("Validation idx: ", idx)
-
-            #     val_distance = val_dist[idx]
-            #     val_error = 0
-
-            #     while val_error < self.up_thresh:
-            #         idx_up = np.random.choice(self.val_length)
-            #         compare_distance = val_dist[idx_up]
-            #         val_error = abs(val_distance - compare_distance)
-
-            #     paired_tuple = self.idx_dict['val'][idx]
-            #     unpaired_tuple = self.idx_dict['val'][idx_up]
-            #     self.idx_dict['val'][idx] = (paired_tuple[0], paired_tuple[1], unpaired_tuple[0], unpaired_tuple[1])                    
+                dataset.close()                  
 
         else:
             self.idx_dict = idx_dict
             self.train_length = len(list(self.idx_dict['train'].keys()))
             self.val_length = len(list(self.idx_dict['val'].keys()))
 
+        self.prev_time = time.time()
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
@@ -163,21 +193,74 @@ class H5_DataLoader(Dataset):
         sample = {}
 
         for key in self.loading_dict.keys():
-            if key == 'action':
-                sample[key] = np.array(dataset[key])[idxs_p[0]:(idxs_p[1]-1)]
-                sample[key + '_mag'] = np.linalg.norm(sample[key], axis = 1)
-                sample[key + '_dir'] = sample[key] / np.repeat(np.expand_dims(sample[key + '_mag'], axis = 1), sample[key].shape[1], axis = 1)
-            elif key == 'force':   
-                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
+            # print( key , " took ", time.time() - self.prev_time, " seconds")
+            # self.prev_time = time.time()
+            if key == 'image':
+                sample[key] = dataset['image_s'][idxs_p[0]:idxs_p[1]]  
+            elif key == 'depth':
+                sample[key] = dataset['depth_s'][idxs_p[0]:idxs_p[1]]  
+            elif key == 'action':
+                sample[key] = np.array(dataset[key][idxs_p[0]:(idxs_p[1]-1)])
+                # sample[key + '_m'] = np.linalg.norm(sample[key], axis = 1)
+                # sample[key + '_d'] = sample[key] / np.repeat(np.expand_dims(sample[key + '_m'], axis = 1), sample[key].shape[1], axis = 1)
+            # elif key == 'force':   
+            #     sample[key] = np.array(dataset[key][idxs_p[0]:idxs_p[1]])  
             elif key == 'proprio':   
-                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
-                sample[key + "_pose"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], :6] 
-                sample[key + "_vel"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], 6:] 
-                # sample[key + '_up'] = np.array(dataset_up[key])[idxs_up[0]:idxs_up[1]] 
+                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]
+                sample["pos"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], :3] 
+                # sample["pos_m"] = np.linalg.norm(sample["pos"], axis = 1)
+                # sample["pos_d"] = sample["pos"] / np.repeat(np.expand_dims(sample["pos_m"], axis = 1), sample["pos"].shape[1], axis = 1)
+
+                sample["pos_diff"] = sample["pos"][1:] - sample["pos"][:-1]
+                sample["pos_diff_m"] = np.linalg.norm(sample["pos_diff"], axis = 1)
+                sample["pos_diff_d"] = sample["pos_diff"] / np.repeat(np.expand_dims(sample["pos_diff_m"], axis = 1), sample["pos_diff"].shape[1], axis = 1)
+
+                sample["ang"] = T_angle(np.array(dataset[key])[idxs_p[0]:idxs_p[1], 3:6])
+                # sample["ang_m"] = np.linalg.norm(sample["ang"], axis = 1)
+                # sample["ang_d"] = sample["ang"] / np.repeat(np.expand_dims(sample["ang_m"], axis = 1), sample["ang"].shape[1], axis = 1)
+
+                # sample["ang_diff"] = calc_angerr(sample["ang"][:-1], sample["ang"][1:])
+                # sample["ang_diff_m"] = np.linalg.norm(sample["ang_diff"], axis = 1)
+                # sample["ang_diff_d"] = sample["ang_diff"] / np.repeat(np.expand_dims(sample["ang_diff_m"], axis = 1), sample["ang_diff"].shape[1], axis = 1)
+
+                sample["vel"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], 6:9] 
+                # sample["vel_m"] = np.linalg.norm(sample["vel"], axis = 1)
+                # sample["vel_d"] = sample["vel"] / np.repeat(np.expand_dims(sample["vel_m"], axis = 1), sample["vel"].shape[1], axis = 1)
+
+                # sample["vel_diff"] = sample["vel"][1:] - sample["vel"][:-1]
+                # sample["vel_diff_m"] = np.linalg.norm(sample["vel_diff"], axis = 1)
+                # sample["vel_diff_d"] = sample["vel_diff"] / np.repeat(np.expand_dims(sample["vel_diff_m"], axis = 1), sample["vel_diff"].shape[1], axis = 1)
+
+                sample["ang_vel"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], 9:12] 
+                # sample["ang_vel_m"] = np.linalg.norm(sample["ang_vel"], axis = 1)
+                # sample["ang_vel_d"] = sample["ang_vel"] / np.repeat(np.expand_dims(sample["ang_vel_m"], axis = 1), sample["ang_vel"].shape[1], axis = 1)
+
+                # sample["ang_vel_diff"] = sample["ang_vel"][1:] - sample["ang_vel"][:-1]
+                # sample["ang_vel_diff_m"] = np.linalg.norm(sample["ang_vel_diff"], axis = 1)
+                # sample["ang_vel_diff_d"] = sample["ang_vel_diff"] / np.repeat(np.expand_dims(sample["ang_vel_diff_m"], axis = 1), sample["ang_vel_diff"].shape[1], axis = 1)
+
+            elif key == 'joint_pos':
+                sample[key] = T_angle(np.array(dataset[key][idxs_p[0]:idxs_p[1]]))
+                # sample[key + '_m'] = np.linalg.norm(sample[key], axis = 1)
+                # sample[key + '_d'] = sample[key] / np.repeat(np.expand_dims(sample[key + '_m'], axis = 1), sample[key].shape[1], axis = 1)
+
+                # sample[key + "_diff"] = calc_angerr(sample[key][:-1], sample[key][1:])
+                # sample[key + "_diff_m"] = np.linalg.norm(sample[key + "_diff"], axis = 1)
+                # sample[key + "_diff_d"] = sample[key + "_diff"] / np.repeat(np.expand_dims(sample[key + "_diff_m"], axis = 1), sample[key + "_diff"].shape[1], axis = 1)
+
+            # elif key == 'joint_vel':
+            #     sample[key] = dataset[key][idxs_p[0]:idxs_p[1]]
+            #     # sample[key + '_m'] = np.linalg.norm(sample[key], axis = 1)
+            #     # sample[key + '_d'] = sample[key] / np.repeat(np.expand_dims(sample[key + '_m'], axis = 1), sample[key].shape[1], axis = 1)
+
+            #     # sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
+            #     # sample[key + "_diff_m"] = np.linalg.norm(sample[key + "_diff"], axis = 1)
+            #     # sample[key + "_diff_d"] = sample[key + "_diff"] / np.repeat(np.expand_dims(sample[key + "_diff_m"], axis = 1), sample[key + "_diff"].shape[1], axis = 1)
+
             elif key == 'peg_type' or key == 'hole_type' or key == 'fit':
-                sample[key] = np.repeat(np.expand_dims(np.array(dataset[key]), axis = 0), idxs_p[1] - idxs_p[0], axis = 0)
+                sample[key] = np.array(dataset[key])
             else:
-                sample[key] = np.array(dataset[key])[idxs_p[0]:idxs_p[1]]  
+                sample[key] = dataset[key][idxs_p[0]:idxs_p[1]]  
 
         dataset.close()
         # dataset_up.close()

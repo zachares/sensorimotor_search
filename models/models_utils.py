@@ -26,24 +26,25 @@ import numpy as np
 # 3. save - saves the model
 # 4. load - loads a model
 class Params(nn.Module):
-    def __init__(self, model_name, size, device, init_values = None):
+    def __init__(self, save_name, load_name, size, device, init_values = None):
         super().__init__()
         self.device = device
         self.model = nn.Parameter(nn.init.uniform_(torch.empty(size)))
-        self.model_name = model_name
+        self.save_name = save_name
+        self.load_name = load_name
         self.size = size
 
     def forward(self):
         return self.model
 
     def save(self, epoch_num):
-        ckpt_path = '{}_{}.{}'.format(self.model_name, epoch_num, "pt")
+        ckpt_path = '{}_{}.{}'.format(self.save_name, epoch_num, "pt")
         print("Saved Model to: ", ckpt_path)
         torch.save(self.model, ckpt_path)
 
     def load(self, epoch_num):
         # pass
-        ckpt_path = '{}_{}.{}'.format(self.model_name, epoch_num, "pt")
+        ckpt_path = '{}_{}.{}'.format(self.load_name, epoch_num, "pt")
         self.model.data = torch.load(ckpt_path)
         print("Loaded Model to: ", ckpt_path)
 
@@ -60,10 +61,11 @@ class Params(nn.Module):
 
 #### super class of all models for logging and loading models
 class Proto_Model(nn.Module):
-    def __init__(self, model_name, device):
+    def __init__(self, save_name, load_name, device):
         super().__init__()
         self.model = None
-        self.model_name = model_name
+        self.save_name = save_name
+        self.load_name = load_name
         self.device = device
     
     def forward(self, input):
@@ -76,19 +78,19 @@ class Proto_Model(nn.Module):
         return [param for name, param in self.named_parameters() if 'bias' in name]
 
     def save(self, epoch_num):
-        ckpt_path = '{}_{}'.format(self.model_name, epoch_num)
+        ckpt_path = '{}_{}'.format(self.save_name, epoch_num)
         print("Saved Model to: ", ckpt_path)
         torch.save(self.model.state_dict(), ckpt_path)
 
     def load(self, epoch_num):
-        ckpt_path = '{}_{}'.format(self.model_name, epoch_num)
+        ckpt_path = '{}_{}'.format(self.load_name, epoch_num)
         ckpt = torch.load(ckpt_path)
         self.model.load_state_dict(ckpt)
         print("Loaded Model to: ", ckpt_path)
 
 class PlanarFlow(Proto_Model):
-    def __init__(self, model_name, channels = 20, num_layers = 16, device= None): #dim=20, K=16):
-        super().__init__(model_name + "_plana_flow", device = device)
+    def __init__(self, save_name, load_name, channels = 20, num_layers = 16, device= None): #dim=20, K=16):
+        super().__init__(save_name + "_plana_flow", load_name + "_plana_flow", device = device)
 
         self.device = device
         self.channels = channels
@@ -117,8 +119,8 @@ class PlanarFlow(Proto_Model):
     #     return zK
 #### a convolutional network
 class CONV2DN(Proto_Model):
-    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, flatten_bool, num_fc_layers, batchnorm_bool = True, dropout_bool = False, device = None):
-        super().__init__(model_name + "_cnn", device = device)
+    def __init__(self, save_name, load_name, input_size, output_size, output_activation_layer_bool, flatten_bool, num_fc_layers, batchnorm_bool = True, dropout_bool = False, device = None):
+        super().__init__(save_name + "_cnn", load_name + "_cnn", device = device)
 
         # assume output_chan is a multiple of 2
         # assume input height and width have only two prime factors 2 and 3 for now
@@ -136,6 +138,8 @@ class CONV2DN(Proto_Model):
 
         #assume that the prime factorization of rows and cols is composed of only powers of 3 and 2
         e_p_list = get_2Dconv_params(input_size, output_size) # encoder parameters
+
+        # print(e_p_list)
 
         layer_list = []
 
@@ -189,8 +193,8 @@ class CONV2DN(Proto_Model):
 
 #### a 2D deconvolutional network
 class DECONV2DN(Proto_Model):
-    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, batchnorm_bool = True, dropout_bool = False, device = None):
-        super().__init__(model_name + "_dcnn", device = device)
+    def __init__(self, save_name, load_name, input_size, output_size, output_activation_layer_bool, batchnorm_bool = True, dropout_bool = False, device = None):
+        super().__init__(save_name + "_dcnn", load_name + "_dcnn", device = device)
 
         # assume output_chan is a multiple of 2
         # assume input height and width have only two prime factors 2 and 3 for now
@@ -243,8 +247,8 @@ class DECONV2DN(Proto_Model):
 
 #### a time series network
 class CONV1DN(Proto_Model):
-    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, flatten_bool, num_fc_layers, batchnorm_bool = True, dropout_bool = False, device = None):
-        super().__init__(model_name + "_1dconv", device = device)
+    def __init__(self, save_name, load_name, input_size, output_size, output_activation_layer_bool, flatten_bool, num_fc_layers, batchnorm_bool = True, dropout_bool = False, device = None):
+        super().__init__(save_name + "_1dconv", load_name + "_1dconv", device = device)
 
         # assume output_chan is a multiple of 2
         # assume input height and width have only two prime factors 2 and 3 for now
@@ -305,8 +309,8 @@ class CONV1DN(Proto_Model):
 
 #### a 1D deconvolutional network
 class DECONV1DN(Proto_Model):
-    def __init__(self, model_name, input_size, output_size, output_activation_layer_bool, batchnorm_bool = True, dropout_bool = False, device = None):
-        super().__init__(model_name + "_1ddeconv", device = device)
+    def __init__(self, save_name, load_name, input_size, output_size, output_activation_layer_bool, batchnorm_bool = True, dropout_bool = False, device = None):
+        super().__init__(save_name + "_1ddeconv", load_name + "_1ddeconv", device = device)
 
         # assume output_chan is a multiple of 2
         # assume input height and width have only two prime factors 2 and 3 for now
@@ -350,8 +354,8 @@ class DECONV1DN(Proto_Model):
 
 #### a fully connected network
 class FCN(Proto_Model):
-    def __init__(self, model_name, input_channels, output_channels, num_layers, middle_channels_list = [], batchnorm_bool = True, dropout_bool = False,  device = None):
-        super().__init__(model_name + "_fcn", device = device)
+    def __init__(self, save_name, load_name, input_channels, output_channels, num_layers, middle_channels_list = [], batchnorm_bool = True, dropout_bool = False,  device = None):
+        super().__init__(save_name + "_fcn", load_name + "_fcn", device = device)
 
         #### activation layers: leaky relu
         #### no batch normalization 
@@ -415,8 +419,8 @@ class FCN(Proto_Model):
 
 ### a basic recurrent neural network 
 class RNNCell(Proto_Model):
-    def __init__(self, model_name, input_channels, output_channels, nonlinearity = 'tanh',  device = None):
-        super().__init__(model_name + "_rnn", device = device)
+    def __init__(self, save_name, load_name, input_channels, output_channels, nonlinearity = 'tanh',  device = None):
+        super().__init__(save_name + "_rnn", load_name + "_rnn", device = device)
 
         self.device = device
         self.input_channels = input_channels
@@ -436,8 +440,8 @@ class RNNCell(Proto_Model):
 
 ### a gated recurrent neural network
 class GRUCell(Proto_Model):
-    def __init__(self, model_name, input_channels, output_channels, device = None):
-        super().__init__(model_name + "_gru", device = device)
+    def __init__(self, save_name, load_name, input_channels, output_channels, device = None):
+        super().__init__(save_name + "_gru", load_name + "_gru", device = device)
 
         self.device = device
         self.input_channels = input_channels
@@ -456,8 +460,8 @@ class GRUCell(Proto_Model):
 
 ### a long short term memory recurrent neural network
 class LSTMCell(Proto_Model):
-    def __init__(self, model_name, input_channels, output_channels, device = None):
-        super().__init__(model_name + "_lstm", device = device)
+    def __init__(self, save_name, load_name, input_channels, output_channels, device = None):
+        super().__init__(save_name + "_lstm", load_name + "_lstm", device = device)
 
         self.device = device
         self.input_channels = input_channels
@@ -477,8 +481,8 @@ class LSTMCell(Proto_Model):
 
 # class Transformer(Proto_Model):
 class Transformer(Proto_Model):
-    def __init__(self, model_name, input_size, num_enc_layers, num_dec_layers, z_dim, device = None):
-        super().__init__(model_name + "_transformer", device = device)
+    def __init__(self, save_name, load_name, input_size, num_enc_layers, num_dec_layers, z_dim, device = None):
+        super().__init__(save_name + "_transformer", load_name + "_transformer", device = device)
 
         self.device = device
         self.input_size = input_size
@@ -494,7 +498,38 @@ class Transformer(Proto_Model):
     def forward(self, source, targ):
         return self.model(source, targ).transpose(0,1)
 
+class Transformer_Encoder(Proto_Model):
+    def __init__(self, save_name, load_name, input_size, num_layers, norm = None, nhead = 8, dim_feedforward = 2048, dropout = 0.1, activation = 'relu', device = None):
+        super().__init__(save_name + "_trans_encoder", load_name + "_trans_encoder", device = device)
+        self.device = device
+        self.input_size = input_size
+        self.num_layers = num_layers
+        self.norm = norm
+        self.nhead = nhead
+        self.dim_feedforward = dim_feedforward
+        self.dropout = dropout
+        self.activation = activation
 
+        self.model = nn.TransformerEncoder(nn.TransformerEncoderLayer(self.input_size, self.nhead, dim_feedforward = self.dim_feedforward, dropout = self.dropout,\
+            activation = self.activation), num_layers = self.num_layers, norm = self.norm)
+
+class Transformer_Decoder(Proto_Model):
+    def __init__(self, save_name, load_name, input_size, num_layers, norm = None, nhead = 8, dim_feedforward = 2048, dropout = 0.1, activation = 'relu', device = None):
+        super().__init__(save_name + "_trans_decoder", load_name + "_trans_decoder", device = device)
+        self.device = device
+        self.input_size = input_size
+        self.num_layers = num_layers
+        self.norm = norm
+        self.nhead = nhead
+        self.dim_feedforward = dim_feedforward
+        self.dropout = dropout
+        self.activation = activation
+
+        self.model = nn.TransformerDecoder(nn.TransformerDecoderLayer(self.input_size, self.nhead, dim_feedforward = self.dim_feedforward, dropout = self.dropout,\
+            activation = self.activation), num_layers = self.num_layers, norm = self.norm)
+
+    def forward(self, tgt_seq, src_seq):
+        return self.model(tgt_seq, src_seq)
 ######################################
 # Current Macromodel Types Supported
 #####################################
@@ -516,9 +551,8 @@ class Proto_Macromodel(nn.Module):
         self.model_list = []
 
     def save(self, epoch_num):
-        if self.save_bool:
-            for model in self.model_list:
-                model.save(epoch_num)
+        for model in self.model_list:
+            model.save(epoch_num)
 
     def load(self, epoch_num):
         for model in self.model_list:
@@ -535,7 +569,7 @@ class Proto_Macromodel(nn.Module):
             model.eval()
 
 class ResNetFCN(Proto_Macromodel):
-    def __init__(self, model_name, input_channels, output_channels, num_layers, device = None):
+    def __init__(self, save_name, load_name, input_channels, output_channels, num_layers, device = None):
         super().__init__()
         self.device = device
         self.input_channels = input_channels
@@ -550,9 +584,9 @@ class ResNetFCN(Proto_Macromodel):
 
         for idx in range(self.num_layers):
             if idx == self.num_layers - 1:
-                self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.input_channels, self.output_channels, 2, batchnorm_bool = False, dropout_bool = True, device = self.device).to(self.device))
+                self.model_list.append(FCN(save_name + "_layer_" + str(idx + 1), load_name + "_layer_" + str(idx + 1), self.input_channels, self.output_channels, 2, batchnorm_bool = False, dropout_bool = True, device = self.device).to(self.device))
             else:
-                self.model_list.append(FCN(model_name + "_layer_" + str(idx + 1), self.input_channels, self.input_channels, 2, batchnorm_bool = False, dropout_bool = True, device = self.device).to(self.device))
+                self.model_list.append(FCN(save_name + "_layer_" + str(idx + 1), load_name + "_layer_" + str(idx + 1), self.input_channels, self.input_channels, 2, batchnorm_bool = False, dropout_bool = True, device = self.device).to(self.device))
 
     def forward(self, x):
         for idx, model in enumerate(self.model_list):
@@ -595,6 +629,9 @@ def get_2Dconv_params(input_size, output_size):
     prime_fact_rows = get_prime_fact(input_height // output_height)
     prime_fact_cols = get_prime_fact(input_width // output_width)
 
+    # print(prime_fact_rows)
+
+    # print(prime_fact_cols)
     if len(prime_fact_cols) > len(prime_fact_rows):
 
         while len(prime_fact_cols) > len(prime_fact_rows):
@@ -640,10 +677,10 @@ def get_2Dconv_params(input_size, output_size):
         if prime_fact_rows[idx] == 7:
             e_p[2,idx] = 9
             e_p[4,idx] = 7
-        if prime_fact_rows[idx] == 5:
+        elif prime_fact_rows[idx] == 5:
             e_p[2,idx] = 7
             e_p[4,idx] = 5
-        if prime_fact_rows[idx] == 3:
+        elif prime_fact_rows[idx] == 3:
             e_p[2,idx] = 5
             e_p[4,idx] = 3
         elif prime_fact_rows[idx] == 2:
@@ -657,10 +694,10 @@ def get_2Dconv_params(input_size, output_size):
         if prime_fact_cols[idx] == 7:
             e_p[3,idx] = 9
             e_p[5,idx] = 7
-        if prime_fact_cols[idx] == 5:
+        elif prime_fact_cols[idx] == 5:
             e_p[3,idx] = 7
             e_p[5,idx] = 5
-        if prime_fact_cols[idx] == 3:
+        elif prime_fact_cols[idx] == 3:
             e_p[3,idx] = 5
             e_p[5,idx] = 3
         elif prime_fact_cols[idx] == 2:

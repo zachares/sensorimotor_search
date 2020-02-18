@@ -13,15 +13,18 @@ def plot_image(image):
 
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
-		if key == "image":
-			obs = np.rot90(obs_dict[key], k = 2)
-			obs = resize(obs, (128, 128))
-			obs = np.transpose(obs, (2, 1, 0))
-			obs = np.expand_dims(obs, axis = 0)
-		elif key == "depth":
-			obs = np.rot90(obs_dict[key], k = 2)
-			obs = resize(obs, (128, 128))
-			obs = np.expand_dims(obs, axis = 0)
+		if key == "rgbd":
+			obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.uint8)
+			obs0 = resize(obs0, (128, 128))
+			obs0 = np.transpose(obs0, (2, 1, 0))
+			obs0 = np.expand_dims(obs0, axis = 0)
+
+			obs1 = np.rot90(obs_dict['depth'], k = 2).astype(np.uint8)
+			obs1 = resize(obs1, (128, 128))
+			obs1 = np.expand_dims(np.expand_dims(obs1, axis = 0), axis = 0)
+
+			obs = np.concatenate([obs0, obs1], axis = 1)
+
 		else:
 			obs = np.expand_dims(obs_dict[key], axis = 0)
 

@@ -32,9 +32,6 @@ from utils import *
 
 import matplotlib.pyplot as plt 
 from shutil import copyfile
-
-############ somehow vectorize model inputs, outputs and losses ##########
-
 ######### this model only supports ADAM for optimization at the moment
 class Trainer(object):
 	def __init__(self, cfg, models_folder, save_models_flag, device):
@@ -54,9 +51,11 @@ class Trainer(object):
 		force_size =self.info_flow['dataset']['outputs']['force_hi_freq'] 
 		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
 		joint_size = self.info_flow['dataset']['outputs']['joint_pos']
+		rgbd_size = self.info_flow['dataset']['outputs']['rgbd']
+
 		action_dim =self.info_flow['dataset']['outputs']['action']
 		z_dim = cfg["model_params"]["z_dim"]
-		offset = cfg["model_params"]["offset"]
+		min_steps = cfg["model_params"]["offset"]
 		num_options = cfg["model_params"]["num_options"]
 
 		self.batch_size = batch_size
@@ -75,11 +74,11 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		# self.model_dict["Options_ClassifierLSTM"] = Options_ClassifierLSTM(models_folder, "Options_ClassifierLSTM", self.info_flow,\
-		#  force_size, proprio_size, action_dim, z_dim, num_options, offset, learn_rep = False, device = device, curriculum = self.curriculum).to(device)
+		self.model_dict["Options_ClassifierTransformer"] = Options_ClassifierTransformer(models_folder, "Options_ClassifierTransformer", self.info_flow,\
+		 force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
 		
-		self.model_dict["Dynamics"] = Dynamics(models_folder, "Dynamics", self.info_flow,\
-		 force_size, proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = device, curriculum = self.curriculum).to(device)		
+		# self.model_dict["Dynamics"] = Dynamics(models_folder, "Dynamics", self.info_flow, rgbd_size, force_size,\
+		#  proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = device, curriculum = self.curriculum).to(device)		
 		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################
@@ -112,15 +111,17 @@ class Trainer(object):
 		self.loss_dict = {}
 		self.loss_dict["Image_multistep"] = Proto_MultiStep_Loss(record_function = record_image)
 		self.loss_dict["MSE_multistep"] = Proto_MultiStep_Loss(record_function = record_diff)
+		self.loss_dict["L1_multistep"] = Proto_MultiStep_Loss(loss_function = nn.L1Loss(), record_function = record_diff)
 		self.loss_dict["Gaussian_KL_multistep"] = Gaussian_KL_MultiStep_Loss()
 		self.loss_dict["Gaussian_KL"] = Gaussian_KL_Loss()
 		self.loss_dict["MSE"] = Proto_Loss()
 		self.loss_dict["Image_loss"] = Proto_Loss(record_function = record_image)
 		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep_Loss()
 		self.loss_dict["CE_multistep"] = CrossEnt_MultiStep_Loss()
+		self.loss_dict["CE"] = CrossEnt_Loss()
 		self.loss_dict["GaussNegLogProb_multistep"] = GaussianNegLogProb_multistep_Loss()
 		self.loss_dict["Multinomial_KL_multistep"] = Multinomial_KL_MultiStep_Loss()
-		self.loss_dict["Mag_multistep"] = Proto_MultiStep_Loss(record_function = record_mag)
+		self.loss_dict["Mag_multistep"] = Proto_MultiStep_Loss(loss_function = nn.L1Loss(), record_function = record_mag)
 		self.loss_dict["Angle_multistep"] = Proto_MultiStep_Loss(record_function = record_angle)
 		###################################
 		####### Code ends here ###########
