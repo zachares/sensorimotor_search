@@ -47,6 +47,21 @@ def random_point(workspace_dim, peg_top_site):
 
 	return np.array([x[0],y[0],z[0]])
 
+def slidepoints(workspace_dim, top_goal):
+	zmin = - 0.00
+	# print("Zs: ", zmin)
+
+	theta = np.random.uniform(low=0, high=2*np.pi)
+	x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+	y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+	z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+	x = workspace_dim * np.cos(theta)
+	y = workspace_dim * np.sin(theta)
+	point_1 = np.array([x, y, zmin, x_ang, y_ang, z_ang]) + top_goal
+	point_2 = np.array([-x, -y, zmin, x_ang, y_ang, z_ang]) + top_goal
+
+	return [(point_1, 1, "sliding"), (point_2, 2, "sliding")]
+
 def save_obs(obs_dict, keys, tensor_dict):
 	for key in keys:
 		if key == "rgbd":
@@ -110,6 +125,8 @@ if __name__ == '__main__':
 	action_dim =info_flow['dataset']['outputs']['action']
 	proprio_size = info_flow['dataset']['outputs']['proprio']
 	num_options = info_flow['dataset']['outputs']['num_options']
+
+	converge_thresh = cfg['perception_params']['converge_thresh']
     ##################################################################################
     ### Setting Debugging Flag
     ##################################################################################
@@ -157,8 +174,6 @@ if __name__ == '__main__':
 	obs = env.reset()
 	env.viewer.set_camera(camera_id=2)
 
-	converge_bool = False
-
 	tol = 0.002 # position tolerance
 	tol_ang = 100 #this is so high since we are only doing position control
 
@@ -179,15 +194,17 @@ if __name__ == '__main__':
 	save_model_flag = False
 	logger = Logger(cfg, debugging_flag, save_model_flag)
 	logging_dict = {}
-	logging_dict['scalar'] = {}
+
     ############################################################
     ### Starting tests
     ###########################################################
-	for trial_num in range(1, num_trials + 1):
-		trial_str = "trial_" + str(trial_num).zfill(4)
-
+	for trial_num in range(num_trials):
 		peg_type = random.choice(peg_types)
+		peg_type = peg_types[trial_num]
+
 		hole_type = random.choice(peg_types)
+
+		memory = torch.from_numpy(np.zeros((3,3))).float().to(device)
 
 		env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
 		 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
@@ -197,8 +214,9 @@ if __name__ == '__main__':
 		env.viewer.set_camera(camera_id=2)
 		converge_count = 0
 		glb_cnt = 0
+		logging_dict['scalar'] = {}
 
-		while converge_count < 5:
+		while converge_count < converge_thresh:
 			top_goal = peg_dict[hole_type][0]
 			bottom_goal = peg_dict[hole_type][1]
 			top_plus = top_goal + np.array([0, 0, 0.02, 0,0,0])
@@ -207,10 +225,30 @@ if __name__ == '__main__':
 			hole_vector = peg_dict[hole_type][2]
 
 			# moving to first initial position
-			points_list = [(top_plus, 0, "top_plus"), (np.concatenate([random_point(workspace_dim, top_goal), np.array([np.pi, 0, np.pi])]),\
-			 0, "freespace"), (top_goal, 0, "top_goal")]
+			points_list = [(top_plus, 0, "top_plus")] + slidepoints(workspace_dim, top_goal) + [(top_plus, 0, "top_plus")] 
 			point_idx = 0
 
+			goal = points_list[point_idx][0]
+			point_type = points_list[point_idx][1]
+
+			step_count = 0
+
+			while env._check_poserr(goal, tol, tol_ang) == False and step_count < step_threshold:
+				action, action_euler = env._pose_err(goal)
+				pos_err = kp * action_euler[:3]
+				noise = np.random.normal(0.0, 0.1, pos_err.size)
+				noise[2] = 0.0
+				pos_err += noise_parameter * noise
+				obs, reward, done, info = env.step(pos_err)
+				obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
+
+				if display_bool:
+					env.render()
+
+
+				step_count += 1
+
+			point_idx += 1
 			goal = points_list[point_idx][0]
 			point_type = points_list[point_idx][1]
 
@@ -268,35 +306,36 @@ if __name__ == '__main__':
 			sample = concatenate(obs_dict,\
 			 torch.from_numpy(peg_vector).float().to(device).unsqueeze(0))
 
-			if sample['contact'].size(1) == 0:
+			if sample['force_hi_freq'].size(1) < 10:
 				continue
+			# else:
+			# 	print("force size: ", sample['force_hi_freq'].size())
 
-			hole_idx = model.process(sample).squeeze().detach().cpu().numpy().argmax()
+			hole_idx = hole_vector.argmax()
+			options_logits = model.process(sample).squeeze(0)
+			print(F.softmax(options_logits, dim = 0))
+			memory[hole_idx] += options_logits
+			options_probs = F.softmax(memory[hole_idx], dim = 0)
+
+			hole_est_idx = options_probs.max(0)[1].item()
 			peg_idx = peg_vector.argmax()
-			print("Network thinks it is a ", peg_types[hole_idx], " hole")
+			print("Network thinks it is a ", peg_types[hole_est_idx], " hole when it is a ", peg_types[hole_idx], " hole")
+			# print(options_probs)
+			# print(memory[hole_idx])
 
-			if peg_idx == hole_idx and hole_idx == hole_vector.argmax():
-				converge_count += 1
-			else:
-				list_idx = peg_types.index(hole_type)
-				list_idx = (list_idx + 1) % len(peg_types)
-				hole_type = peg_types[list_idx]
+			# list_idx = peg_types.index(hole_type)
+			# list_idx = (list_idx + 1) % len(peg_types)
+			# hole_type = peg_types[list_idx]
 
-			if peg_idx == hole_idx:
-				logging_dict['scalar'][trial_str + "/Goal"] = 0
-			else:
-				if peg_idx == 0:
-					holes_left = np.array([hole_type[1], hole_type[2]])
-				elif peg_idx == 1:
-					holes_left = np.array([hole_type[0], hole_type[2]])
-				else:
-					holes_left = np.array([hole_type[0], hole_type[1]])
+			# if hole_idx == hole_vector.argmax():
+			# 	logging_dict['scalar'][trial_str + "/Correct"] = 1
+			# else:
+			# 	logging_dict['scalar'][trial_str + "/Correct"] = 0
 
-				if holes_left[0] == 1:
-					logging_dict['scalar'][trial_str + "/Goal"] = 1
-				else:
-					logging_dict['scalar'][trial_str + "/Goal"] = 2
+			logging_dict['scalar'][peg_type + "_" + hole_type + "/" + peg_types[0] + "_prob" ] = options_probs[0].item()
+			logging_dict['scalar'][peg_type + "_" + hole_type + "/" + peg_types[1] + "_prob" ] = options_probs[1].item()
+			logging_dict['scalar'][peg_type + "_" + hole_type + "/" + peg_types[2] + "_prob" ] = options_probs[2].item()
 
 			logger.save_scalars(logging_dict, glb_cnt, 'evaluation/')
 			glb_cnt += 1
-
+			converge_count += 1

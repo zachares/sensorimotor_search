@@ -28,10 +28,9 @@ if __name__ == '__main__':
 		cfg = yaml.safe_load(ymlfile)
 
 	logging_folder = cfg['datacollection_params']['logging_folder']
-	collection_details = cfg['datacollection_params']['collection_details']
 	logging_data_bool = cfg['datacollection_params']['logging_data_bool']
 	display_bool = cfg['datacollection_params']['display_bool']
-	discretization = cfg['datacollection_params']['discretization']
+	num_trajectories = cfg['datacollection_params']['num_trajectories']
 	kp = np.array(cfg['datacollection_params']['kp'])
 	noise_parameter = np.array(cfg['datacollection_params']['noise_parameter'])
 	ctrl_freq = np.array(cfg['datacollection_params']['control_freq'])
@@ -53,7 +52,7 @@ if __name__ == '__main__':
 	obs = env.reset()
 	env.viewer.set_camera(camera_id=2)
 
-	tol = 0.002
+	tol = 0.01
 	tol_ang = 100 #this is so high since we are only doing position control
 
 	for idx, peg_type in enumerate(peg_types):
@@ -70,17 +69,18 @@ if __name__ == '__main__':
 
 	peg_hole_options = list(itertools.product(*[peg_types, peg_types]))
 
-	fp_array = dc_T.gridpoints(workspace_dim, np.array([0,0,0]), discretization)
+	fp_array = dc_T.slidepoints(workspace_dim, num_trajectories)
 
 	file_num = 0
 
 	for peg_hole_option in peg_hole_options:
 		peg_type = peg_hole_option[0]
-
-		# if peg_type == peg_types[0] or peg_type == peg_types[1]:
-		# 	continue
-
 		hole_type = peg_hole_option[1]
+
+		option_file_num = 0
+
+		# if peg_type == hole_type:
+		# 	continue
 
 		env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
 		 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
@@ -102,17 +102,23 @@ if __name__ == '__main__':
 
 		# moving to first initial position
 
-		num_files = fp_array.shape[0] * len(peg_hole_options)
+		num_files = (fp_array.shape[0] // 2) * len(peg_hole_options)
 
 		points_list = []
 		point_idx = 0
+		point_count = 0
 
-		for idx in range(fp_array.shape[0]):
-			point = fp_array[idx]
-			points_list.append((point + top_goal, 0, "freespace"))
-			points_list.append((top_goal, 0, "top goal"))
-			points_list.append((bottom_goal, 1, "insertion"))
-			points_list.append((top_goal + np.array([0, 0, 0.02, 0,0,0]), 1, "top plus"))
+		for idx in range(int(fp_array.shape[0] / 2)):
+			idx0 = 2 * idx
+			idx1 = 2 * idx + 1
+			points_list.append((fp_array[idx0] + top_goal, 0, "sliding"))
+			points_list.append((fp_array[idx1]+ top_goal, 1, "sliding_recording"))
+			points_list.append((top_goal + np.array([0, 0, 0.02, 0,0,0]), 2, "top plus"))
+			# point_count += 1
+			# point_count %= 2
+			# points_list.append((top_goal, 0, "top goal"))
+			# points_list.append((bottom_goal, 1, "insertion"))
+
 			# points_list.append((top_goal, 0, "top_goal"))
 
 		goal = points_list[point_idx][0]
@@ -123,8 +129,6 @@ if __name__ == '__main__':
 			action, action_euler = env._pose_err(goal)
 			pos_err = kp * action_euler[:3]
 			noise = np.random.normal(0.0, 0.1, pos_err.size)
-			noise[2] = 0.0
-			# noise[2] = -1.0 * np.absolute(noise[2])
 			pos_err += noise_parameter * noise
 			obs, reward, done, info = env.step(pos_err)
 			obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
@@ -151,20 +155,20 @@ if __name__ == '__main__':
 			goal = points_list[point_idx][0]
 			point_type = points_list[point_idx][1]
 			print("Translation type is ", points_list[point_idx][2])
+			# print("previous point type ", prev_point_type, " current point type ", point_type)
+
+			if point_type == 1:
+				final_point = copy.deepcopy(goal)
 
 			while env._check_poserr(goal, tol, tol_ang) == False:
 				action, action_euler = env._pose_err(goal)
 				pos_err = kp * action_euler[:3]
-				# adding random noise
-				# var = np.random.uniform(0.1, 1.5)
 				noise = np.random.normal(0.0, 0.1, pos_err.size)
-				noise[2] = 0.0
-				# noise[2] = -1.0 * np.absolute(noise[2])
 				pos_err += noise_parameter * noise
 
 				obs['action'] = env.controller.transform_action(pos_err)
 
-				if logging_data_bool == 1:
+				if logging_data_bool == 1 and point_type == 1:
 					dc_T.save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
 
 				obs, reward, done, info = env.step(pos_err)
@@ -172,18 +176,19 @@ if __name__ == '__main__':
 
 
 				# if display_bool:
-				# 	# plt.scatter(glb_ts, obs['force'][2])
-				# 	plt.scatter(glb_ts, obs['contact'])
+				# 	plt.scatter(glb_ts, obs['force'][2])
+				# 	# plt.scatter(glb_ts, obs['contact'])
 				# 	plt.pause(0.001)
 				# glb_ts += 1
 
 				if display_bool:
 					env.render()
 	        	
-				if logging_data_bool == 1 and point_type == 1 and prev_point_type == 1:
-					print("On ", file_num + 1, " of ", num_files, " trajectories")
-					file_name = logging_folder + collection_details + "_" + str(file_num + 1).zfill(4) + ".h5"
+				if logging_data_bool == 1 and point_type == 2 and prev_point_type == 1:
 					file_num += 1
+					option_file_num += 1
+					print("On ", file_num, " of ", num_files, " trajectories")
+					file_name = logging_folder + peg_type + "_" + hole_type + "_" + str(option_file_num).zfill(4) + ".h5"
 
 					dataset = h5py.File(file_name, 'w')
 
@@ -199,10 +204,11 @@ if __name__ == '__main__':
 						dataset.create_dataset(key, data= key_array, chunks = chunk_size)
 
 					dataset.create_dataset("hole_type", data = hole_vector)
+					dataset.create_dataset("final_point", data = final_point)
 					dataset.create_dataset("peg_type", data = peg_vector)
 					dataset.create_dataset("fit", data = fit_bool)
-
 					dataset.close()
+
 					print("Saving to file: ", file_name)
 					obs_dict = {}
 					prev_point_type = -1
@@ -216,8 +222,10 @@ if __name__ == '__main__':
 					goal = points_list[point_idx][0]
 					prev_point_type = copy.deepcopy(point_type)
 					point_type = points_list[point_idx][1]
+					print("Number of Steps", point_num_steps)
 					point_num_steps = 0
-					print("Skipped Point")
+					# print("Skipped Point")
+
 					print("Translation type is ", points_list[point_idx][2])
 
 			print("Number of Steps", point_num_steps)	

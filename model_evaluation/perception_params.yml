@@ -1,15 +1,16 @@
 perception_params:
   seed: 1234
   display_bool: 1.0 # 1 if display should be on, 0 if display should be off
-  workspace_dim: 0.04
+  workspace_dim: 0.02
   discretization: 8
   kp: [4, 4, 4]
-  noise_parameter: [0.4, 0.4, 0.4]
-  control_freq: 2
-  step_threshold: 50
+  noise_parameter: [0.8, 0.8, 0.8]
+  control_freq: 10
+  step_threshold: 75
   use_GPU: True
-  num_trials: 50
-  
+  num_trials: 3
+  converge_thresh: 16
+
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
   run_description: "testing" #Options include: debugging, training, testing
@@ -28,5 +29,5 @@ info_flow:
       num_options: 3
   Options_ClassifierTransformer:
     train: 0
-    model_folder: "/scr-ssd/sens_search_logging/models/202002111612_debugging_35_2HZ_wrgbd/"
-    epoch_num: 11
+    model_folder: "/scr-ssd/sens_search_logging/models/202002201234_debugging_17_10HZ_wensemble/"
+    epoch_num: 23

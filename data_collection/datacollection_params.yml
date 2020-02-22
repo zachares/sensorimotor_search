@@ -1,11 +1,10 @@
 datacollection_params:
   seed: 1234
-  logging_folder: "/scr2/muj_senssearch_dataset2HZ_winsert/"
-  collection_details: "multimodal_op_space"
+  logging_folder: "/scr2/muj_senssearch_dataset10HZ_slide/"
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   workspace_dim: 0.04
-  discretization: 8
+  num_trajectories: 500
   kp: [4, 4, 4]
-  noise_parameter: [0.4, 0.4, 0.4]
-  control_freq: 2
+  noise_parameter: [0.8, 0.8, 0.8]
+  control_freq: 10

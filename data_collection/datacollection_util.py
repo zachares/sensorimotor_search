@@ -11,6 +11,17 @@ def plot_image(image):
 	imgplot = plt.imshow(image)
 	plt.show()
 
+def T_angle(angle):
+    TWO_PI = 2 * np.pi
+    ones = np.ones_like(angle)
+    zeros = np.zeros_like(angle)
+
+    case1 = np.where(angle < -TWO_PI, angle + TWO_PI * np.ceil(abs(angle) / TWO_PI), zeros)
+    case2 = np.where(angle > TWO_PI, angle - TWO_PI * np.floor(angle / TWO_PI), zeros)
+    case3 = np.where(angle > -TWO_PI, ones, zeros) * np.where(angle < 0, TWO_PI + angle, zeros)
+    case4 = np.where(angle < TWO_PI, ones, zeros) * np.where(angle > 0, angle, zeros)
+
+    return case1 + case2 + case3 + case4
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
 		if key == "rgbd":
@@ -48,8 +59,8 @@ def gridpoints(workspace_dim, peg_top_site, num_points = 10):
 	y = np.random.uniform(low=ymin, high=ymax, size=num_points)#np.linspace(ymin, ymax, num = num_points, endpoint = True)
 	z = np.random.uniform(low=zmin, high=zmax, size=num_points)#np.linspace(zmin, zmax, num = num_points, endpoint = True)
 
-	xfloor = np.random.uniform(low=xmin, high=xmax, size = int(0.5 *(num_points**(3/2))))
-	yfloor = np.random.uniform(low=ymin, high=ymax, size= int(0.5 * (num_points**(3/2))))
+	xfloor = np.random.uniform(low=xmin, high=xmax, size = int(0.5 *(num_points**(3))))
+	yfloor = np.random.uniform(low=ymin, high=ymax, size= int(0.5 * (num_points**(3))))
 
 	nc_point_list = []
 	c_point_list = []
@@ -62,18 +73,43 @@ def gridpoints(workspace_dim, peg_top_site, num_points = 10):
 				z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
 				c_point_list.append(np.expand_dims(np.array([xfloor[idx_x], yfloor[idx_y], zmin, x_ang, y_ang, z_ang]), axis = 0))
 
-	for idx_x in range(num_points):
-		for idx_y in range(num_points):
-			for idx_z in range(num_points):
-				x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-				y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-				z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-				nc_point_list.append(np.expand_dims(np.array([x[idx_x], y[idx_y], z[idx_z], x_ang, y_ang, z_ang]), axis = 0))
+	# for idx_x in range(num_points):
+	# 	for idx_y in range(num_points):
+	# 		for idx_z in range(num_points):
+	# 			x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+	# 			y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+	# 			z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+	# 			nc_point_list.append(np.expand_dims(np.array([x[idx_x], y[idx_y], z[idx_z], x_ang, y_ang, z_ang]), axis = 0))
 
 	point_list = c_point_list + nc_point_list
 
 	return np.concatenate(point_list, axis = 0)
 
+def slidepoints(workspace_dim, num_trajectories = 10):
+	zmin = - 0.00
+	# print("Zs: ", zmin)
+
+	theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
+	theta_delta = np.random.uniform(low=np.pi / 2, high=np.pi, size = num_trajectories)
+	theta_sign = np.random.choice([-1, 1], size = num_trajectories)
+	theta_final = T_angle(theta_init + theta_delta * theta_sign)
+
+	c_point_list = []
+
+	for idx in range(theta_init.size):
+		x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+		y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+		z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+		theta0 = theta_init[idx]
+		theta1 = theta_final[idx]
+		x_init = workspace_dim * np.cos(theta0)
+		y_init = workspace_dim * np.sin(theta0)
+		x_final = workspace_dim * np.cos(theta1)
+		y_final = workspace_dim * np.sin(theta1) 
+		c_point_list.append(np.expand_dims(np.array([x_init, y_init, zmin, x_ang, y_ang, z_ang]), axis = 0))
+		c_point_list.append(np.expand_dims(np.array([x_final, y_final, zmin, x_ang, y_ang, z_ang]), axis = 0))
+
+	return np.concatenate(c_point_list, axis = 0)
 # def gridpoints(workspace, peg_top_site, num_points = 10):
 # 	xmin = workspace[0,0]
 # 	xmax = workspace[1,0]

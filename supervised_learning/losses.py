@@ -292,6 +292,35 @@ class CrossEnt_MultiStep_Loss(Proto_MultiStep_Loss):
 
 		return loss
 
+class CrossEnt_Ensemble_Loss(Proto_MultiStep_Loss):
+	def __init__(self):
+	    super().__init__(loss_function = nn.CrossEntropyLoss())
+	    self.softmax = nn.Softmax(dim=1)
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		logits_list = input_tuple[0]
+		labels = input_tuple[1]
+
+		logits_sum = torch.zeros_like(logits_list[0])
+
+		for idx, logits in enumerate(logits_list):
+			logits_sum += logits
+			if idx == 0:
+				loss = weight * self.loss_function(logits, labels.max(1)[1])
+			else:
+				loss += weight * self.loss_function(logits, labels.max(1)[1])
+
+		probs = self.softmax(logits_sum)
+		samples = torch.zeros_like(labels)
+		samples[torch.arange(samples.size(0)), probs.max(1)[1]] = 1.0
+		test = torch.where(samples == labels, torch.zeros_like(probs), torch.ones_like(probs)).sum(1)
+		accuracy = torch.where(test > 0, torch.zeros_like(test), torch.ones_like(test))
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']['accuracy/' + label] = accuracy.mean().item()	
+
+		return loss
+
 class Histogram_MultiStep_Loss(object):
 	def __init__(self, loss_function, transform_target_function = None, record_function = None, hyperparameter = 1.0):
 		self.loss_function = loss_function
@@ -376,6 +405,23 @@ class Gaussian_KL_Loss(Proto_Loss):
 			self.record_function((mu_est, var_est), (mu_tar, var_tar), label, logging_dict)
 
 		return loss
+
+class Contrastive_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		network_outputs = input_tuple[0]
+		output_0, output_1 = network_outputs
+
+		loss = -1.0 * weight * self.loss_function(output_0, output_1)
+		logging_dict['scalar']["loss/" + label] = loss.item()
+
+		# if self.record_function is not None:
+		# 	self.record_function((mu_est, var_est), (mu_tar, var_tar), label, logging_dict)
+
+		return loss
+		
 		
 class Gaussian_KL_MultiStep_Loss(Proto_Loss):
 

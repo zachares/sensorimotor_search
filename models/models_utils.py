@@ -528,8 +528,11 @@ class Transformer_Decoder(Proto_Model):
         self.model = nn.TransformerDecoder(nn.TransformerDecoderLayer(self.input_size, self.nhead, dim_feedforward = self.dim_feedforward, dropout = self.dropout,\
             activation = self.activation), num_layers = self.num_layers, norm = self.norm)
 
-    def forward(self, tgt_seq, src_seq):
-        return self.model(tgt_seq, src_seq)
+    def forward(self, tgt_seq, src_seq, padding_mask = None):
+        if padding_mask is None:
+            return self.model(tgt_seq, src_seq)
+        else:
+            return self.model(tgt_seq, src_seq, memory_key_padding_mask = padding_mask)
 ######################################
 # Current Macromodel Types Supported
 #####################################

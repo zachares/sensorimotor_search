@@ -51,11 +51,11 @@ class Trainer(object):
 		force_size =self.info_flow['dataset']['outputs']['force_hi_freq'] 
 		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
 		joint_size = self.info_flow['dataset']['outputs']['joint_pos']
-		rgbd_size = self.info_flow['dataset']['outputs']['rgbd']
+		# rgbd_size = self.info_flow['dataset']['outputs']['rgbd']
 
 		action_dim =self.info_flow['dataset']['outputs']['action']
 		z_dim = cfg["model_params"]["z_dim"]
-		min_steps = cfg["model_params"]["offset"]
+		min_steps = cfg["model_params"]["min_steps"]
 		num_options = cfg["model_params"]["num_options"]
 
 		self.batch_size = batch_size
@@ -123,6 +123,8 @@ class Trainer(object):
 		self.loss_dict["Multinomial_KL_multistep"] = Multinomial_KL_MultiStep_Loss()
 		self.loss_dict["Mag_multistep"] = Proto_MultiStep_Loss(loss_function = nn.L1Loss(), record_function = record_mag)
 		self.loss_dict["Angle_multistep"] = Proto_MultiStep_Loss(record_function = record_angle)
+		self.loss_dict["Contrastive"] = Contrastive_Loss()
+		self.loss_dict["CE_ensemble"] = CrossEnt_Ensemble_Loss()
 		###################################
 		####### Code ends here ###########
 		####################################
