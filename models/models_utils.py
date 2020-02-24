@@ -514,7 +514,7 @@ class Transformer_Encoder(Proto_Model):
             activation = self.activation), num_layers = self.num_layers, norm = self.norm)
 
 class Transformer_Decoder(Proto_Model):
-    def __init__(self, save_name, load_name, input_size, num_layers, norm = None, nhead = 8, dim_feedforward = 2048, dropout = 0.1, activation = 'relu', device = None):
+    def __init__(self, save_name, load_name, input_size, num_layers, norm = None, nhead = 8, dim_feedforward = 128, dropout = 0.1, activation = 'relu', device = None):
         super().__init__(save_name + "_trans_decoder", load_name + "_trans_decoder", device = device)
         self.device = device
         self.input_size = input_size
@@ -528,11 +528,17 @@ class Transformer_Decoder(Proto_Model):
         self.model = nn.TransformerDecoder(nn.TransformerDecoderLayer(self.input_size, self.nhead, dim_feedforward = self.dim_feedforward, dropout = self.dropout,\
             activation = self.activation), num_layers = self.num_layers, norm = self.norm)
 
-    def forward(self, tgt_seq, src_seq, padding_mask = None):
-        if padding_mask is None:
+    def forward(self, tgt_seq, src_seq, mem_padding_mask = None, tgt_padding_mask = None):
+        # print("Padding mask size: ", mem_padding_mask.size())
+        # print("input size: ", tgt_seq.size())
+        if mem_padding_mask is None and tgt_padding_mask is None:
             return self.model(tgt_seq, src_seq)
+        elif mem_padding_mask is None :
+            return self.model(tgt_seq, src_seq, tgt_key_padding_mask = tgt_padding_mask)
+        elif tgt_padding_mask is None:
+            return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask)
         else:
-            return self.model(tgt_seq, src_seq, memory_key_padding_mask = padding_mask)
+            return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask, tgt_key_padding_mask = tgt_padding_mask)
 ######################################
 # Current Macromodel Types Supported
 #####################################

@@ -6,5 +6,5 @@ datacollection_params:
   workspace_dim: 0.04
   num_trajectories: 500
   kp: [4, 4, 4]
-  noise_parameter: [0.8, 0.8, 0.8]
+  noise_parameter: [0.4, 0.4, 0.4]
   control_freq: 10

@@ -90,9 +90,14 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 	# print("Zs: ", zmin)
 
 	theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
-	theta_delta = np.random.uniform(low=np.pi / 2, high=np.pi, size = num_trajectories)
+	theta_delta = np.random.uniform(low=3 * np.pi / 4, high=np.pi, size = num_trajectories)
 	theta_sign = np.random.choice([-1, 1], size = num_trajectories)
 	theta_final = T_angle(theta_init + theta_delta * theta_sign)
+
+	# print("Init angles", theta_init * 180 / np.pi)
+	# print("final_angles", theta_final * 180 / np.pi)
+	# print("final_angles", T_angle(theta_final) * 180 / np.pi)
+
 
 	c_point_list = []
 
@@ -106,6 +111,9 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 		y_init = workspace_dim * np.sin(theta0)
 		x_final = workspace_dim * np.cos(theta1)
 		y_final = workspace_dim * np.sin(theta1) 
+
+		# print("Initial point: ", x_init, y_init)
+		# print("Final point: ", x_final, y_final)
 		c_point_list.append(np.expand_dims(np.array([x_init, y_init, zmin, x_ang, y_ang, z_ang]), axis = 0))
 		c_point_list.append(np.expand_dims(np.array([x_final, y_final, zmin, x_ang, y_ang, z_ang]), axis = 0))
 

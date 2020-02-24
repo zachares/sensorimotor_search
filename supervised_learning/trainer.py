@@ -125,6 +125,7 @@ class Trainer(object):
 		self.loss_dict["Angle_multistep"] = Proto_MultiStep_Loss(record_function = record_angle)
 		self.loss_dict["Contrastive"] = Contrastive_Loss()
 		self.loss_dict["CE_ensemble"] = CrossEnt_Ensemble_Loss()
+		self.loss_dict["Multivariate_Normal_Logprob"] = Multivariate_GaussianNegLogProb_Loss()
 		###################################
 		####### Code ends here ###########
 		####################################

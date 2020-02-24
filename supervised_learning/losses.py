@@ -69,11 +69,10 @@ def multiv_gauss_logprob(samples, means, var):
     cholesky_decomposition = torch.cholesky(var)
     var_det = torch.diagonal(cholesky_decomposition, dim1 = 1, dim2 = 2).prod(1)
     var_inv = torch.inverse(var)
-    log_prob_const = -0.5 * samples.size(1) * torch.log(2 * np.pi) - 0.5 * torch.log(var_det)
+    log_prob_const = -0.5 * samples.size(1) * np.log(2 * np.pi) - 0.5 * torch.log(var_det)
     diff = (samples - means).unsqueeze(1) 
     log_prob_sample = -0.5 * torch.bmm(torch.bmm(diff, var_inv), diff.transpose(1,2))
     return log_prob_const + log_prob_sample
-
 
 def multinomial_KL(p, logq):
 	p_soft = p + 1e-8
@@ -203,6 +202,23 @@ class Multivariate_GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
 		
 		logging_dict['scalar']["loss/" + label] = loss.item()
 
+		return loss
+
+class Multivariate_GaussianNegLogProb_Loss(Proto_MultiStep_Loss):
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		params = input_tuple[0]
+		labels = input_tuple[1]
+		# print(labels.size())
+		# print(params.size())
+		means, covs = params
+		
+		loss = -1.0 * weight * multiv_gauss_logprob(labels, means, covs).mean()
+		
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']["norm_av_err/" + label] = ((labels - means).norm(p=2, dim = 1) / labels.norm(p=2, dim=1)).mean()
 		return loss
 
 class Multinomial_KL_MultiStep_Loss(Proto_MultiStep_Loss):

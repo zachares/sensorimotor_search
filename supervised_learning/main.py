@@ -168,7 +168,7 @@ if __name__ == '__main__':
             ##### Validation #########
             ##################################################################################
             # performed at the end of each epoch
-            if val_ratio is not 0:
+            if val_ratio is not 0 and (i_epoch % 25) == 0:
                 
                 print("Calculating validation results after #{} epochs".format(i_epoch))
 
@@ -192,7 +192,7 @@ if __name__ == '__main__':
                     os.mkdir(logger.models_folder)
                 trainer.save(i_epoch)
 
-            elif save_model_flag:
+            elif save_model_flag and (i_epoch % 25) == 0:
                 trainer.save(i_epoch)
 
     else:

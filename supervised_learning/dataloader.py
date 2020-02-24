@@ -99,15 +99,13 @@ def selfsupervised_filenum(filenum):
 
 class H5_DataLoader(Dataset):
     ### h5py file type dataloader dataset ###
-    def __init__(self, model_folder, num_trajectories, loading_dict, val_ratio, min_length, idx_dict = None, device = None, transform=None):
+    def __init__(self, model_folder, loading_dict, val_ratio, num_trajectories, min_length, idx_dict = None, device = None, transform=None):
         self.device = device
         self.transform = transform
         self.loading_dict = loading_dict
         self.sample = {}
 
-        self.filename_list = filename_list     
-
-        self.num_steps = num_steps
+        self.model_folder = model_folder     
 
         self.val_bool = False
         self.val_ratio = val_ratio
@@ -115,9 +113,7 @@ class H5_DataLoader(Dataset):
         self.train_length = 0
         self.val_length = 0
 
-        self.up_thresh = 0.0003
-
-        self.min_length = min_length
+        self.min_length = int(min_length)
 
         if idx_dict == None:
             self.idx_dict = {}
@@ -132,19 +128,19 @@ class H5_DataLoader(Dataset):
 
             for idx in range(num_trajectories):
                 lengths = np.zeros(3)
-                cross_cross = model_folder + "/Cross_Cross_" + str(idx + 1).zfill(4) + ".h5" 
+                cross_cross = model_folder + "Cross_Cross_" + str(idx + 1).zfill(4) + ".h5" 
                 dataset = self.load_file(cross_cross)
                 proprios = np.array(dataset['proprio'])
                 lengths[0] = proprios.shape[0]
                 dataset.close()
 
-                cross_rect = model_folder + "/Cross_Rect_" + str(idx + 1).zfill(4) + ".h5" 
+                cross_rect = model_folder + "Cross_Rect_" + str(idx + 1).zfill(4) + ".h5" 
                 dataset = self.load_file(cross_rect)
                 proprios = np.array(dataset['proprio'])
                 lengths[1] = proprios.shape[0]
                 dataset.close()
 
-                cross_square = model_folder + "/Cross_Square_" + str(idx + 1).zfill(4) + ".h5"
+                cross_square = model_folder + "Cross_Square_" + str(idx + 1).zfill(4) + ".h5"
                 dataset = self.load_file(cross_square)
                 proprios = np.array(dataset['proprio'])
                 lengths[2] = proprios.shape[0]
@@ -152,19 +148,19 @@ class H5_DataLoader(Dataset):
 
                 cross_length = lengths.min()
 
-                rect_cross = model_folder + "/Rect_Cross_" + str(idx + 1).zfill(4) + ".h5" 
+                rect_cross = model_folder + "Rect_Cross_" + str(idx + 1).zfill(4) + ".h5" 
                 dataset = self.load_file(rect_cross)
                 proprios = np.array(dataset['proprio'])
                 lengths[0] = proprios.shape[0]
                 dataset.close()
 
-                rect_rect = model_folder + "/Rect_Rect_" + str(idx + 1).zfill(4) + ".h5"
+                rect_rect = model_folder + "Rect_Rect_" + str(idx + 1).zfill(4) + ".h5"
                 dataset = self.load_file(rect_rect)
                 proprios = np.array(dataset['proprio'])
                 lengths[1] = proprios.shape[0]
                 dataset.close()
 
-                rect_square = model_folder + "/Rect_Square_" + str(idx + 1).zfill(4) + ".h5"
+                rect_square = model_folder + "Rect_Square_" + str(idx + 1).zfill(4) + ".h5"
                 dataset = self.load_file(rect_square)
                 proprios = np.array(dataset['proprio'])
                 lengths[2] = proprios.shape[0]
@@ -172,19 +168,19 @@ class H5_DataLoader(Dataset):
 
                 rect_length = lengths.min()
 
-                square_cross = model_folder + "/Square_Cross_" + str(idx + 1).zfill(4) + ".h5"
+                square_cross = model_folder + "Square_Cross_" + str(idx + 1).zfill(4) + ".h5"
                 dataset = self.load_file(square_cross)
                 proprios = np.array(dataset['proprio'])
                 lengths[0] = proprios.shape[0]
                 dataset.close()
 
-                square_rect = model_folder + "/Square_Rect_" + str(idx + 1).zfill(4) + ".h5"
+                square_rect = model_folder + "Square_Rect_" + str(idx + 1).zfill(4) + ".h5"
                 dataset = self.load_file(square_rect)
                 proprios = np.array(dataset['proprio'])
                 lengths[1] = proprios.shape[0]
                 dataset.close()
 
-                square_square = model_folder + "/Square_Square_" + str(idx + 1).zfill(4) + ".h5"
+                square_square = model_folder + "Square_Square_" + str(idx + 1).zfill(4) + ".h5"
                 dataset = self.load_file(square_square)
                 proprios = np.array(dataset['proprio'])
                 lengths[2] = proprios.shape[0]
@@ -192,70 +188,82 @@ class H5_DataLoader(Dataset):
 
                 square_length = lengths.min()
 
+                if self.max_length < cross_length:
+                    self.max_length = int(cross_length)
+
+                if self.max_length < rect_length:
+                    self.max_length = rect_length
+
+                if self.max_length < square_length:
+                    self.max_length = square_length
+
                 train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 9) ### 1 is train, 0 is val
 
                 if train_val_bool[0] == 1:
-                    self.idx_dict['train'][self.train_length] = (cross_cross, cross_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (cross_cross, int(cross_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (cross_cross, cross_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (cross_cross, int(cross_length)) #, filename_ss) 
                     self.val_length += 1         
 
                 if train_val_bool[1] == 1:
-                    self.idx_dict['train'][self.train_length] = (cross_rect, cross_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (cross_rect, int(cross_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (cross_rect, cross_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (cross_rect, int(cross_length)) #, filename_ss) 
                     self.val_length += 1                  
 
                 if train_val_bool[2] == 1:
-                    self.idx_dict['train'][self.train_length] = (cross_square, cross_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (cross_square, int(cross_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (cross_square, cross_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (cross_square, int(cross_length)) #, filename_ss) 
                     self.val_length += 1   
 
                 if train_val_bool[3] == 1:
-                    self.idx_dict['train'][self.train_length] = (rect_cross, rect_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (rect_cross, int(rect_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (rect_cross, rect_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (rect_cross, int(rect_length)) #, filename_ss) 
                     self.val_length += 1   
 
                 if train_val_bool[4] == 1:
-                    self.idx_dict['train'][self.train_length] = (rect_rect, rect_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (rect_rect, int(rect_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (rect_rect, rect_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (rect_rect, int(rect_length)) #, filename_ss) 
                     self.val_length += 1 
 
                 if train_val_bool[5] == 1:
-                    self.idx_dict['train'][self.train_length] = (rect_square, rect_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (rect_square, int(rect_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (rect_square, rect_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (rect_square, int(rect_length)) #, filename_ss) 
                     self.val_length += 1  
 
                 if train_val_bool[6] == 1:
-                    self.idx_dict['train'][self.train_length] = (square_cross, square_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (square_cross, int(square_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (square_cross, square_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (square_cross, int(square_length)) #, filename_ss) 
                     self.val_length += 1
 
                 if train_val_bool[7] == 1:
-                    self.idx_dict['train'][self.train_length] = (square_rect, square_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (square_rect, int(square_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (square_rect, square_length) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (square_rect, int(square_length)) #, filename_ss) 
                     self.val_length += 1 
 
                 if train_val_bool[8] == 1:
-                    self.idx_dict['train'][self.train_length] = (square_square, square_length) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (square_square, int(square_length)) #, filename_ss)
                     self.train_length += 1  
                 else:
-                    self.idx_dict['val'][self.val_length] = (square_square, square_length) #, filename_ss) 
-                    self.val_length += 1 
+                    self.idx_dict['val'][self.val_length] = (square_square, int(square_length)) #, filename_ss) 
+                    self.val_length += 1
+
+            self.idx_dict["max_length"] = self.max_length
+            self.idx_dict["min_length"] = self.min_length
 
         else:
             self.idx_dict = idx_dict
@@ -285,49 +293,68 @@ class H5_DataLoader(Dataset):
             key_set = 'train'
 
         dataset = self.load_file(self.idx_dict[key_set][idx][0])
-        # dataset_ss = self.load_file(self.idx_dict[key_set][idx][2])
-        idxs_p = self.idx_dict[key_set][idx][1]
+        max_traj_length = self.idx_dict[key_set][idx][1]
+        max_length = self.idx_dict["max_length"]
+        min_length = self.idx_dict["min_length"]
+        # print(max_traj_length)
+        # print(max_length)
+        # print(min_length)
+
+        if max_traj_length <= min_length:
+            idx0 = 0
+            idx1 = max_traj_length
+        else:
+            idx0 = np.random.choice(max_traj_length - min_length) # beginning idx
+            idx1 = np.random.choice(range(idx0 + min_length, max_traj_length)) # end idx
+
+        padded = max_length - idx1 + idx0 + 1
+        unpadded = idx1 - idx0 - 1
+        # print(idx0)
+        # print(idx1)
+        # print(padded)
+        # print(unpadded)
+        # print(idx1 - idx0)
         sample = {}
 
         for key in self.loading_dict.keys():
             # print( key , " took ", time.time() - self.prev_time, " seconds")
             # self.prev_time = time.time()
             if key == 'action':
-                sample[key] = dataset[key][idxs_p[0]:(idxs_p[1]-1)]
-                # sample[key + "_ss"] = dataset_ss[key][idxs_p[0]:(idxs_p[1]-1)]
+                sample[key] = np.array(dataset[key][idx0:(idx1 - 1)])
+                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
+                # print("Action size", np.array(sample[key]).shape)
+            elif key == 'force_hi_freq':
+                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
+                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
+                # print("Force size", np.array(sample[key]).shape)
             elif key == 'proprio':   
-                sample[key] = dataset[key][idxs_p[0]:idxs_p[1]]
-                sample["pos"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], :3] 
-                sample["pos_diff"] = sample["pos"][1:] - sample["pos"][:-1]
-                sample["pos_diff_m"] = np.linalg.norm(sample["pos_diff"], axis = 1)
-                sample["pos_diff_d"] = sample["pos_diff"] / np.repeat(np.expand_dims(sample["pos_diff_m"], axis = 1), sample["pos_diff"].shape[1], axis = 1)
-
-                sample["ang"] = T_angle(np.array(dataset[key])[idxs_p[0]:idxs_p[1], 3:6])
-                sample["vel"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], 6:9] 
-                sample["ang_vel"] = np.array(dataset[key])[idxs_p[0]:idxs_p[1], 9:12] 
-
-                # sample[key + "_ss"] = dataset_ss[key][idxs_p[0]:idxs_p[1]]
-                # sample["pos" + "_ss"] = np.array(dataset_ss[key])[idxs_p[0]:idxs_p[1], :3] 
-                # sample["pos_diff" + "_ss"] = sample["pos_ss"][1:] - sample["pos_ss"][:-1]
-                # sample["pos_diff_m" + "_ss"] = np.linalg.norm(sample["pos_diff_ss"], axis = 1)
-                # sample["pos_diff_d" + "_ss"] = sample["pos_diff_ss"] / np.repeat(np.expand_dims(sample["pos_diff_m_ss"], axis = 1),\
-                #  sample["pos_diff_ss"].shape[1], axis = 1)
-
-                # sample["ang" + "_ss"] = T_angle(np.array(dataset_ss[key])[idxs_p[0]:idxs_p[1], 3:6])
-                # sample["vel" + "_ss"] = np.array(dataset_ss[key])[idxs_p[0]:idxs_p[1], 6:9] 
-                # sample["ang_vel" + "_ss"] = np.array(dataset_ss[key])[idxs_p[0]:idxs_p[1], 9:12] 
-            elif key == 'joint_pos':
-                sample[key] = T_angle(np.array(dataset[key][idxs_p[0]:idxs_p[1]]))
-                # sample[key + "_ss"] = T_angle(np.array(dataset_ss[key][idxs_p[0]:idxs_p[1]]))
-            elif key == 'peg_type' or key == 'hole_type' or key == 'fit':
+                sample[key] = np.array(dataset[key][idx0:idx1])
+                sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
+                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
+                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
+                # print("Proprio size", np.array(sample[key]).shape)
+                # print("Proprio diff size", np.array(sample[key + "_diff"]).shape)
+            elif key == 'contact':
+                sample[key] = np.array(dataset[key][idx0:idx1])
+                sample[key + "_diff"] = sample[key][1:].astype(np.int16) - sample[key][:-1].astype(np.int16) 
+                sample[key] = np.concatenate([sample[key], np.zeros((padded))], axis = 0)
+                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded))], axis = 0)   
+                # print("contact size", np.array(sample[key]).shape)
+                # print("contact diff size", np.array(sample[key + "_diff"]).shape)            
+            elif key == 'peg_type' or key == 'hole_type':
                 sample[key] = np.array(dataset[key])
-                # sample[key + "_ss"] = np.array(dataset_ss[key])
-            else:
-                sample[key] = dataset[key][idxs_p[0]:idxs_p[1]]  
-                # sample[key + "_ss"] = dataset_ss[key][idxs_p[0]:idxs_p[1]]  
+            elif key == 'final_point':
+                sample[key] =  np.array(dataset[key][:3])
+            # else:
+            #     sample[key] = dataset[key][idx0:idx1] 
+            #     print(key, " size", np.array(sample[key]).shape)
 
         dataset.close()
-        # dataset_ss.close()
+
+        sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
+        # print(sample["padding_mask"].shape)
+        sample["length"] = np.array([unpadded - 1])
+        # print("Length size: ", sample["length"].shape)
 
         if self.transform:
             sample = self.transform(sample)
@@ -348,7 +375,10 @@ class ToTensor(object):
         # convert numpy arrays to pytorch tensors
         new_dict = dict()
         for k, v in sample.items():
-            new_dict[k] = torch.from_numpy(v).float()
+            if k == "padding_mask":
+                new_dict[k] = torch.from_numpy(v).bool()
+            else:
+                new_dict[k] = torch.from_numpy(v).float()
 
         return new_dict
 
@@ -359,7 +389,8 @@ def init_dataloader(cfg, device, idx_dict_path = None):
     dataset_path = cfg['dataloading_params']['dataset_path']
     num_workers = cfg['dataloading_params']['num_workers']
     batch_size = cfg['dataloading_params']['batch_size']
-    num_steps = cfg['dataloading_params']['num_steps']
+    num_trajectories = cfg['dataloading_params']['num_trajectories']
+    min_steps = cfg['model_params']['min_steps']
 
     val_ratio = cfg['training_params']['val_ratio']
 
@@ -393,7 +424,8 @@ def init_dataloader(cfg, device, idx_dict_path = None):
     else:
         idx_dict = None
 
-    dataset = H5_DataLoader(filename_list, sample_keys, val_ratio, num_steps = num_steps, idx_dict = idx_dict, device = device, transform=transforms.Compose([ToTensor(device = device)]))
+    dataset = H5_DataLoader(dataset_path, sample_keys, val_ratio, num_trajectories, min_steps,\
+     idx_dict = idx_dict, device = device, transform=transforms.Compose([ToTensor(device = device)]))
 
     if val_ratio == 0:
         print("No validation set")

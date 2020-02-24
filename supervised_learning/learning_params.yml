@@ -4,11 +4,12 @@ model_params:
   num_options: 3
 
 dataloading_params:
-  dataset_path: "/scr2/muj_senssearch_dataset10HZ_sliding/"
+  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide/"
   num_workers: 4
-  batch_size: 128
-  num_steps: 50
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202002200925_debugging_15_10HZ_wensemble/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset10HZ_sliding/"
+  batch_size: 64
+  num_trajectories: 500
+  idx_dict_path: ""
+  # "/scr-ssd/sens_search_logging/runs/202002200925_debugging_15_10HZ_wensemble/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset10HZ_sliding/"
   #"/scr-ssd/sens_search_logging/runs/202002180859_debugging_5_2HZ_wrgbd/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset2HZ_winsert/"
     #"/scr-ssd/sens_search_logging/runs/202002111509_debugging_19_2HZ_wrgbd/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset_2HZ/"
 
@@ -19,7 +20,7 @@ training_params:
   lrn_rate: 0.0001
   beta1: 0.9
   beta2: 0.99
-  max_training_epochs: 25
+  max_training_epochs: 1250
   val_ratio: 0.05
   use_GPU: True
   curriculum: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] #[] #[10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
@@ -27,7 +28,7 @@ training_params:
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
   run_description: "debugging" #Options include: debugging, training, testing
-  run_notes: "_10HZ_wensemble"
+  run_notes: "_10HZ"
 
 debugging_params:
   debugging_val: 1.0 ### 1.0 for True,  0.0 for False
@@ -45,37 +46,33 @@ info_flow:
       contact: [1]
       peg_type: [3]
       hole_type: [3]
+      final_point: [3]
   Options_ClassifierTransformer:
     train: 1
-    model_folder: "/scr-ssd/sens_search_logging/models/202002200925_debugging_15_10HZ_wensemble/"
-    epoch_num: 24
+    model_folder: ""
+    epoch_num: 0
     inputs:
-      proprio: "dataset"
+      proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
       peg_type: "dataset"
-      hole_type: "dataset"
-      contact: "dataset"
-      # proprio_ss: "dataset"
-      # force_hi_freq_ss: "dataset"
-      # action_ss: "dataset"
-      # peg_type_ss: "dataset"
-      # hole_type_ss: "dataset"
-      # contact_ss: "dataset"
+      contact_diff: "dataset"
+      padding_mask: "dataset"
+      length: "dataset"
       epoch: "dataset"
     outputs:
       options_class:
-        loss: "CE_ensemble"
+        loss: "CE"
         loss_name: "Options_Class"
         weight: 1
         inputs:
           hole_type: "dataset"
-      options_class:
-        loss: "Multivariate_Normal_Logprob_ensemble"
+      origin_params:
+        loss: "Multivariate_Normal_Logprob"
         loss_name: "Position_Detection"
         weight: 1
         inputs:
-          position: "dataset"
+          final_point: "dataset"
       # options_class_ss:
       #   loss: "CE"
       #   loss_name: "Options_Class1"

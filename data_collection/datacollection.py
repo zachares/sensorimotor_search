@@ -111,9 +111,9 @@ if __name__ == '__main__':
 		for idx in range(int(fp_array.shape[0] / 2)):
 			idx0 = 2 * idx
 			idx1 = 2 * idx + 1
-			points_list.append((fp_array[idx0] + top_goal, 0, "sliding"))
-			points_list.append((fp_array[idx1]+ top_goal, 1, "sliding_recording"))
-			points_list.append((top_goal + np.array([0, 0, 0.02, 0,0,0]), 2, "top plus"))
+			points_list.append((fp_array[idx0] + top_goal, 0, "sliding", 0.01))
+			points_list.append((fp_array[idx1]+ top_goal, 1, "sliding_recording", 0.01))
+			points_list.append((top_goal + np.array([0, 0, 0.04, 0,0,0]), 2, "top plus", 0.02))
 			# point_count += 1
 			# point_count %= 2
 			# points_list.append((top_goal, 0, "top goal"))
@@ -129,6 +129,7 @@ if __name__ == '__main__':
 			action, action_euler = env._pose_err(goal)
 			pos_err = kp * action_euler[:3]
 			noise = np.random.normal(0.0, 0.1, pos_err.size)
+			noise[2] = -1.0 * abs(noise[2])
 			pos_err += noise_parameter * noise
 			obs, reward, done, info = env.step(pos_err)
 			obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
@@ -154,7 +155,9 @@ if __name__ == '__main__':
 			prev_point_type = copy.deepcopy(point_type)
 			goal = points_list[point_idx][0]
 			point_type = points_list[point_idx][1]
-			print("Translation type is ", points_list[point_idx][2])
+			tol = points_list[point_idx][3]
+			if points_list[point_idx][2] == "sliding_recording":
+				print("Translation type is ", points_list[point_idx][2])
 			# print("previous point type ", prev_point_type, " current point type ", point_type)
 
 			if point_type == 1:
@@ -164,6 +167,7 @@ if __name__ == '__main__':
 				action, action_euler = env._pose_err(goal)
 				pos_err = kp * action_euler[:3]
 				noise = np.random.normal(0.0, 0.1, pos_err.size)
+				noise[2] = -1.0 * abs(noise[2])
 				pos_err += noise_parameter * noise
 
 				obs['action'] = env.controller.transform_action(pos_err)
@@ -215,20 +219,24 @@ if __name__ == '__main__':
 
 				point_num_steps += 1
 
-				if point_num_steps >= 75:
+				if (point_num_steps >= 75 and point_type == 1) or (point_num_steps >= 150 and point_type == 0):
+					if points_list[point_idx][2] == "sliding_recording":
+						print("Number of Steps", point_num_steps)
 					point_idx += 1
 					if point_idx >= len(points_list):
 						break
 					goal = points_list[point_idx][0]
 					prev_point_type = copy.deepcopy(point_type)
 					point_type = points_list[point_idx][1]
-					print("Number of Steps", point_num_steps)
+					tol = points_list[point_idx][3]
+
 					point_num_steps = 0
 					# print("Skipped Point")
-
-					print("Translation type is ", points_list[point_idx][2])
-
-			print("Number of Steps", point_num_steps)	
+					if points_list[point_idx][2] == "sliding_recording":
+						print("Translation type is ", points_list[point_idx][2])
+			
+			if points_list[point_idx][2] == "sliding_recording":
+				print("Number of Steps", point_num_steps)	
 			point_num_steps = 0
 			point_idx += 1
 
