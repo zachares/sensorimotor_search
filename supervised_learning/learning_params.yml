@@ -8,7 +8,7 @@ dataloading_params:
   num_workers: 4
   batch_size: 64
   num_trajectories: 500
-  idx_dict_path: ""
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202002251427_debugging_16_10HZ/val_train_split.pkl"
   # "/scr-ssd/sens_search_logging/runs/202002200925_debugging_15_10HZ_wensemble/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset10HZ_sliding/"
   #"/scr-ssd/sens_search_logging/runs/202002180859_debugging_5_2HZ_wrgbd/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset2HZ_winsert/"
     #"/scr-ssd/sens_search_logging/runs/202002111509_debugging_19_2HZ_wrgbd/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset_2HZ/"

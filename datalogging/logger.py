@@ -97,6 +97,7 @@ class Logger(object):
 		if self.debugging_flag == False and len(logging_dict['scalar'].keys()) != 0:
 
 			for key in logging_dict['scalar'].keys():
+				# print(key, logging_dict['scalar'][key])
 				self.writer.add_scalar(label + key, logging_dict['scalar'][key], iteration)
 
 	def save_dict(self, name, dictionary, yml_bool):

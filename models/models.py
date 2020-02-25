@@ -69,12 +69,14 @@ def T_angle(angle):
 
     return case1 + case2 + case3 + case4
 
-def cholesky_dec(noise_matrix, device): #converting noise parameters to cholesky decomposition form
+def extract_var(noise_matrix, device): #converting noise parameters to cholesky decomposition form
     chol_dec = noise_matrix.tril()
     chol_diag = torch.abs(chol_dec.diag())
     chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] *= 0
-    chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] += chol_diag     
-    return chol_dec
+    chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] += chol_diag 
+    cov = torch.mm(chol_dec, chol_dec.t())    
+    # print(torch.eig(cov))
+    return cov
 #######################################
 # Defining Custom Macromodels for project
 #######################################
@@ -566,9 +568,7 @@ class Options_ClassifierTransformer(Proto_Macromodel):
         origin_mean = origin_det(torch.max(origin_transdec(states, states, mem_padding_mask = padding_masks, tgt_padding_mask = padding_masks), 0)[0])
         # origin_mean = origin_det(origin_transdec(final_state, states, mem_padding_mask = padding_masks).squeeze(0))
 
-        origin_chol_dec = cholesky_dec(origin_noise(), self.device)
-
-        origin_cov = torch.mm(origin_chol_dec, origin_chol_dec.t()).unsqueeze(0).repeat_interleave(batch_size, 0)
+        origin_cov = extract_var(origin_noise(), self.device).unsqueeze(0).repeat_interleave(batch_size, 0)
 
         return options_logits, origin_mean, origin_cov
 
@@ -649,11 +649,26 @@ class Options_ClassifierTransformer(Proto_Macromodel):
         # print(origin_cov.size())
         # print("Took ", time.time() - prev_time, " seconds")
 
+        # origin_chol_dec = cholesky_dec(self.origin_noise01(), self.device)
+
+        # origin_cov = torch.mm(origin_chol_dec, origin_chol_dec.t())
+
+        # print(origin_cov)
+
+        # origin_chol_dec = cholesky_dec(self.origin_noise11(), self.device)
+
+        # origin_cov = torch.mm(origin_chol_dec, origin_chol_dec.t())
+
+        # print(origin_cov)
+
+        # origin_chol_dec = cholesky_dec(self.origin_noise21(), self.device)
+
+        # origin_cov = torch.mm(origin_chol_dec, origin_chol_dec.t())
+
+        # print(origin_cov)
         return {
             'options_class': options_logits,
             'origin_params': (origin_mean, origin_cov),
-            # 'options_class_ss': options_logits_ss,
-            # 'contrastive': (output, output_ss),
         }
 
     def process(self, input_dict):
