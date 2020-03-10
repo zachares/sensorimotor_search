@@ -27,6 +27,140 @@ def product_of_experts(m_vect, v_vect):
 
     return mu, var
 
+class Dynamics(Proto_Macromodel):
+    def __init__(self, model_folder, model_name, info_flow, rgbd_size, force_size, proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = None, curriculum = None):
+        super().__init__()
+
+        if info_flow[model_name]["model_folder"] != "":
+            load_folder = info_flow[model_name]["model_folder"] + model_name
+        else:
+            load_folder = model_folder + model_name
+
+        save_folder = model_folder + model_name 
+
+        self.curriculum = curriculum
+        self.device = device
+        self.model_list = []
+
+        self.action_dim = action_dim[0]
+        self.pos_size = int(proprio_size[0] / 4)
+        self.ang_size = int(proprio_size[0] / 4)
+        self.vel_size = int(proprio_size[0] / 2)
+        self.joint_size = 2 * joint_size[0]
+        self.force_size = force_size
+        self.offset = offset
+        self.num_options = num_options
+        self.contact_size = 1
+        self.frc_enc_size = 8 * 3 * 2
+        self.rgbd_size = rgbd_size
+        self.rgbd_enc_size = 8 * 4 * 2
+        self.use_fft = use_fft
+
+        self.normalization = simple_normalization
+
+        self.oned_state_size = self.ang_size + self.vel_size + self.joint_size
+        self.state_size = self.frc_enc_size + self.pos_size + self.oned_state_size + self.contact_size + self.rgbd_enc_size
+
+        if self.use_fft:
+            self.frc_enc = CONV2DN(save_folder + "_fft_enc", load_folder + "_fft_enc", (self.force_size[0], 126, 2), (8, 3, 2), False, True, 4, device = self.device) #10 HZ - 27 # 2 HZ - 126
+        else:
+            self.frc_enc = CONV1DN(save_folder + "_frc_enc", load_folder + "_frc_enc", (self.force_size[0], self.force_size[1]),\
+             (self.frc_enc_size, 1), False, True, 4, device = self.device)
+
+        self.rgbd_enc = CONV2DN(save_folder + "_rgbd_enc", load_folder + "_rgbd_enc", self.rgbd_size, (8, 4, 2), False, True, 3, device = self.device)
+
+        self.dyn = ResNetFCN(save_folder + "_dynamics", load_folder + "_dynamics", self.state_size + self.action_dim + 2 * self.num_options + 1, self.pos_size, 10, device = self.device)
+
+        self.model_list.append(self.dyn)
+        self.model_list.append(self.frc_enc)
+        self.model_list.append(self.rgbd_enc)
+
+        if info_flow[model_name]["model_folder"] != "":
+            self.load(info_flow[model_name]["epoch_num"])
+
+    def get_frc(self, force):
+        if self.use_fft:
+            # print(force.size())
+            fft = torch.rfft(force, 2, normalized=False, onesided=True)
+            # print(fft.size())
+            # frc_enc = self.frc_enc(torch.cat([fft, torch.zeros_like(fft[:,:,0,:]).unsqueeze(2)], dim = 2))
+            frc_enc = self.frc_enc(fft)
+        else:
+            frc_enc = self.frc_enc(force)
+
+        return frc_enc
+
+    def get_latent(self, state):
+        return self.latent_enc(state)
+
+    def forward(self, input_dict):
+        actions = input_dict["action"].to(self.device)
+        rgbds = input_dict["rgbd"].to(self.device) / 255.0
+        proprios = input_dict["proprio"].to(self.device)
+        joint_poses = input_dict["joint_pos"].to(self.device)
+        joint_vels = input_dict["joint_vel"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        peg_types = input_dict["peg_type"].to(self.device)
+        hole_types = input_dict["hole_type"].to(self.device)
+        contacts = input_dict["contact"].to(self.device).unsqueeze(2)
+        epoch =  int(input_dict["epoch"].detach().item())
+
+        pos_diff_dir_list = []
+        pos_diff_mag_list = []
+
+        peg_type = peg_types[:,0]
+        hole_type = hole_types[:,0]
+
+        if self.curriculum is not None:
+            steps = actions.size(1)
+            if len(self.curriculum) - 1 >= epoch:
+                steps = self.curriculum[epoch]
+        else:
+            steps = actions.size(1)
+
+        proprio = proprios[:,0]
+
+        pos_pred = proprio[:,:3]
+        
+        ang = proprio[:,3:6]
+        vel = proprio[:,6:12]
+        joint_pos = joint_poses[:,0]
+        joint_vel = joint_vels[:,0]
+
+        oned_state = torch.cat([ang, vel, joint_pos, joint_vel], dim = 1)
+
+        force = forces[:,0]
+        frc_enc = self.get_frc(force)
+
+        rgbd = rgbds[:,0]
+        rgbd_enc = self.rgbd_enc(rgbd)
+
+        contact = contacts[:,0]
+
+        fixed_state = torch.cat([oned_state, frc_enc, rgbd_enc, contact, peg_type, hole_type], dim =1)
+
+        counter = torch.zeros_like(contact)
+
+        for idx in range(steps):
+            action = actions[:,idx]
+
+            #### dynamics
+            next_state = self.dyn(torch.cat([pos_pred, action, counter, fixed_state], dim = 1))
+
+            pos_diff_pred = next_state[:,:self.pos_size]
+
+            pos_pred = pos_diff_pred + pos_pred
+
+            counter += 1
+
+            if idx >= self.offset:
+                pos_diff_dir_list.append(self.normalization(pos_diff_pred))
+                pos_diff_mag_list.append(pos_diff_pred.norm(2,dim = 1))
+
+        return {
+            "pos_diff_dir": pos_diff_dir_list,
+            "pos_diff_mag": pos_diff_mag_list,
+        }
 class Options_ClassifierLSTM(Proto_Macromodel):
     def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, z_dim, num_options, offset, use_fft = True, learn_rep = True, device = None, curriculum = None):
         super().__init__()

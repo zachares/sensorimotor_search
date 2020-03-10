@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 from shutil import copyfile
 
 ######## git hash to know the state of the code when experiments are run
+### add dev feature for development!
 
 if __name__ == '__main__':
 
@@ -56,7 +57,7 @@ if __name__ == '__main__':
     learning_rate = cfg['training_params']['lrn_rate']
     beta_1 = cfg['training_params']['beta1']
     beta_2 = cfg['training_params']['beta2']
-    max_epoch = cfg['training_params']['max_training_epochs']
+    max_epoch = cfg['training_params']['max_training_epochs'] + 1
     val_ratio = cfg['training_params']['val_ratio']
     logging_folder = cfg['logging_params']['logging_folder']
     run_description = cfg['logging_params']['run_description'] 
@@ -88,6 +89,7 @@ if __name__ == '__main__':
 
     if debugging_flag:
         print("Currently Debugging")
+        torch.autograd.set_detect_anomaly(True)
     else:
         print("Training with debugged code")
 

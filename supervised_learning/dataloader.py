@@ -317,6 +317,8 @@ class H5_DataLoader(Dataset):
         sample = {}
 
         for key in self.loading_dict.keys():
+            if key == 'pose_err':
+                continue
             # print( key , " took ", time.time() - self.prev_time, " seconds")
             # self.prev_time = time.time()
             if key == 'action':
@@ -330,6 +332,12 @@ class H5_DataLoader(Dataset):
             elif key == 'proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
                 sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
+                error = np.random.normal(0.0, 0.0075, 3)
+                sample['init_pos'] = sample[key][0,:3]
+                sample['final_pos'] = sample[key][-1,:3]
+                sample['pose_delta'] = sample['final_pos'] - sample['init_pos']
+                sample['pose_vect'] = np.concatenate([sample['init_pos'] + error, sample['final_pos'] + error, sample['pose_delta']])
+                sample['pose_err'] = error
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
                 sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
                 # print("Proprio size", np.array(sample[key]).shape)
@@ -344,7 +352,7 @@ class H5_DataLoader(Dataset):
             elif key == 'peg_type' or key == 'hole_type':
                 sample[key] = np.array(dataset[key])
             elif key == 'final_point':
-                sample[key] =  np.array(dataset[key][:3])
+                sample["command_pos"] =  np.array(dataset[key][:3])
             # else:
             #     sample[key] = dataset[key][idx0:idx1] 
             #     print(key, " size", np.array(sample[key]).shape)

@@ -51,6 +51,7 @@ class Trainer(object):
 		force_size =self.info_flow['dataset']['outputs']['force_hi_freq'] 
 		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
 		joint_size = self.info_flow['dataset']['outputs']['joint_pos']
+		pose_size = 3
 		# rgbd_size = self.info_flow['dataset']['outputs']['rgbd']
 
 		action_dim =self.info_flow['dataset']['outputs']['action']
@@ -74,11 +75,12 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["Options_ClassifierTransformer"] = Options_ClassifierTransformer(models_folder, "Options_ClassifierTransformer", self.info_flow,\
+		# self.model_dict["Options_ClassifierTransformer"] = Options_ClassifierTransformer(models_folder, "Options_ClassifierTransformer", self.info_flow,\
+		#  force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
+		self.model_dict["Origin_DetectionTransformer"] = Origin_DetectionTransformer(models_folder, "Origin_DetectionTransformer", self.info_flow,\
 		 force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
-		
-		# self.model_dict["Dynamics"] = Dynamics(models_folder, "Dynamics", self.info_flow, rgbd_size, force_size,\
-		#  proprio_size, joint_size, action_dim, num_options, offset, use_fft = True, device = device, curriculum = self.curriculum).to(device)		
+		# self.model_dict["Options_PredictionResNet"] = Options_PredictionResNet(models_folder, "Options_PredictionResNet", self.info_flow,\
+		#  pose_size, num_options, device = device).to(device)
 		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################
@@ -115,12 +117,14 @@ class Trainer(object):
 		self.loss_dict["Gaussian_KL_multistep"] = Gaussian_KL_MultiStep_Loss()
 		self.loss_dict["Gaussian_KL"] = Gaussian_KL_Loss()
 		self.loss_dict["MSE"] = Proto_Loss()
+		self.loss_dict["L1"] = Proto_Loss(loss_function = nn.L1Loss())
 		self.loss_dict["Image_loss"] = Proto_Loss(record_function = record_image)
 		self.loss_dict["BCE_multistep"] = BinaryEst_MultiStep_Loss()
 		self.loss_dict["CE_multistep"] = CrossEnt_MultiStep_Loss()
 		self.loss_dict["CE"] = CrossEnt_Loss()
 		self.loss_dict["GaussNegLogProb_multistep"] = GaussianNegLogProb_multistep_Loss()
-		self.loss_dict["Multinomial_KL_multistep"] = Multinomial_KL_MultiStep_Loss()
+		self.loss_dict["Mult_KL_multistep"] = Multinomial_KL_MultiStep_Loss()
+		self.loss_dict["Mult_KL"] = Multinomial_KL_Loss()
 		self.loss_dict["Mag_multistep"] = Proto_MultiStep_Loss(loss_function = nn.L1Loss(), record_function = record_mag)
 		self.loss_dict["Angle_multistep"] = Proto_MultiStep_Loss(record_function = record_angle)
 		self.loss_dict["Contrastive"] = Contrastive_Loss()
@@ -139,7 +143,10 @@ class Trainer(object):
 	def train(self, sample_batched):
 		torch.enable_grad()
 		for key in self.model_dict.keys():
-			self.model_dict[key].train()
+			if self.info_flow[key]["train"] == 1:
+				self.model_dict[key].train()
+			else:
+				self.model_dict[key].eval()
 
 		loss = self.forward_pass(sample_batched)
 

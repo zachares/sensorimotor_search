@@ -73,10 +73,9 @@ def multiv_gauss_logprob(samples, means, var):
     log_prob_sample = -0.5 * torch.bmm(torch.bmm(diff, var_inv), diff.transpose(1,2))
     return log_prob_const + log_prob_sample
 
-def multinomial_KL(p, logq):
-	p_soft = p + 1e-8
-	p_soft_norm = p_soft / p_soft.sum(1).unsqueeze(1).repeat(1,p_soft.size(1))
-	return - (p_soft_norm * (logq - torch.log(p_soft_norm))).sum(1).mean()
+def multinomial_KL(logits_q, logits_p):
+
+	return -(F.softmax(logits_p, dim =1) * (F.log_softmax(logits_q, dim = 1) - F.log_softmax(logits_p, dim = 1))).sum(1).mean()
 
 def gaussian_KL(mu_est, var_est, mu_tar, var_tar):
 	return 0.5 * (torch.log(var_tar) - torch.log(var_est) + var_est / var_tar + (mu_est - mu_tar).pow(2) / var_tar - 1).sum(1).mean()
@@ -203,13 +202,14 @@ class Multivariate_GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
 
 		return loss
 
-class Multivariate_GaussianNegLogProb_Loss(Proto_MultiStep_Loss):
+class Multivariate_GaussianNegLogProb_Loss(Proto_Loss):
 	def __init__(self):
 	    super().__init__()
 
 	def loss(self, input_tuple, logging_dict, weight, label):
 		params = input_tuple[0]
 		labels = input_tuple[1]
+		# print(labels[0:3,:])
 
 		means, covs = params
 		
@@ -217,6 +217,28 @@ class Multivariate_GaussianNegLogProb_Loss(Proto_MultiStep_Loss):
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
 		logging_dict['scalar']["norm_av_err/" + label] = (((labels - means).norm(p=2, dim = 1) / labels.norm(p=2, dim=1)).mean()).item()
+		# print(logging_dict['scalar']["norm_av_err/" + label])
+		return loss
+
+class Multinomial_KL_Loss(Proto_Loss):
+
+	def __init__(self, record_function = None):
+	    super().__init__(record_function = record_function)
+	    self.logsoftmax = nn.LogSoftmax(dim = 1)
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		logits = input_tuple[0]
+		target_logits = input_tuple[1]
+
+		l_guess = F.softmax(logits, dim =1).max(1)[1]
+		t_guess = F.softmax(target_logits, dim =1).max(1)[1]
+		match = torch.where(l_guess == t_guess, torch.ones_like(l_guess), torch.zeros_like(l_guess)).float()
+
+		loss = weight * multinomial_KL(logits, target_logits)
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']["match/" + label] = match.mean().item()
+		
 		return loss
 
 class Multinomial_KL_MultiStep_Loss(Proto_MultiStep_Loss):

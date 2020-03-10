@@ -20,7 +20,7 @@ training_params:
   lrn_rate: 0.0001
   beta1: 0.9
   beta2: 0.99
-  max_training_epochs: 1250
+  max_training_epochs: 2500
   val_ratio: 0.05
   use_GPU: True
   curriculum: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] #[] #[10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
@@ -47,69 +47,70 @@ info_flow:
       peg_type: [3]
       hole_type: [3]
       final_point: [3]
-  Options_ClassifierTransformer:
+      pose_err: [3]
+  # Options_ClassifierTransformer:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   # train: 1
+  #   # model_folder: ""
+  #   # epoch_num: 0
+  #   inputs:
+  #     proprio_diff: "dataset"
+  #     force_hi_freq: "dataset"
+  #     action: "dataset"
+  #     peg_type: "dataset"
+  #     contact_diff: "dataset"
+  #     padding_mask: "dataset"
+  #     length: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     options_class:
+  #       loss: "CE"
+  #       loss_name: "Options_Class"
+  #       weight: 1
+  #       inputs:
+  #         hole_type: "dataset"
+  Origin_DetectionTransformer:
     train: 1
     model_folder: ""
     epoch_num: 0
+    # train: 1
+    # model_folder: ""
+    # epoch_num: 0
     inputs:
       proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
       peg_type: "dataset"
+      hole_type: "dataset"
       contact_diff: "dataset"
       padding_mask: "dataset"
+      hole_type: "dataset"
+      pose_vect: "dataset"
       length: "dataset"
       epoch: "dataset"
     outputs:
-      options_class:
-        loss: "CE"
-        loss_name: "Options_Class"
-        weight: 1
-        inputs:
-          hole_type: "dataset"
       origin_params:
         loss: "Multivariate_Normal_Logprob"
-        loss_name: "Position_Detection"
-        weight: 1
+        loss_name: "Noise_Estimation"
+        weight: 100
         inputs:
-          final_point: "dataset"
-      # options_class_ss:
-      #   loss: "CE"
-      #   loss_name: "Options_Class1"
-      #   weight: 1
-      #   inputs:
-      #     hole_type_ss: "dataset"
-      # contrastive:
-      #   loss: "Contrastive"
-      #   loss_name: "Contrastive_Loss"
-      #   weight: 10
-  # Dynamics:
-  #   train: 1
-  #   model_folder: "/scr-ssd/sens_search_logging/models/202002101946_debugging_14_2HZ_wrgbd/"
-  #   epoch_num: 24
+          pose_err: "dataset"
+  # Options_PredictionResNet:
+  #   train: 0
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202002291410_debugging_21_10HZ/"
+  #   epoch_num: 625
   #   inputs:
-  #     rgbd: "dataset"
-  #     proprio: "dataset"
-  #     force_hi_freq: "dataset"
-  #     action: "dataset"
-  #     joint_pos: "dataset"
-  #     joint_vel: "dataset"
+  #     init_pos: "dataset"
+  #     command_pos: "dataset"
   #     peg_type: "dataset"
   #     hole_type: "dataset"
-  #     contact: "dataset"
   #     epoch: "dataset"
   #   outputs:
-  #     pos_diff_dir:
-  #       loss: "Angle_multistep"
-  #       loss_name: "pos_diff_dir_est"
-  #       weight: 1.0
-  #       offset: 0
+  #     options_class:
+  #       loss: "Mult_KL"
+  #       loss_name: "Options_Class"
+  #       weight: 1
   #       inputs:
-  #         pos_diff_d: "dataset"
-  #     pos_diff_mag:
-  #       loss: "Mag_multistep"
-  #       loss_name: "pos_diff_mag_est"
-  #       weight: 10000
-  #       offset: 0
-  #       inputs:
-  #         pos_diff_m: "dataset"
+  #         options_class: "Options_ClassifierTransformer"
