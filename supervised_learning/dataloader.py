@@ -330,14 +330,15 @@ class H5_DataLoader(Dataset):
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
                 # print("Force size", np.array(sample[key]).shape)
             elif key == 'proprio':   
-                sample[key] = np.array(dataset[key][idx0:idx1])
+                sample[key] = 100 * np.array(dataset[key][idx0:idx1])
                 sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
-                error = np.random.normal(0.0, 0.0075, 3)
+                error = np.random.normal(0.0, 0.75, 3)
                 sample['init_pos'] = sample[key][0,:3]
                 sample['final_pos'] = sample[key][-1,:3]
                 sample['pose_delta'] = sample['final_pos'] - sample['init_pos']
                 sample['pose_vect'] = np.concatenate([sample['init_pos'] + error, sample['final_pos'] + error, sample['pose_delta']])
-                sample['pose_err'] = error
+                sample['errorinit_pos'] = sample['init_pos'] + error
+                sample['pos_err'] = error
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
                 sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
                 # print("Proprio size", np.array(sample[key]).shape)

@@ -62,15 +62,19 @@ def record_diff(est, tar, label, logging_dict):
 def log_normal(x, m, v):
     return -0.5 * ((x - m).pow(2)/ v + torch.log(2 * np.pi * v)).sum(-1).unsqueeze(-1)
 
-def multiv_gauss_logprob(samples, means, var):
+def det3(mats):
+    return mats[:,0,0] * (mats[:,1,1] * mats[:,2,2] - mats[:,1,2] *mats[:,2,1]) -\
+     mats[:,0,1] * (mats[:,1,0] * mats[:,2,2] - mats[:,2,0] * mats[:,1,2]) +\
+      mats[:,0,2] * (mats[:,1,0] * mats[:,2,1] - mats[:,1,1] * mats[:,2,0])
+
+def multiv_gauss_logprob(samples, means, prec):
     # means dim - batch x samples
     # samples dim - batch x samples
     # var dim - batch x samples x samples
-    var_det = torch.det(var)
-    var_inv = torch.inverse(var)
-    log_prob_const = -0.5 * samples.size(1) * np.log(2 * np.pi) - 0.5 * torch.log(var_det)
-    diff = (samples - means).unsqueeze(1) 
-    log_prob_sample = -0.5 * torch.bmm(torch.bmm(diff, var_inv), diff.transpose(1,2))
+    prec_det = det3(prec)
+    log_prob_const = 0.5 * torch.log(prec_det)
+    err = (samples - means).unsqueeze(1) 
+    log_prob_sample = -0.5 * torch.bmm(torch.bmm(err, prec), err.transpose(1,2))
     return log_prob_const + log_prob_sample
 
 def multinomial_KL(logits_q, logits_p):
@@ -102,29 +106,6 @@ class Proto_Loss(object):
 
 		return loss
 
-class CrossEnt_Loss(Proto_Loss):
-	def __init__(self):
-	    super().__init__(loss_function = nn.CrossEntropyLoss())
-	    self.softmax = nn.Softmax(dim=1)
-
-	def loss(self, input_tuple, logging_dict, weight, label):
-		logits = input_tuple[0]
-		labels = input_tuple[1]
-
-		probs = self.softmax(logits)
-		samples = torch.zeros_like(labels)
-		samples[torch.arange(samples.size(0)), probs.max(1)[1]] = 1.0
-		test = torch.where(samples == labels, torch.zeros_like(probs), torch.ones_like(probs)).sum(1)
-		accuracy = torch.where(test > 0, torch.zeros_like(test), torch.ones_like(test))
-
-		loss = weight * self.loss_function(logits, labels.max(1)[1])
-		accuracy_rate = accuracy.mean()
-
-		logging_dict['scalar']["loss/" + label] = loss.item()
-		logging_dict['scalar']['accuracy/' + label] = accuracy.mean().item()	
-
-		return loss
-
 class Proto_MultiStep_Loss(object):
 	def __init__(self, loss_function = nn.MSELoss(), transform_target_function = None, record_function = None):
 		self.loss_function = loss_function
@@ -151,6 +132,46 @@ class Proto_MultiStep_Loss(object):
 				self.record_function(net_est, target, label, logging_dict)
 
 		logging_dict['scalar']["loss/" + label] = loss.item() / len(net_est_list)
+
+		return loss
+
+class CrossEnt_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__(loss_function = nn.CrossEntropyLoss())
+	    self.softmax = nn.Softmax(dim=1)
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		logits = input_tuple[0]
+		labels = input_tuple[1]
+
+		probs = self.softmax(logits)
+		samples = torch.zeros_like(labels)
+		samples[torch.arange(samples.size(0)), probs.max(1)[1]] = 1.0
+		test = torch.where(samples == labels, torch.zeros_like(probs), torch.ones_like(probs)).sum(1)
+		accuracy = torch.where(test > 0, torch.zeros_like(test), torch.ones_like(test))
+
+		loss = weight * self.loss_function(logits, labels.max(1)[1])
+		accuracy_rate = accuracy.mean()
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']['accuracy/' + label] = accuracy.mean().item()	
+
+		return loss
+
+class Multivariate_GaussianNegLogProb_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		params = input_tuple[0]
+		labels = input_tuple[1]
+
+		means, precs = params
+		
+		loss = -1.0 * weight * multiv_gauss_logprob(labels, means, precs).mean()
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']['avg_err/' + label] =(means - labels).norm(p=2, dim =1).mean().item()
 
 		return loss
 
@@ -202,23 +223,6 @@ class Multivariate_GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
 
 		return loss
 
-class Multivariate_GaussianNegLogProb_Loss(Proto_Loss):
-	def __init__(self):
-	    super().__init__()
-
-	def loss(self, input_tuple, logging_dict, weight, label):
-		params = input_tuple[0]
-		labels = input_tuple[1]
-		# print(labels[0:3,:])
-
-		means, covs = params
-		
-		loss = -1.0 * weight * multiv_gauss_logprob(labels, means, covs).mean()
-
-		logging_dict['scalar']["loss/" + label] = loss.item()
-		logging_dict['scalar']["norm_av_err/" + label] = (((labels - means).norm(p=2, dim = 1) / labels.norm(p=2, dim=1)).mean()).item()
-		# print(logging_dict['scalar']["norm_av_err/" + label])
-		return loss
 
 class Multinomial_KL_Loss(Proto_Loss):
 
@@ -478,4 +482,55 @@ class Gaussian_KL_MultiStep_Loss(Proto_Loss):
 
 		logging_dict['scalar']["loss/" + label] = torch.tensor([loss]).detach().item()
 		
+		return loss
+
+class Ranking_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__(loss_function = None)
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		values = input_tuple[0]
+		targets = input_tuple[1]
+
+		# print(targets)
+
+		idxs = torch.argsort(targets)
+		v_sorted = values[idxs] - values.min()
+
+		# print(v_sorted)
+
+		v_mat = v_sorted.unsqueeze(0).repeat_interleave(v_sorted.size(0), dim = 0)
+
+		# print(v_mat)
+		v_mat_diag = v_mat.diag().unsqueeze(1).repeat_interleave(v_sorted.size(0), dim = 1)
+
+		# print(v_mat_diag)
+		v = (v_mat - v_mat_diag)
+
+		# print(v)
+
+		w_bad = torch.where(v <= 0, torch.ones_like(v), torch.zeros_like(v)).triu()
+		w_bad[torch.arange(w_bad.size(0)), torch.arange(w_bad.size(1))] *= 0
+
+		w_good = (torch.where(v > 0, torch.ones_like(v), torch.zeros_like(v)) * torch.where(v <= 1, torch.ones_like(v), torch.zeros_like(v))).triu()
+		w_good[torch.arange(w_good.size(0)), torch.arange(w_good.size(1))] *= 0
+
+		# print(w_mat)
+		# print(w_pos)
+		# print(w_neg)
+		# print("Weights: ", w)
+		# print("Values: ", v_sorted)
+		# print((w * torch.abs(w)))
+		# print(torch.sign(v_sorted))
+
+		loss = - weight * (w_good * v + w_bad * v).sum()
+
+		# print(loss)
+
+		# a = input("")
+
+		logging_dict['scalar']["loss/" + label] = loss.mean().item()
+		logging_dict['scalar']['accuracy/counts' + label] = w_bad.sum().item()	
+		# logging_dict['scalar']['accuracy/w_neg' + label] = w_neg.sum().item()	
+
 		return loss

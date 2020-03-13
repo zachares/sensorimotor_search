@@ -1,0 +1,27 @@
+evaluation_params:
+  num_envs: 4 # Default 3 - [2,3,4] # All done
+  nn_num: 4
+  num_trials: 200
+  gamma: 0.95
+  shape: [20, 20] #Default 20 - [20,30,40] # All done
+  num_bins: 11 #Default 11 - [11,21,31,41] # All done
+  eps: 0.001
+  max_radius: 2
+  large_value: 9.0 #Default 9 - [3, 9, 15] #3, 15
+  prob_goal: 6
+  prob_not_goal: 3
+  load_bamdp_path: "/scr-ssd/sens_search_logging/framework_evaluation/models/201912060810_debugging_1_debugged_code/bamdp_numenvs_4_large_value_9.0_shape_20_20_nnnum_4_numbins_11_iteration_91.npy"
+  load_ent_path: "/scr-ssd/sens_search_logging/framework_evaluation/models/201912060810_debugging_1_debugged_code/entmdp_numenvs_4_large_value_9.0_shape_20_20_nnnum_4_numbins_11_iteration_114.npy"
+  seed: 1234
+
+logging_params:
+  logging_folder: "/scr-ssd/sens_search_logging/framework_evaluation/"
+  run_description: "debugging" #Options include: debugging, training, testing
+  run_notes: "_debugged_code"
+
+debugging_params:
+  debugging_val: 0.0 ### 1.0 for True,  0.0 for False
+  save_model_val: 1.0 ### 1.0 for True,  0.0 for False 
+
+
+

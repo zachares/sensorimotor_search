@@ -37,6 +37,7 @@ from shutil import copyfile
 
 ######## git hash to know the state of the code when experiments are run
 ### add dev feature for development!
+### add saving train log
 
 if __name__ == '__main__':
 

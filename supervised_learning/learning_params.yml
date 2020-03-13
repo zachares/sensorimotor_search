@@ -71,32 +71,6 @@ info_flow:
   #       weight: 1
   #       inputs:
   #         hole_type: "dataset"
-  Origin_DetectionTransformer:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    # train: 1
-    # model_folder: ""
-    # epoch_num: 0
-    inputs:
-      proprio_diff: "dataset"
-      force_hi_freq: "dataset"
-      action: "dataset"
-      peg_type: "dataset"
-      hole_type: "dataset"
-      contact_diff: "dataset"
-      padding_mask: "dataset"
-      hole_type: "dataset"
-      pose_vect: "dataset"
-      length: "dataset"
-      epoch: "dataset"
-    outputs:
-      origin_params:
-        loss: "Multivariate_Normal_Logprob"
-        loss_name: "Noise_Estimation"
-        weight: 100
-        inputs:
-          pose_err: "dataset"
   # Options_PredictionResNet:
   #   train: 0
   #   model_folder: "/scr-ssd/sens_search_logging/models/202002291410_debugging_21_10HZ/"
@@ -114,3 +88,49 @@ info_flow:
   #       weight: 1
   #       inputs:
   #         options_class: "Options_ClassifierTransformer"
+  PosErr_DetectionTransformer:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    # train: 1
+    # model_folder: ""
+    # epoch_num: 0
+    inputs:
+      proprio_diff: "dataset"
+      force_hi_freq: "dataset"
+      action: "dataset"
+      peg_type: "dataset"
+      hole_type: "dataset"
+      contact_diff: "dataset"
+      padding_mask: "dataset"
+      hole_type: "dataset"
+      pose_vect: "dataset"
+      length: "dataset"
+      pos_err: "dataset"
+      epoch: "dataset"
+    outputs:
+      pos_err_params:
+        loss: "Multivariate_Normal_Logprob"
+        loss_name: "PosErr_Estimation"
+        weight: 1
+        inputs:
+          pos_err: "dataset"
+  # PosErr_PredictionResNet:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     errorinit_pos: "dataset"
+  #     pos_err: "dataset"
+  #     command_pos: "dataset"
+  #     peg_type: "dataset"
+  #     hole_type: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     pos_err_ratio:
+  #       loss: "Ranking_Loss"
+  #       loss_name: "PosErr_NormPred"
+  #       weight: 1
+  #       inputs:
+  #         norm_av: "PosErr_DetectionTransformer"
+
