@@ -594,11 +594,9 @@ class Proto_Macromodel(nn.Module):
             model.eval()
 
     def set_parallel(self, parallel_bool):
-        model_list = self.model_list[:]
-        self.model_list = []
         if parallel_bool:
-            for model in model_list:
-                self.model_list.append(nn.DataParallel(model))
+            for model in self.model_list:
+                model.set_parallel(parallel_bool)
 
         self.parallel = parallel_bool
 
