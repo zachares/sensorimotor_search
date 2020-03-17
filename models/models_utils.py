@@ -25,37 +25,70 @@ import numpy as np
 # 1. init - initializes the network with the inputs requested by the user
 # 3. save - saves the model
 # 4. load - loads a model
-class Params(nn.Module):
-    def __init__(self, save_name, load_name, size, device, init_values = None):
+class PlanarTransform(nn.Module):
+    def __init__(self, dim=20):
         super().__init__()
-        self.device = device
-        self.model = nn.Parameter(nn.init.uniform_(torch.empty(size)))
-        self.save_name = save_name
-        self.load_name = load_name
+        self.u = nn.Parameter(torch.randn(1, dim) * 0.01)
+        self.w = nn.Parameter(torch.randn(1, dim) * 0.01)
+        self.b = nn.Parameter(torch.randn(()) * 0.01)
+    def m(self, x):
+        return -1 + torch.log(1 + torch.exp(x))
+    def h(self, x):
+        return torch.tanh(x)
+    def h_prime(self, x):
+        return 1 - torch.tanh(x) ** 2
+    def forward(self, z, logdet=False):
+        # z.size() = batch x dim
+        u_dot_w = (self.u @ self.w.t()).view(())
+        w_hat = self.w / torch.norm(self.w, p=2) # Unit vector in the direction of w
+        u_hat = (self.m(u_dot_w) - u_dot_w) * (w_hat) + self.u # 1 x dim
+        affine = z @ self.w.t() + self.b
+        z_next = z + u_hat * self.h(affine) # batch x dim
+        if logdet:
+            psi = self.h_prime(affine) * self.w # batch x dim
+            LDJ = -torch.log(torch.abs(psi @ u_hat.t() + 1) + 1e-8) # batch x 1
+            return z_next, LDJ
+        return z_next
+
+class Params_module(nn.Module):
+    def __init__(self, size, init_values = None):
         self.size = size
-        self.parallel = False
-
+        self.init_values = init_values
+        self.p = nn.Parameter(nn.init.uniform_(torch.empty(size)))
     def forward(self):
-        return self.model
+        return self.p
 
-    def save(self, epoch_num):
-        ckpt_path = '{}_{}.{}'.format(self.save_name, epoch_num, "pt")
-        print("Saved Model to: ", ckpt_path)
-        torch.save(self.model, ckpt_path)
+# class Params(nn.Module):
+#     def __init__(self, save_name, load_name, size, device, init_values = None):
+#         super().__init__()
+#         self.device = device
+#         self.model = nn.Parameter(nn.init.uniform_(torch.empty(size)))
+#         self.save_name = save_name
+#         self.load_name = load_name
+#         self.size = size
+#         self.parallel = False
 
-    def load(self, epoch_num):
-        # pass
-        ckpt_path = '{}_{}.{}'.format(self.load_name, epoch_num, "pt")
-        self.model.data = torch.load(ckpt_path)
-        print("Loaded Model to: ", ckpt_path)
+#     def forward(self):
+#         return self.model
 
-    def set_parallel(self, parallel_bool):
-        # if parallel_bool:
-        #     params = self.model.clone().data
-        #     self.model =  nn.DataParallel(nn.Parameter(nn.init.uniform_(torch.empty(size))))
-        #     self.model.data = params
+#     def save(self, epoch_num):
+#         ckpt_path = '{}_{}.{}'.format(self.save_name, epoch_num, "pt")
+#         print("Saved Model to: ", ckpt_path)
+#         torch.save(self.model, ckpt_path)
 
-        # self.parallel = parallel_bool
+#     def load(self, epoch_num):
+#         # pass
+#         ckpt_path = '{}_{}.{}'.format(self.load_name, epoch_num, "pt")
+#         self.model.data = torch.load(ckpt_path)
+#         print("Loaded Model to: ", ckpt_path)
+
+#     def set_parallel(self, parallel_bool):
+#         if parallel_bool:
+#             params = self.model.clone().data
+#             self.model =  nn.DataParallel(nn.Parameter(nn.init.uniform_(torch.empty(size))))
+#             self.model.data = params
+
+#         self.parallel = parallel_bool
 
 
 #########################################
@@ -104,6 +137,18 @@ class Proto_Model(nn.Module):
            self.model =  nn.DataParallel(self.model)
 
         self.parallel = parallel_bool
+
+class Params(Proto_Model):
+    def __init__(self, save_name, load_name, size, device= None, init_values = None): #dim=20, K=16):
+        super().__init__(save_name + "_params", load_name + "_params", device = device)
+
+        self.device = device
+        self.size = size
+        self.init_values = init_values
+
+        layer_list = []
+        layer_list.append(Params_module(self.size, self.init_values))
+        self.model = nn.Sequential(*layer_list)
 
 class PlanarFlow(Proto_Model):
     def __init__(self, save_name, load_name, channels = 20, num_layers = 16, device= None): #dim=20, K=16):
