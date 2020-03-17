@@ -610,16 +610,16 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         err_sqr = (error - pos_err_mean).pow(2).sum(1)
         cov_dets = err_sqr
 
-        # print(prec_dets.size())
+        print(prec_dets.size())
 
-        if self.frc_enc21.training:
-            self.train_dets()[0] = (1 - self.train_lr) * self.train_dets()[0] + self.train_lr * cov_dets.min()
-            self.train_dets()[1] = (1 - self.train_lr) * self.train_dets()[1] + self.train_lr * cov_dets.mean()       
-            self.train_dets()[2] = (1 - self.train_lr) * self.train_dets()[2] + self.train_lr * cov_dets.max()
-        else:
-            self.val_dets()[0] = (1 - self.val_lr) * self.val_dets()[0] + self.val_lr * cov_dets.min()
-            self.val_dets()[1] = (1 - self.val_lr) * self.val_dets()[1] + self.val_lr * cov_dets.mean()       
-            self.val_dets()[2] = (1 - self.val_lr) * self.val_dets()[2] + self.val_lr * cov_dets.max()
+        # if self.frc_enc21.training:
+        #     self.train_dets()[0] = (1 - self.train_lr) * self.train_dets()[0] + self.train_lr * cov_dets.min()
+        #     self.train_dets()[1] = (1 - self.train_lr) * self.train_dets()[1] + self.train_lr * cov_dets.mean()       
+        #     self.train_dets()[2] = (1 - self.train_lr) * self.train_dets()[2] + self.train_lr * cov_dets.max()
+        # else:
+        #     self.val_dets()[0] = (1 - self.val_lr) * self.val_dets()[0] + self.val_lr * cov_dets.min()
+        #     self.val_dets()[1] = (1 - self.val_lr) * self.val_dets()[1] + self.val_lr * cov_dets.mean()       
+        #     self.val_dets()[2] = (1 - self.val_lr) * self.val_dets()[2] + self.val_lr * cov_dets.max()
 
         return {
             'pos_err_params': (pos_err_mean, pos_err_prec),
