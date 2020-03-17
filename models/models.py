@@ -70,13 +70,10 @@ def T_angle(angle):
     return case1 + case2 + case3 + case4
 
 def prec_single(noise_matrix): #converting noise parameters to cholesky decomposition form
-    print("S")
     chol_dec = noise_matrix.tril()
     # chol_diag = 
-    print("A")
     chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] = torch.abs(chol_dec.diag())
     # chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] += chol_diag 
-    print("C")
     prec = torch.mm(chol_dec, chol_dec.t())
     # cov = cov / torch.det(cov)      # print(torch.eig(cov))
     return prec
@@ -496,33 +493,28 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
 
         # print(states.size())
         # print(padding_masks.size())
-        print("21")
 
         if padding_masks is None:
             rep_delta = torch.max(pos_err_transdec(states, states), 1)[0]
         else:
             rep_delta = torch.max(pos_err_transdec(states, states, mem_padding_mask = padding_masks, tgt_padding_mask = padding_masks), 1)[0]
 
-        print("22")
-
         rep = torch.cat([pose_vect, rep_delta], dim = 1)
 
-        print("23")
         pos_err_mean0 = pos_err_model0(rep)
         pos_err_mean1 = pos_err_model1(rep)
         pos_err_mean2 = pos_err_model2(rep)
 
-        print("24")
         rep_prec0 = torch.cat([rep, pos_err_mean0], dim = 1)
         rep_prec1 = torch.cat([rep, pos_err_mean1], dim = 1)
         rep_prec2 = torch.cat([rep, pos_err_mean2], dim = 1)
-        print("25")
+
         pos_err_prechet_vect0 = pos_err_prechet0(rep_prec0).transpose(0,1)
         pos_err_prechet_vect1 = pos_err_prechet1(rep_prec1).transpose(0,1)
         pos_err_prechet_vect2 = pos_err_prechet2(rep_prec2).transpose(0,1)
 
         tril_indices = torch.tril_indices(row=self.pose_size, col=self.pose_size)
-        print("26")
+
         pos_err_tril0 = torch.zeros((self.pose_size, self.pose_size, pos_err_mean0.size(0))).to(self.device)
         pos_err_tril1 = torch.zeros((self.pose_size, self.pose_size, pos_err_mean0.size(0))).to(self.device)
         pos_err_tril2 = torch.zeros((self.pose_size, self.pose_size, pos_err_mean0.size(0))).to(self.device)
@@ -530,16 +522,15 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         pos_err_tril0[tril_indices[0], tril_indices[1]] = pos_err_prechet_vect0
         pos_err_tril1[tril_indices[0], tril_indices[1]] = pos_err_prechet_vect1
         pos_err_tril2[tril_indices[0], tril_indices[1]] = pos_err_prechet_vect2
-        print("27")
+
         pos_err_prechet0 = prec_mult(pos_err_tril0)
         pos_err_prechet1 = prec_mult(pos_err_tril1)
         pos_err_prechet2 = prec_mult(pos_err_tril2)
-        print("27a")
+
         pos_err_prechom0 = prec_single(pos_err_prechom0()).unsqueeze(0).repeat_interleave(batch_size, 0)
-        print("27b")
         pos_err_prechom1 = prec_single(pos_err_prechom1()).unsqueeze(0).repeat_interleave(batch_size, 0)
         pos_err_prechom2 = prec_single(pos_err_prechom2()).unsqueeze(0).repeat_interleave(batch_size, 0)
-        print("28")
+
         pos_err_prec0 = (pos_err_prechet0 + pos_err_prechom0)
         pos_err_prec1 = (pos_err_prechet1 + pos_err_prechom1)
         pos_err_prec2 = (pos_err_prechet2 + pos_err_prechom2)
@@ -550,22 +541,22 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         oc_hole0 = hole_type[:,0].unsqueeze(1).repeat_interleave(pos_err_prec0.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec0.size(2), dim=2)
         oc_hole1 = hole_type[:,1].unsqueeze(1).repeat_interleave(pos_err_prec0.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec0.size(2), dim=2)
         oc_hole2 = hole_type[:,2].unsqueeze(1).repeat_interleave(pos_err_prec0.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec0.size(2), dim=2)
-        print("29")
+
         pos_err_mean = om_hole0 * pos_err_mean0 + om_hole1 * pos_err_mean1 + om_hole2 * pos_err_mean2
         pos_err_prec = oc_hole0 * pos_err_prec0 + oc_hole1 * pos_err_prec1 + oc_hole2 * pos_err_prec2
-        print("30")
-        # if not self.frc_enc21.training:
-        #     if self.noise_mode == 'avg':
-        #         scalar = self.train_dets()[1] / self.val_dets()[1]
-        #     elif self.noise_mode == 'min':
-        #         scalar = self.train_dets()[0] / self.val_dets()[2]
-        #     else:
-        #         scalar = self.train_dets()[2] / self.val_dets()[0]
 
-        #     # print("Val dets:", self.val_dets())
-        #     # print("Train dets:", self.train_dets())
-        #     # print("scalar: ", scalar)
-        #     pos_err_prec = pos_err_prec * scalar
+        if not self.frc_enc21.training:
+            if self.noise_mode == 'avg':
+                scalar = self.train_dets()[1] / self.val_dets()[1]
+            elif self.noise_mode == 'min':
+                scalar = self.train_dets()[0] / self.val_dets()[2]
+            else:
+                scalar = self.train_dets()[2] / self.val_dets()[0]
+
+            # print("Val dets:", self.val_dets())
+            # print("Train dets:", self.train_dets())
+            # print("scalar: ", scalar)
+            pos_err_prec = pos_err_prec * scalar
 
         return pos_err_mean, pos_err_prec
 
@@ -577,17 +568,15 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
 
         prestate = torch.cat([proprio_diffs, contact_diffs.unsqueeze(2), actions], dim = 2)
         prestate_reshaped = torch.reshape(prestate, (prestate.size(0) * prestate.size(1), prestate.size(2)))#.contiguous()
-        print("1")
+
         pos_err_mean01, pos_err_prec01 = self.get_data(prestate_reshaped, pose_vect, forces_reshaped, hole_type, self.ensemble_list[0],\
          batch_size, sequence_size, padding_masks)
-        print("1")
+
         pos_err_mean11, pos_err_prec11 = self.get_data(prestate_reshaped, pose_vect, forces_reshaped, hole_type, self.ensemble_list[1],\
          batch_size, sequence_size, padding_masks)
-        print("1")
 
         pos_err_mean21, pos_err_prec21 = self.get_data(prestate_reshaped, pose_vect, forces_reshaped, hole_type, self.ensemble_list[2],\
          batch_size, sequence_size, padding_masks)
-        print("1")
 
         om_peg0 = peg_type[:,0].unsqueeze(1).repeat_interleave(pos_err_mean01.size(1), dim=1)
         om_peg1 = peg_type[:,1].unsqueeze(1).repeat_interleave(pos_err_mean01.size(1), dim=1)
@@ -621,16 +610,16 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         err_sqr = (error - pos_err_mean).pow(2).sum(1)
         cov_dets = err_sqr
 
-        print(prec_dets.size())
+        # print(prec_dets.size())
 
-        # if self.frc_enc21.training:
-        #     self.train_dets()[0] = (1 - self.train_lr) * self.train_dets()[0] + self.train_lr * cov_dets.min()
-        #     self.train_dets()[1] = (1 - self.train_lr) * self.train_dets()[1] + self.train_lr * cov_dets.mean()       
-        #     self.train_dets()[2] = (1 - self.train_lr) * self.train_dets()[2] + self.train_lr * cov_dets.max()
-        # else:
-        #     self.val_dets()[0] = (1 - self.val_lr) * self.val_dets()[0] + self.val_lr * cov_dets.min()
-        #     self.val_dets()[1] = (1 - self.val_lr) * self.val_dets()[1] + self.val_lr * cov_dets.mean()       
-        #     self.val_dets()[2] = (1 - self.val_lr) * self.val_dets()[2] + self.val_lr * cov_dets.max()
+        if self.frc_enc21.training:
+            self.train_dets()[0] = (1 - self.train_lr) * self.train_dets()[0] + self.train_lr * cov_dets.min()
+            self.train_dets()[1] = (1 - self.train_lr) * self.train_dets()[1] + self.train_lr * cov_dets.mean()       
+            self.train_dets()[2] = (1 - self.train_lr) * self.train_dets()[2] + self.train_lr * cov_dets.max()
+        else:
+            self.val_dets()[0] = (1 - self.val_lr) * self.val_dets()[0] + self.val_lr * cov_dets.min()
+            self.val_dets()[1] = (1 - self.val_lr) * self.val_dets()[1] + self.val_lr * cov_dets.mean()       
+            self.val_dets()[2] = (1 - self.val_lr) * self.val_dets()[2] + self.val_lr * cov_dets.max()
 
         return {
             'pos_err_params': (pos_err_mean, pos_err_prec),

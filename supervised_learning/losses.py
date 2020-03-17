@@ -167,12 +167,18 @@ class Multivariate_GaussianNegLogProb_Loss(Proto_Loss):
 		labels = input_tuple[1]
 
 		means, precs = params
-		
+
+		errors = labels - means
+		errors_sqnorm = errors.pow(2).sum(1)
+		covs = torch.inverse(precs)
+		covs_diag = torch.diagonal(covs, dim1 = 1, dim2=2)
+		covs_sqnorm = covs_diag.sum(1)
+
 		loss = -1.0 * weight * multiv_gauss_logprob(labels, means, precs).mean()
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
-		logging_dict['scalar']['avg_err/' + label] =(means - labels).norm(p=2, dim =1).mean().item()
-
+		logging_dict['scalar']['avg_err/' + label] = errors.norm(p=2, dim =1).mean().item()
+		logging_dict['scalar']['trace_ratio/' + label] = (covs_sqnorm / erros_sqnorm).mean().item()
 		return loss
 
 class GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
