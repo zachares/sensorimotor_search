@@ -592,8 +592,8 @@ class Transformer_Decoder(Proto_Model):
             activation = self.activation), num_layers = self.num_layers, norm = self.norm)
 
     def forward(self, tgt_seq, src_seq, mem_padding_mask = None, tgt_padding_mask = None):
-        # print("Padding mask size: ", mem_padding_mask.size())
-        # print("input size: ", tgt_seq.size())
+        print("Padding mask size: ", mem_padding_mask.size())
+        print("input size: ", tgt_seq.size())
         if mem_padding_mask is None and tgt_padding_mask is None:
             return self.model(tgt_seq.transpose(0,1), src_seq.transpose(0,1))
         elif mem_padding_mask is None :
