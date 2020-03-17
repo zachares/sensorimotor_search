@@ -152,7 +152,9 @@ class Params(Proto_Model):
         self.model = nn.Sequential(*layer_list)
     def forward(self):
         return self.model()
-        
+    def set_parallel(self, bool):
+        pass
+
 class PlanarFlow(Proto_Model):
     def __init__(self, save_name, load_name, channels = 20, num_layers = 16, device= None): #dim=20, K=16):
         super().__init__(save_name + "_plana_flow", load_name + "_plana_flow", device = device)
