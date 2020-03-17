@@ -33,6 +33,7 @@ class Params(nn.Module):
         self.save_name = save_name
         self.load_name = load_name
         self.size = size
+        self.parallel = False
 
     def forward(self):
         return self.model
@@ -47,6 +48,13 @@ class Params(nn.Module):
         ckpt_path = '{}_{}.{}'.format(self.load_name, epoch_num, "pt")
         self.model.data = torch.load(ckpt_path)
         print("Loaded Model to: ", ckpt_path)
+
+    def set_parallel(self, parallel_bool):
+        if parallel_bool:
+           self.model =  nn.DataParallel(self.model)
+
+        self.parallel = parallel_bool
+
 
 #########################################
 # Current Model Types Supported 
@@ -67,7 +75,8 @@ class Proto_Model(nn.Module):
         self.save_name = save_name
         self.load_name = load_name
         self.device = device
-    
+        self.parallel = False
+
     def forward(self, input):
         return self.model(input)
 
@@ -87,6 +96,12 @@ class Proto_Model(nn.Module):
         ckpt = torch.load(ckpt_path)
         self.model.load_state_dict(ckpt)
         print("Loaded Model to: ", ckpt_path)
+
+    def set_parallel(self, parallel_bool):
+        if parallel_bool:
+           self.model =  nn.DataParallel(self.model)
+
+        self.parallel = parallel_bool
 
 class PlanarFlow(Proto_Model):
     def __init__(self, save_name, load_name, channels = 20, num_layers = 16, device= None): #dim=20, K=16):
@@ -558,6 +573,7 @@ class Proto_Macromodel(nn.Module):
     def __init__(self):
         super().__init__()   
         self.model_list = []
+        self.parallel = False
 
     def save(self, epoch_num):
         for model in self.model_list:
@@ -576,6 +592,15 @@ class Proto_Macromodel(nn.Module):
     def eval(self):
         for model in self.model_list:
             model.eval()
+
+    def set_parallel(self, parallel_bool):
+        model_list = self.model_list[:]
+        self.model_list = []
+        if parallel_bool:
+            for model in model_list:
+                self.model_list.append(nn.DataParallel(model))
+
+        self.parallel = parallel_bool
 
 class ResNetFCN(Proto_Macromodel):
     def __init__(self, save_name, load_name, input_channels, output_channels, num_layers, device = None):

@@ -45,6 +45,7 @@ class Trainer(object):
 		learning_rate = cfg['training_params']['lrn_rate']
 		beta_1 = cfg['training_params']['beta1']
 		beta_2 = cfg['training_params']['beta2']
+		parallel_bool = cfg['training_params']['parallel_bool']
 
 		self.info_flow = cfg['info_flow']
 		# image_size = self.info_flow['dataset']['outputs']['image']
@@ -83,7 +84,12 @@ class Trainer(object):
 		#  pose_size, num_options, device = device).to(device)
 		# self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
 		#  pose_size, num_options, device = device).to(device)
-		print("Finished Initialization")	 	
+		print("Finished Initialization")
+
+		if parallel_bool == 1:
+			for key in self.model_dict.keys():
+				self.model_dict[key].set_parallel(True)
+				print(key, "is now parallelizable between GPUs")
 		###############################################
 		###### Code ends here ########################
 		################################################
