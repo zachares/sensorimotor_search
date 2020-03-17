@@ -50,12 +50,12 @@ class Params(nn.Module):
         print("Loaded Model to: ", ckpt_path)
 
     def set_parallel(self, parallel_bool):
-        if parallel_bool:
-            params = self.model.clone().data
-            self.model =  nn.DataParallel(nn.Parameter(nn.init.uniform_(torch.empty(size))))
-            self.model.data = params
+        # if parallel_bool:
+        #     params = self.model.clone().data
+        #     self.model =  nn.DataParallel(nn.Parameter(nn.init.uniform_(torch.empty(size))))
+        #     self.model.data = params
 
-        self.parallel = parallel_bool
+        # self.parallel = parallel_bool
 
 
 #########################################
