@@ -201,7 +201,7 @@ class Options_ClassifierTransformer(Proto_Macromodel):
         state_encs_unshaped = state_enc(state)
         state_encs = torch.reshape(state_encs_unshaped, (batch_size, sequence_size, self.encoded_size))#.contiguous()
 
-        states = torch.cat([state_encs, frc_encs], dim = 2).transpose(0,1)#.contiguous()
+        states = torch.cat([state_encs, frc_encs], dim = 2)#.contiguous()
 
         # final_state = states[lengths, torch.arange(states.size(1))].unsqueeze(0)
 
@@ -489,7 +489,7 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         state_encs_unshaped = state_enc(state)
         state_encs = torch.reshape(state_encs_unshaped, (batch_size, sequence_size, self.encoded_size))#.contiguous()
 
-        states = torch.cat([state_encs, frc_encs], dim = 2).transpose(0,1)#.contiguous()
+        states = torch.cat([state_encs, frc_encs], dim = 2)#.contiguous()
 
         print(states.size())
         print(padding_masks.size())

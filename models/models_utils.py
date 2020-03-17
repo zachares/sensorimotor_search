@@ -53,7 +53,7 @@ class PlanarTransform(nn.Module):
 class Params_module(nn.Module):
     def __init__(self, size, init_values = None):
         super().__init__()
-        self.size = size
+        self.size = sizes
         self.init_values = init_values
         self.p = nn.Parameter(nn.init.uniform_(torch.empty(size)))
     def forward(self):
@@ -595,13 +595,13 @@ class Transformer_Decoder(Proto_Model):
         # print("Padding mask size: ", mem_padding_mask.size())
         # print("input size: ", tgt_seq.size())
         if mem_padding_mask is None and tgt_padding_mask is None:
-            return self.model(tgt_seq, src_seq)
+            return self.model(tgt_seq.transpose(0,1), src_seq.transpose(0,1))
         elif mem_padding_mask is None :
-            return self.model(tgt_seq, src_seq, tgt_key_padding_mask = tgt_padding_mask)
+            return self.model(tgt_seq.transpose(0,1), src_seq.transpose(0,1), tgt_key_padding_mask = tgt_padding_mask)
         elif tgt_padding_mask is None:
-            return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask)
+            return self.model(tgt_seq.transpose(0,1), src_seq.transpose(0,1), memory_key_padding_mask = mem_padding_mask)
         else:
-            return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask, tgt_key_padding_mask = tgt_padding_mask)
+            return self.model(tgt_seq.transpose(0,1), src_seq.transpose(0,1), memory_key_padding_mask = mem_padding_mask, tgt_key_padding_mask = tgt_padding_mask)
 ######################################
 # Current Macromodel Types Supported
 #####################################
