@@ -493,11 +493,14 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
 
         # print(states.size())
         # print(padding_masks.size())
+        print("2")
 
         if padding_masks is None:
             rep_delta = torch.max(pos_err_transdec(states, states), 1)[0]
         else:
             rep_delta = torch.max(pos_err_transdec(states, states, mem_padding_mask = padding_masks, tgt_padding_mask = padding_masks), 1)[0]
+
+        print("2")
 
         rep = torch.cat([pose_vect, rep_delta], dim = 1)
 
@@ -545,18 +548,17 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         pos_err_mean = om_hole0 * pos_err_mean0 + om_hole1 * pos_err_mean1 + om_hole2 * pos_err_mean2
         pos_err_prec = oc_hole0 * pos_err_prec0 + oc_hole1 * pos_err_prec1 + oc_hole2 * pos_err_prec2
 
-        if not self.frc_enc21.training:
-            if self.noise_mode == 'avg':
-                scalar = self.train_dets()[1] / self.val_dets()[1]
-            elif self.noise_mode == 'min':
-                scalar = self.train_dets()[0] / self.val_dets()[2]
-            else:
-                scalar = self.train_dets()[2] / self.val_dets()[0]
-
+        # if not self.frc_enc21.training:
+        #     if self.noise_mode == 'avg':
+        #         scalar = self.train_dets()[1] / self.val_dets()[1]
+        #     elif self.noise_mode == 'min':
+        #         scalar = self.train_dets()[0] / self.val_dets()[2]
+        #     else:
+            # scalar = self.train_dets()[2] / self.val_dets()[0
             # print("Val dets:", self.val_dets())
             # print("Train dets:", self.train_dets())
             # print("scalar: ", scalar)
-            pos_err_prec = pos_err_prec * scalar
+            pos_err_prec = pos_err_prec * 1.0
 
         return pos_err_mean, pos_err_prec
 
@@ -568,15 +570,17 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
 
         prestate = torch.cat([proprio_diffs, contact_diffs.unsqueeze(2), actions], dim = 2)
         prestate_reshaped = torch.reshape(prestate, (prestate.size(0) * prestate.size(1), prestate.size(2)))#.contiguous()
-
+        print("1")
         pos_err_mean01, pos_err_prec01 = self.get_data(prestate_reshaped, pose_vect, forces_reshaped, hole_type, self.ensemble_list[0],\
          batch_size, sequence_size, padding_masks)
-
+        print("1")
         pos_err_mean11, pos_err_prec11 = self.get_data(prestate_reshaped, pose_vect, forces_reshaped, hole_type, self.ensemble_list[1],\
          batch_size, sequence_size, padding_masks)
+        print("1")
 
         pos_err_mean21, pos_err_prec21 = self.get_data(prestate_reshaped, pose_vect, forces_reshaped, hole_type, self.ensemble_list[2],\
          batch_size, sequence_size, padding_masks)
+        print("1")
 
         om_peg0 = peg_type[:,0].unsqueeze(1).repeat_interleave(pos_err_mean01.size(1), dim=1)
         om_peg1 = peg_type[:,1].unsqueeze(1).repeat_interleave(pos_err_mean01.size(1), dim=1)
