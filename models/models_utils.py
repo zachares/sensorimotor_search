@@ -148,8 +148,8 @@ class Params(Proto_Model):
         self.init_values = init_values
 
         layer_list = []
-        layer_list.append(Params_module(self.size, self.init_values))
-        self.model = nn.Sequential(*layer_list)
+        self.model = Params_module(self.size, self.init_values)
+
     def forward(self):
         return self.model()
     def set_parallel(self, bool):
