@@ -554,11 +554,12 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         #     elif self.noise_mode == 'min':
         #         scalar = self.train_dets()[0] / self.val_dets()[2]
         #     else:
-            # scalar = self.train_dets()[2] / self.val_dets()[0
-            # print("Val dets:", self.val_dets())
-            # print("Train dets:", self.train_dets())
-            # print("scalar: ", scalar)
-            pos_err_prec = pos_err_prec * 1.0
+        #         scalar = self.train_dets()[2] / self.val_dets()[0]
+
+        #     # print("Val dets:", self.val_dets())
+        #     # print("Train dets:", self.train_dets())
+        #     # print("scalar: ", scalar)
+        #     pos_err_prec = pos_err_prec * scalar
 
         return pos_err_mean, pos_err_prec
 
