@@ -491,6 +491,9 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
 
         states = torch.cat([state_encs, frc_encs], dim = 2).transpose(0,1)#.contiguous()
 
+        print(states.size())
+        print(padding_masks.size())
+
         if padding_masks is None:
             rep_delta = torch.max(pos_err_transdec(states, states), 0)[0]
         else:
