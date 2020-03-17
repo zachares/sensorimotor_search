@@ -52,6 +52,7 @@ class PlanarTransform(nn.Module):
 
 class Params_module(nn.Module):
     def __init__(self, size, init_values = None):
+        super().__init__()
         self.size = size
         self.init_values = init_values
         self.p = nn.Parameter(nn.init.uniform_(torch.empty(size)))
