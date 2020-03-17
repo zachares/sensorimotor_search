@@ -70,10 +70,13 @@ def T_angle(angle):
     return case1 + case2 + case3 + case4
 
 def prec_single(noise_matrix): #converting noise parameters to cholesky decomposition form
+    print("S")
     chol_dec = noise_matrix.tril()
     # chol_diag = 
+    print("A")
     chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] = torch.abs(chol_dec.diag())
     # chol_dec[torch.arange(chol_dec.size(0)), torch.arange(chol_dec.size(1))] += chol_diag 
+    print("C")
     prec = torch.mm(chol_dec, chol_dec.t())
     # cov = cov / torch.det(cov)      # print(torch.eig(cov))
     return prec
