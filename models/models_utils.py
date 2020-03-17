@@ -51,7 +51,9 @@ class Params(nn.Module):
 
     def set_parallel(self, parallel_bool):
         if parallel_bool:
-           self.model =  nn.DataParallel(self.model)
+            params = self.model.clone().data
+            self.model =  nn.DataParallel(nn.Parameter(nn.init.uniform_(torch.empty(size))))
+            self.model.data = params
 
         self.parallel = parallel_bool
 
