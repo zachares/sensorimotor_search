@@ -178,7 +178,7 @@ class Multivariate_GaussianNegLogProb_Loss(Proto_Loss):
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
 		logging_dict['scalar']['avg_err/' + label] = errors.norm(p=2, dim =1).mean().item()
-		logging_dict['scalar']['trace_ratio/' + label] = (covs_sqnorm / erros_sqnorm).mean().item()
+		logging_dict['scalar']['trace_ratio/' + label] = (covs_sqnorm / errors_sqnorm).mean().item()
 		return loss
 
 class GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
