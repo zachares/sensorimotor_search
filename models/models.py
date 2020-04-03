@@ -270,7 +270,7 @@ class Options_ClassifierTransformer(Proto_Macromodel):
         return options_logits
 
 class PosErr_DetectionTransformer(Proto_Macromodel):
-    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, num_options, min_steps, use_fft = True, cov_type = 0, device = None):
+    def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, num_options, min_steps, use_fft = True, device = None):
         super().__init__()
 
         if info_flow[model_name]["model_folder"] != "":
@@ -477,6 +477,29 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
         # frc_enc = self.frc_enc(fft)
         return frc_enc
 
+    def calc_params(self, rep, meanmodel, hetmodel, hom_prec):
+        batch_size = rep.size(0)
+
+        mean = meanmodel(rep)
+        
+        new_rep = torch.cat([rep, mean], dim = 1)
+        
+        het_vect = hetmodel(new_rep).transpose(0,1)
+
+        tril_indices = torch.tril_indices(row=self.pose_size, col=self.pose_size)
+
+        het_tril = torch.zeros((self.pose_size, self.pose_size, batch_size)).to(self.device)
+
+        het_tril[tril_indices[0], tril_indices[1]] = het_vect
+
+        het_prec = prec_mult(het_tril)
+
+        hom_prec = prec_single(hom_prec()).unsqueeze(0).repeat_interleave(batch_size, 0)  
+
+        prec = het_prec + hom_prec
+
+        return mean, prec
+
     def get_data(self, state, pose_vect, forces, hole_type, model_tuple, batch_size, sequence_size, padding_masks = None):
         frc_enc, state_enc, pos_err_transdec,\
          pos_err_model0, pos_err_prechom0, pos_err_prechet0,\
@@ -498,39 +521,9 @@ class PosErr_DetectionTransformer(Proto_Macromodel):
 
         rep = torch.cat([pose_vect, rep_delta], dim = 1)
 
-        pos_err_mean0 = pos_err_model0(rep)
-        pos_err_mean1 = pos_err_model1(rep)
-        pos_err_mean2 = pos_err_model2(rep)
-
-        rep_prec0 = torch.cat([rep, pos_err_mean0], dim = 1)
-        rep_prec1 = torch.cat([rep, pos_err_mean1], dim = 1)
-        rep_prec2 = torch.cat([rep, pos_err_mean2], dim = 1)
-
-        pos_err_prechet_vect0 = pos_err_prechet0(rep_prec0).transpose(0,1)
-        pos_err_prechet_vect1 = pos_err_prechet1(rep_prec1).transpose(0,1)
-        pos_err_prechet_vect2 = pos_err_prechet2(rep_prec2).transpose(0,1)
-
-        tril_indices = torch.tril_indices(row=self.pose_size, col=self.pose_size)
-
-        pos_err_tril0 = torch.zeros((self.pose_size, self.pose_size, pos_err_mean0.size(0))).to(self.device)
-        pos_err_tril1 = torch.zeros((self.pose_size, self.pose_size, pos_err_mean0.size(0))).to(self.device)
-        pos_err_tril2 = torch.zeros((self.pose_size, self.pose_size, pos_err_mean0.size(0))).to(self.device)
-
-        pos_err_tril0[tril_indices[0], tril_indices[1]] = pos_err_prechet_vect0
-        pos_err_tril1[tril_indices[0], tril_indices[1]] = pos_err_prechet_vect1
-        pos_err_tril2[tril_indices[0], tril_indices[1]] = pos_err_prechet_vect2
-
-        pos_err_prechet0 = prec_mult(pos_err_tril0)
-        pos_err_prechet1 = prec_mult(pos_err_tril1)
-        pos_err_prechet2 = prec_mult(pos_err_tril2)
-
-        pos_err_prechom0 = prec_single(pos_err_prechom0()).unsqueeze(0).repeat_interleave(batch_size, 0)
-        pos_err_prechom1 = prec_single(pos_err_prechom1()).unsqueeze(0).repeat_interleave(batch_size, 0)
-        pos_err_prechom2 = prec_single(pos_err_prechom2()).unsqueeze(0).repeat_interleave(batch_size, 0)
-
-        pos_err_prec0 = (pos_err_prechet0 + pos_err_prechom0)
-        pos_err_prec1 = (pos_err_prechet1 + pos_err_prechom1)
-        pos_err_prec2 = (pos_err_prechet2 + pos_err_prechom2)
+        pos_err_mean0, pos_err_prec0 = self.calc_params(rep, pos_err_model0, pos_err_prechet0, pos_err_prechom0)
+        pos_err_mean1, pos_err_prec1 = self.calc_params(rep, pos_err_model1, pos_err_prechet1, pos_err_prechom1)
+        pos_err_mean2, pos_err_prec2 = self.calc_params(rep, pos_err_model2, pos_err_prechet2, pos_err_prechom2)
 
         om_hole0 = hole_type[:,0].unsqueeze(1).repeat_interleave(pos_err_mean0.size(1), dim=1)
         om_hole1 = hole_type[:,1].unsqueeze(1).repeat_interleave(pos_err_mean0.size(1), dim=1)
@@ -838,7 +831,7 @@ class PosErr_PredictionResNet(Proto_Macromodel):
         self.device = device
         self.model_list = []
 
-        self.pos_size = 3
+        self.pose_size = 3
         self.z_dim = 48
         self.num_options = num_options
 
@@ -847,13 +840,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
         # first number indicates index in peg vector, second number indicates number in ensemble
         # Network 001
         self.expand_state001 = FCN(save_folder + "_expand_state001", load_folder + "_expand_state001",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred001 = ResNetFCN(save_folder + "_pos_err_pred001", load_folder + "_pos_err_pred001",\
-            self.z_dim, self.pos_size, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet001 = ResNetFCN(save_folder + "_pos_err_prechet001", load_folder + "_pos_err_prechet001",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom001 = Params(save_folder + "_pos_err_prechom001", load_folder + "_pos_err_prechom001", (self.pose_size, self.pose_size), device = self.device)
  
@@ -864,13 +857,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 011
         self.expand_state011 = FCN(save_folder + "_expand_state011", load_folder + "_expand_state011",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred011 = ResNetFCN(save_folder + "_pos_err_pred011", load_folder + "_pos_err_pred011",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet011 = ResNetFCN(save_folder + "_pos_err_prechet011", load_folder + "_pos_err_prechet011",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom011 = Params(save_folder + "_pos_err_prechom011", load_folder + "_pos_err_prechom011", (self.pose_size, self.pose_size), device = self.device)
  
@@ -881,13 +874,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 021
         self.expand_state021 = FCN(save_folder + "_expand_state021", load_folder + "_expand_state021",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred021 = ResNetFCN(save_folder + "_pos_err_pred021", load_folder + "_pos_err_pred021",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet021 = ResNetFCN(save_folder + "_pos_err_prechet021", load_folder + "_pos_err_prechet021",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom021 = Params(save_folder + "_pos_err_prechom021", load_folder + "_pos_err_prechom021", (self.pose_size, self.pose_size), device = self.device)
  
@@ -898,13 +891,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 101
         self.expand_state101 = FCN(save_folder + "_expand_state101", load_folder + "_expand_state101",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred101 = ResNetFCN(save_folder + "_pos_err_pred101", load_folder + "_pos_err_pred101",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet101 = ResNetFCN(save_folder + "_pos_err_prechet101", load_folder + "_pos_err_prechet101",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom101 = Params(save_folder + "_pos_err_prechom101", load_folder + "_pos_err_prechom101", (self.pose_size, self.pose_size), device = self.device)
  
@@ -915,13 +908,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 111
         self.expand_state111 = FCN(save_folder + "_expand_state111", load_folder + "_expand_state111",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred111 = ResNetFCN(save_folder + "_pos_err_pred111", load_folder + "_pos_err_pred111",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet111 = ResNetFCN(save_folder + "_pos_err_prechet111", load_folder + "_pos_err_prechet111",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom111 = Params(save_folder + "_pos_err_prechom111", load_folder + "_pos_err_prechom111", (self.pose_size, self.pose_size), device = self.device)
  
@@ -932,13 +925,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 121
         self.expand_state121 = FCN(save_folder + "_expand_state121", load_folder + "_expand_state121",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred121 = ResNetFCN(save_folder + "_pos_err_pred121", load_folder + "_pos_err_pred121",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet121 = ResNetFCN(save_folder + "_pos_err_prechet121", load_folder + "_pos_err_prechet121",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom121 = Params(save_folder + "_pos_err_prechom121", load_folder + "_pos_err_prechom121", (self.pose_size, self.pose_size), device = self.device)
  
@@ -949,13 +942,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 201
         self.expand_state201 = FCN(save_folder + "_expand_state201", load_folder + "_expand_state201",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred201 = ResNetFCN(save_folder + "_pos_err_pred201", load_folder + "_pos_err_pred201",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet201 = ResNetFCN(save_folder + "_pos_err_prechet201", load_folder + "_pos_err_prechet201",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom201 = Params(save_folder + "_pos_err_prechom201", load_folder + "_pos_err_prechom201", (self.pose_size, self.pose_size), device = self.device)
  
@@ -966,13 +959,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 211
         self.expand_state211 = FCN(save_folder + "_expand_state211", load_folder + "_expand_state211",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred211 = ResNetFCN(save_folder + "_pos_err_pred211", load_folder + "_pos_err_pred211",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet211 = ResNetFCN(save_folder + "_pos_err_prechet211", load_folder + "_pos_err_prechet211",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom211 = Params(save_folder + "_pos_err_prechom211", load_folder + "_pos_err_prechom211", (self.pose_size, self.pose_size), device = self.device)
  
@@ -983,13 +976,13 @@ class PosErr_PredictionResNet(Proto_Macromodel):
 
         # Network 221
         self.expand_state221 = FCN(save_folder + "_expand_state221", load_folder + "_expand_state221",\
-            2 * self.pos_size, self.z_dim, 1, device = self.device)
+            2 * self.pose_size, self.z_dim, 1, device = self.device)
 
         self.pos_err_pred221 = ResNetFCN(save_folder + "_pos_err_pred221", load_folder + "_pos_err_pred221",\
-            self.z_dim, 1, 3, device = self.device)
+            self.z_dim, self.pose_size, 3, device = self.device)
 
         self.pos_err_prechet221 = ResNetFCN(save_folder + "_pos_err_prechet221", load_folder + "_pos_err_prechet221",\
-            self.state_size + self.extra + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
+            self.z_dim + self.pose_size, sum(range(self.pose_size+1)), 4, device = self.device)
 
         self.pos_err_prechom221 = Params(save_folder + "_pos_err_prechom221", load_folder + "_pos_err_prechom221", (self.pose_size, self.pose_size), device = self.device)
  
@@ -1002,38 +995,69 @@ class PosErr_PredictionResNet(Proto_Macromodel):
         if info_flow[model_name]["model_folder"] != "":
             self.load(info_flow[model_name]["epoch_num"])
 
-    def get_pred(self, init_pos, command_pos, pos_err, peg_type, hole_type):
-        state = torch.cat([init_pos, command_pos, pos_err], dim = 1)
+    def calc_params(self, rep, meanmodel, hetmodel, hom_prec):
+        batch_size = rep.size(0)
 
-        pos_err_logits001 = self.pos_err_pred001(self.expand_state001(state))
-        pos_err_logits011 = self.pos_err_pred011(self.expand_state011(state))
-        pos_err_logits021 = self.pos_err_pred021(self.expand_state021(state))
+        mean = meanmodel(rep)
+        
+        new_rep = torch.cat([rep, mean], dim = 1)
+        
+        het_vect = hetmodel(new_rep).transpose(0,1)
 
-        pos_err_logits101 = self.pos_err_pred101(self.expand_state101(state))
-        pos_err_logits111 = self.pos_err_pred111(self.expand_state111(state))
-        pos_err_logits121 = self.pos_err_pred121(self.expand_state121(state))
+        tril_indices = torch.tril_indices(row=self.pose_size, col=self.pose_size)
 
-        pos_err_logits201 = self.pos_err_pred201(self.expand_state201(state))
-        pos_err_logits211 = self.pos_err_pred211(self.expand_state211(state))
-        pos_err_logits221 = self.pos_err_pred221(self.expand_state221(state))
+        het_tril = torch.zeros((self.pose_size, self.pose_size, batch_size)).to(self.device)
 
-        ol_peg0 = peg_type[:,0].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        ol_peg1 = peg_type[:,1].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        ol_peg2 = peg_type[:,2].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
+        het_tril[tril_indices[0], tril_indices[1]] = het_vect
 
-        ol_hole0 = hole_type[:,0].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        ol_hole1 = hole_type[:,1].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        ol_hole2 = hole_type[:,2].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
+        het_prec = prec_mult(het_tril)
 
-        pos_err_logits01 = ol_hole0 * pos_err_logits001 + ol_hole1 * pos_err_logits101 + ol_hole2 * pos_err_logits201
+        hom_prec = prec_single(hom_prec()).unsqueeze(0).repeat_interleave(batch_size, 0)  
 
-        pos_err_logits11 = ol_hole0 * pos_err_logits011 + ol_hole1 * pos_err_logits111 + ol_hole2 * pos_err_logits211
+        prec = het_prec + hom_prec
 
-        pos_err_logits21 = ol_hole0 * pos_err_logits021 + ol_hole1 * pos_err_logits121 + ol_hole2 * pos_err_logits221
+        return mean, prec
 
-        pos_err_logits1 = ol_peg0 * pos_err_logits01 + ol_peg1 * pos_err_logits11 + ol_peg2 * pos_err_logits21
+    def get_pred(self, init_pos, command_pos, peg_type, hole_type):
+        state = torch.cat([init_pos, command_pos], dim = 1)
 
-        return pos_err_logits1
+        pos_err_mean001, pos_err_prec001 = self.calc_params(self.expand_state001(state), self.pos_err_pred001, self.pos_err_prechet001, self.pos_err_prechom001)
+        pos_err_mean101, pos_err_prec101 = self.calc_params(self.expand_state101(state), self.pos_err_pred101, self.pos_err_prechet101, self.pos_err_prechom101)
+        pos_err_mean201, pos_err_prec201 = self.calc_params(self.expand_state201(state), self.pos_err_pred201, self.pos_err_prechet201, self.pos_err_prechom201)
+        pos_err_mean011, pos_err_prec011 = self.calc_params(self.expand_state011(state), self.pos_err_pred011, self.pos_err_prechet011, self.pos_err_prechom011)
+        pos_err_mean111, pos_err_prec111 = self.calc_params(self.expand_state111(state), self.pos_err_pred111, self.pos_err_prechet111, self.pos_err_prechom111)
+        pos_err_mean211, pos_err_prec211 = self.calc_params(self.expand_state211(state), self.pos_err_pred211, self.pos_err_prechet211, self.pos_err_prechom211)
+        pos_err_mean021, pos_err_prec021 = self.calc_params(self.expand_state021(state), self.pos_err_pred021, self.pos_err_prechet021, self.pos_err_prechom021)
+        pos_err_mean121, pos_err_prec121 = self.calc_params(self.expand_state121(state), self.pos_err_pred121, self.pos_err_prechet121, self.pos_err_prechom121)
+        pos_err_mean221, pos_err_prec221 = self.calc_params(self.expand_state221(state), self.pos_err_pred221, self.pos_err_prechet221, self.pos_err_prechom221)
+
+        om_hole0 = hole_type[:,0].unsqueeze(1).repeat_interleave(pos_err_mean001.size(1), dim=1)
+        om_hole1 = hole_type[:,1].unsqueeze(1).repeat_interleave(pos_err_mean001.size(1), dim=1)
+        om_hole2 = hole_type[:,2].unsqueeze(1).repeat_interleave(pos_err_mean001.size(1), dim=1)
+        oc_hole0 = hole_type[:,0].unsqueeze(1).repeat_interleave(pos_err_prec001.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec001.size(2), dim=2)
+        oc_hole1 = hole_type[:,1].unsqueeze(1).repeat_interleave(pos_err_prec001.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec001.size(2), dim=2)
+        oc_hole2 = hole_type[:,2].unsqueeze(1).repeat_interleave(pos_err_prec001.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec001.size(2), dim=2)
+
+        om_peg0 = peg_type[:,0].unsqueeze(1).repeat_interleave(pos_err_mean001.size(1), dim=1)
+        om_peg1 = peg_type[:,1].unsqueeze(1).repeat_interleave(pos_err_mean001.size(1), dim=1)
+        om_peg2 = peg_type[:,2].unsqueeze(1).repeat_interleave(pos_err_mean001.size(1), dim=1)
+        oc_peg0 = peg_type[:,0].unsqueeze(1).repeat_interleave(pos_err_prec001.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec001.size(2), dim=2)
+        oc_peg1 = peg_type[:,1].unsqueeze(1).repeat_interleave(pos_err_prec001.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec001.size(2), dim=2)
+        oc_peg2 = peg_type[:,2].unsqueeze(1).repeat_interleave(pos_err_prec001.size(1), dim=1).unsqueeze(2).repeat_interleave(pos_err_prec001.size(2), dim=2)
+
+        pos_err_mean01 = om_hole0 * pos_err_mean001 + om_hole1 * pos_err_mean101 + om_hole2 * pos_err_mean201
+        pos_err_prec01 = oc_hole0 * pos_err_prec001 + oc_hole1 * pos_err_prec101 + oc_hole2 * pos_err_prec201
+
+        pos_err_mean11 = om_hole0 * pos_err_mean011 + om_hole1 * pos_err_mean111 + om_hole2 * pos_err_mean211
+        pos_err_prec11 = oc_hole0 * pos_err_prec011 + oc_hole1 * pos_err_prec111 + oc_hole2 * pos_err_prec211
+
+        pos_err_mean21 = om_hole0 * pos_err_mean021 + om_hole1 * pos_err_mean121 + om_hole2 * pos_err_mean221
+        pos_err_prec21 = oc_hole0 * pos_err_prec021 + oc_hole1 * pos_err_prec121 + oc_hole2 * pos_err_prec221
+
+        pos_err_mean1 = om_peg0 * pos_err_mean01 + om_peg1 * pos_err_mean11 + om_peg2 * pos_err_mean21
+        pos_err_prec1 = oc_peg0 * pos_err_prec01 + oc_peg1 * pos_err_prec11 + oc_peg2 * pos_err_prec21
+
+        return pos_err_mean1, pos_err_prec1
 
     def forward(self, input_dict):
         init_pos = input_dict["errorinit_pos"].to(self.device)
@@ -1047,36 +1071,10 @@ class PosErr_PredictionResNet(Proto_Macromodel):
             'pos_err_params': (pos_err_mean, pos_err_prec),
         }
 
-    def process(self, state, peg_type, hole_type):
-        pos_err_logits001 = self.pos_err_pred001(self.expand_state001(state)) # cross, cross
-        pos_err_logits011 = self.pos_err_pred011(self.expand_state011(state)) # cross, rect
-        pos_err_logits021 = self.pos_err_pred021(self.expand_state021(state)) # cross, square
+    def process(self, init_pos, command_pos, pos_err, peg_type, hole_type):
+        return self.get_pred(init_pos, command_pos, peg_type, hole_type)
 
-        pos_err_logits101 = self.pos_err_pred101(self.expand_state101(state))
-        pos_err_logits111 = self.pos_err_pred111(self.expand_state111(state))
-        pos_err_logits121 = self.pos_err_pred121(self.expand_state121(state))
 
-        pos_err_logits201 = self.pos_err_pred201(self.expand_state201(state))
-        pos_err_logits211 = self.pos_err_pred211(self.expand_state211(state))
-        pos_err_logits221 = self.pos_err_pred221(self.expand_state221(state))
-
-        ol_peg0 = peg_type[:,0].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        ol_peg1 = peg_type[:,1].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        ol_peg2 = peg_type[:,2].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-
-        pos_err_logits01 = ol_peg0 * pos_err_logits001 + ol_peg1 * pos_err_logits011 + ol_peg2 * pos_err_logits021 # cross hole logits
-
-        pos_err_logits11 = ol_peg0 * pos_err_logits101 + ol_peg1 * pos_err_logits111 + ol_peg2 * pos_err_logits121 # rect hole logits
-
-        pos_err_logits21 = ol_peg0 * pos_err_logits201 + ol_peg1 * pos_err_logits211 + ol_peg2 * pos_err_logits221 # square hole logits
-
-        pe_hole0 = hole_type[:,0].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        pe_hole1 = hole_type[:,1].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-        pe_hole2 = hole_type[:,2].unsqueeze(1).repeat_interleave(pos_err_logits001.size(1), dim=1)
-
-        pos_err_ratio = pe_hole0 * pos_err_logits01 + pe_hole1 * pos_err_logits11 + pe_hole2 * pos_err_logits21
-
-        return pos_err_ratio.squeeze()
         
 # class Origin_DetectionTransformer(Proto_Macromodel):
 #     def __init__(self, model_folder, model_name, info_flow, force_size, proprio_size, action_dim, num_options, min_steps, use_fft = True, device = None):

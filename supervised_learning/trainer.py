@@ -81,8 +81,8 @@ class Trainer(object):
 		 force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
 		# self.model_dict["Options_PredictionResNet"] = Options_PredictionResNet(models_folder, "Options_PredictionResNet", self.info_flow,\
 		#  pose_size, num_options, device = device).to(device)
-		# self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
-		#  pose_size, num_options, device = device).to(device)
+		self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
+		 pose_size, num_options, device = device).to(device)
 		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################
@@ -133,6 +133,7 @@ class Trainer(object):
 		self.loss_dict["Ranking_Loss"] = Ranking_Loss()
 		self.loss_dict["CE_ensemble"] = CrossEnt_Ensemble_Loss()
 		self.loss_dict["Multivariate_Normal_Logprob"] = Multivariate_GaussianNegLogProb_Loss()
+		self.loss_dict["Multivariate_Normal_KL"] = Multivariate_GaussianKL_Loss()
 		###################################
 		####### Code ends here ###########
 		####################################

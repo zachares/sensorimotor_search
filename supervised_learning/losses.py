@@ -77,6 +77,17 @@ def multiv_gauss_logprob(samples, means, prec):
     log_prob_sample = -0.5 * torch.bmm(torch.bmm(err, prec), err.transpose(1,2))
     return log_prob_const + log_prob_sample
 
+def multiv_gauss_KL(mean1, mean2, prec1, prec2):
+
+	prec1_det = det3(prec1)
+	prec2_det = det3(prec2)
+	prec1_inv = torch.inverse(prec1)
+	prec_mult = torch.bmm(prec2, prec1_inv)
+	prec_mult_trace = torch.diagonal(prec_mult, dim1=1, dim2=2).sum(1)
+	mean_error = (mean2 - mean1).unsqueeze(2)
+
+	return 0.5 * (torch.log(prec1_det/prec2_det) + prec_mult_trace + torch.bmm(torch.bmm(mean_error.transpose(1,2), prec2), mean_error).squeeze())
+
 def multinomial_KL(logits_q, logits_p):
 
 	return -(F.softmax(logits_p, dim =1) * (F.log_softmax(logits_q, dim = 1) - F.log_softmax(logits_p, dim = 1))).sum(1).mean()
@@ -172,6 +183,24 @@ class Multivariate_GaussianNegLogProb_Loss(Proto_Loss):
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
 		logging_dict['scalar']['avg_err/' + label] =(means - labels).norm(p=2, dim =1).mean().item()
+
+		return loss
+
+class Multivariate_GaussianKL_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		params_est = input_tuple[0]
+		params_tgt = input_tuple[1]
+
+		means_est, precs_est = params_est
+		means_tgt, precs_tgt = params_tgt
+		
+		loss = weight * multiv_gauss_KL(means_tgt, means_est, precs_tgt, precs_est).mean()
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']['avg_err/' + label] =(means_est -  means_tgt).norm(p=2, dim =1).mean().item()
 
 		return loss
 

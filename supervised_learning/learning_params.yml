@@ -115,22 +115,22 @@ info_flow:
         weight: 1
         inputs:
           pos_err: "dataset"
-  # PosErr_PredictionResNet:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
-  #   inputs:
-  #     errorinit_pos: "dataset"
-  #     pos_err: "dataset"
-  #     command_pos: "dataset"
-  #     peg_type: "dataset"
-  #     hole_type: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     pos_err_ratio:
-  #       loss: "Ranking_Loss"
-  #       loss_name: "PosErr_NormPred"
-  #       weight: 1
-  #       inputs:
-  #         norm_av: "PosErr_DetectionTransformer"
+  PosErr_PredictionResNet:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      errorinit_pos: "dataset"
+      pos_err: "dataset"
+      command_pos: "dataset"
+      peg_type: "dataset"
+      hole_type: "dataset"
+      epoch: "dataset"
+    outputs:
+      pos_err_params:
+        loss: "Multivariate_Normal_KL"
+        loss_name: "PosErr_KL"
+        weight: 1
+        inputs:
+          pos_err_params: "PosErr_DetectionTransformer"
 

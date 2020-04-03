@@ -1,5 +1,5 @@
 perception_params:
-  seed: 1234
+  seed: 8888
   display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   workspace_dim: 0.04
   discretization: 8
@@ -10,6 +10,7 @@ perception_params:
   use_GPU: True
   num_trials: 9
   converge_thresh: 10
+  num_samples: 1000
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
