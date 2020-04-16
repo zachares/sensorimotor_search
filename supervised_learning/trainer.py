@@ -38,8 +38,6 @@ class Trainer(object):
 
 		self.device = device
 
-		z_dim = cfg["model_params"]["z_dim"]
-
 		batch_size = cfg['dataloading_params']['batch_size']
 		regularization_weight = cfg['training_params']['regularization_weight']
 		learning_rate = cfg['training_params']['lrn_rate']
@@ -47,24 +45,16 @@ class Trainer(object):
 		beta_2 = cfg['training_params']['beta2']
 
 		self.info_flow = cfg['info_flow']
-		# image_size = self.info_flow['dataset']['outputs']['image']
 		force_size =self.info_flow['dataset']['outputs']['force_hi_freq'] 
 		proprio_size =self.info_flow['dataset']['outputs']['proprio'] 
-		joint_size = self.info_flow['dataset']['outputs']['joint_pos']
 		pose_size = 3
 		# rgbd_size = self.info_flow['dataset']['outputs']['rgbd']
 
 		action_dim =self.info_flow['dataset']['outputs']['action']
-		z_dim = cfg["model_params"]["z_dim"]
 		min_steps = cfg["model_params"]["min_steps"]
 		num_options = cfg["model_params"]["num_options"]
 
 		self.batch_size = batch_size
-
-		self.curriculum = cfg['training_params']['curriculum']
-
-		if len(self.curriculum) == 0:
-			self.curriculum = None
 
 		### Initializing Model ####
 		print("Initializing Neural Network Models")
@@ -75,14 +65,15 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		# self.model_dict["Options_ClassifierTransformer"] = Options_ClassifierTransformer(models_folder, "Options_ClassifierTransformer", self.info_flow,\
-		#  force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
-		self.model_dict["PosErr_DetectionTransformer"] = PosErr_DetectionTransformer(models_folder, "PosErr_DetectionTransformer", self.info_flow,\
+		self.model_dict["Options_Classifier"] = Options_Classifier(models_folder, "Options_Classifier", self.info_flow,\
 		 force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
-		# self.model_dict["Options_PredictionResNet"] = Options_PredictionResNet(models_folder, "Options_PredictionResNet", self.info_flow,\
+		# self.model_dict["Options_Confusion"] = Options_Net(models_folder, "Options_Confusion", self.info_flow, pose_size, num_options, device = device).to(device)
+		# self.model_dict["Options_Prediction"] = Options_Net(models_folder, "Options_Prediction", self.info_flow, pose_size, num_options, device = device).to(device)
+		self.model_dict["Options_Confusion_Mat"] = Options_Mat(models_folder, "Options_Confusion_Mat", self.info_flow, pose_size, num_options, device = device).to(device)
+		# self.model_dict["Insertion_PredictionResNet"] = Insertion_PredictionResNet(models_folder, "Insertion_PredictionResNet", self.info_flow,\
+		#  pose_size, device = device).to(device)
+		# self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
 		#  pose_size, num_options, device = device).to(device)
-		self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
-		 pose_size, num_options, device = device).to(device)
 		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################
@@ -133,7 +124,9 @@ class Trainer(object):
 		self.loss_dict["Ranking_Loss"] = Ranking_Loss()
 		self.loss_dict["CE_ensemble"] = CrossEnt_Ensemble_Loss()
 		self.loss_dict["Multivariate_Normal_Logprob"] = Multivariate_GaussianNegLogProb_Loss()
+		self.loss_dict["Normal_Logprob"] = GaussianNegLogProb_Loss()
 		self.loss_dict["Multivariate_Normal_KL"] = Multivariate_GaussianKL_Loss()
+		self.loss_dict["BCE"] = BinaryEst_Loss()
 		###################################
 		####### Code ends here ###########
 		####################################
@@ -208,37 +201,38 @@ class Trainer(object):
 		for idx_model, model_key in enumerate(self.model_dict.keys()):
 			# if self.info_flow[model_key]["train"] == 0:
 			# 	continue
-			for idx_output, output_key in enumerate(self.info_flow[model_key]['outputs'].keys()):
-				if self.info_flow[model_key]['outputs'][output_key]['loss'] == "":
-					loss_idx += 1
-					continue
+			if 'outputs' in self.info_flow[model_key].keys():
+				for idx_output, output_key in enumerate(self.info_flow[model_key]['outputs'].keys()):
+					if self.info_flow[model_key]['outputs'][output_key]['loss'] == "":
+						loss_idx += 1
+						continue
 
-				input_list = [self.model_outputs[model_key][output_key]]
+					input_list = [self.model_outputs[model_key][output_key]]
 
-				if 'inputs' in list(self.info_flow[model_key]['outputs'][output_key].keys()):
-					for input_key in self.info_flow[model_key]['outputs'][output_key]['inputs'].keys():
-						input_source = self.info_flow[model_key]['outputs'][output_key]['inputs'][input_key]
-						if input_source == "":
-							input_source = model_key
-							
-						input_list.append(self.model_outputs[input_source][input_key])
+					if 'inputs' in list(self.info_flow[model_key]['outputs'][output_key].keys()):
+						for input_key in self.info_flow[model_key]['outputs'][output_key]['inputs'].keys():
+							input_source = self.info_flow[model_key]['outputs'][output_key]['inputs'][input_key]
+							if input_source == "":
+								input_source = model_key
+								
+							input_list.append(self.model_outputs[input_source][input_key])
 
-				loss_function = self.loss_dict[self.info_flow[model_key]['outputs'][output_key]['loss']]
-				loss_name = self.info_flow[model_key]["outputs"][output_key]["loss_name"]
+					loss_function = self.loss_dict[self.info_flow[model_key]['outputs'][output_key]['loss']]
+					loss_name = self.info_flow[model_key]["outputs"][output_key]["loss_name"]
 
-				if loss_bool == False:
-					if "offset" in self.info_flow[model_key]["outputs"][output_key].keys():
-						offset = self.info_flow[model_key]["outputs"][output_key]["offset"]
-						loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name, offset)
+					if loss_bool == False:
+						if "offset" in self.info_flow[model_key]["outputs"][output_key].keys():
+							offset = self.info_flow[model_key]["outputs"][output_key]["offset"]
+							loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name, offset)
+						else:
+							loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
+						loss_bool = True
 					else:
-						loss = loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
-					loss_bool = True
-				else:
-					if "offset" in self.info_flow[model_key]["outputs"][output_key].keys():
-						offset = self.info_flow[model_key]["outputs"][output_key]["offset"]
-						loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name, offset)
-					else:
-						loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
+						if "offset" in self.info_flow[model_key]["outputs"][output_key].keys():
+							offset = self.info_flow[model_key]["outputs"][output_key]["offset"]
+							loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name, offset)
+						else:
+							loss += loss_function.loss(tuple(input_list), self.logging_dict, self.info_flow[model_key]['outputs'][output_key]['weight'], model_key + "/" + loss_name)
 
 		return loss
 

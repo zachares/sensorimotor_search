@@ -8,10 +8,7 @@ dataloading_params:
   num_workers: 4
   batch_size: 64
   num_trajectories: 500
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202002251427_debugging_16_10HZ/val_train_split.pkl"
-  # "/scr-ssd/sens_search_logging/runs/202002200925_debugging_15_10HZ_wensemble/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset10HZ_sliding/"
-  #"/scr-ssd/sens_search_logging/runs/202002180859_debugging_5_2HZ_wrgbd/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset2HZ_winsert/"
-    #"/scr-ssd/sens_search_logging/runs/202002111509_debugging_19_2HZ_wrgbd/val_train_split.pkl" # - dataset "/scr2/muj_senssearch_dataset_2HZ/"
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202004142024_debugging_13_10HZ/val_train_split.pkl"
 
 
 training_params:
@@ -21,10 +18,9 @@ training_params:
   beta1: 0.9
   beta2: 0.99
   max_training_epochs: 2500
-  val_ratio: 0.05
+  val_ratio: 0.33
   use_GPU: True
-  curriculum: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] #[] #[10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20, 20] #[2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10] #[2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2] #
-#  # [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10,11,11,11,11,12,12,12,12,12] #
+  
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
   run_description: "debugging" #Options include: debugging, training, testing
@@ -48,33 +44,35 @@ info_flow:
       hole_type: [3]
       final_point: [3]
       pose_err: [3]
-  # Options_ClassifierTransformer:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
-  #   # train: 1
-  #   # model_folder: ""
-  #   # epoch_num: 0
-  #   inputs:
-  #     proprio_diff: "dataset"
-  #     force_hi_freq: "dataset"
-  #     action: "dataset"
-  #     peg_type: "dataset"
-  #     contact_diff: "dataset"
-  #     padding_mask: "dataset"
-  #     length: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     options_class:
-  #       loss: "CE"
-  #       loss_name: "Options_Class"
-  #       weight: 1
-  #       inputs:
-  #         hole_type: "dataset"
-  # Options_PredictionResNet:
+      insertion: [1]
+  Options_Classifier:
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/202004142111_debugging_24_10HZ/"
+    epoch_num: 2500
+    # train: 1
+    # model_folder: ""
+    # epoch_num: 0
+    inputs:
+      proprio_diff: "dataset"
+      force_hi_freq: "dataset"
+      action: "dataset"
+      macro_action: "dataset"
+      peg_type: "dataset"
+      hole_type: "dataset"
+      contact_diff: "dataset"
+      padding_mask: "dataset"
+      epoch: "dataset"
+    outputs:
+      options_class:
+        loss: "CE"
+        loss_name: "Options_Class"
+        weight: 1
+        inputs:
+          hole_type: "dataset"
+  # Options_Prediction:
   #   train: 0
-  #   model_folder: "/scr-ssd/sens_search_logging/models/202002291410_debugging_21_10HZ/"
-  #   epoch_num: 625
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
+  #   epoch_num: 100
   #   inputs:
   #     init_pos: "dataset"
   #     command_pos: "dataset"
@@ -87,50 +85,50 @@ info_flow:
   #       loss_name: "Options_Class"
   #       weight: 1
   #       inputs:
-  #         options_class: "Options_ClassifierTransformer"
-  PosErr_DetectionTransformer:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    # train: 1
-    # model_folder: ""
-    # epoch_num: 0
-    inputs:
-      proprio_diff: "dataset"
-      force_hi_freq: "dataset"
-      action: "dataset"
-      peg_type: "dataset"
-      hole_type: "dataset"
-      contact_diff: "dataset"
-      padding_mask: "dataset"
-      hole_type: "dataset"
-      pose_vect: "dataset"
-      length: "dataset"
-      pos_err: "dataset"
-      epoch: "dataset"
-    outputs:
-      pos_err_params:
-        loss: "Multivariate_Normal_Logprob"
-        loss_name: "PosErr_Estimation"
-        weight: 1
-        inputs:
-          pos_err: "dataset"
-  PosErr_PredictionResNet:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      errorinit_pos: "dataset"
-      pos_err: "dataset"
-      command_pos: "dataset"
-      peg_type: "dataset"
-      hole_type: "dataset"
-      epoch: "dataset"
-    outputs:
-      pos_err_params:
-        loss: "Multivariate_Normal_KL"
-        loss_name: "PosErr_KL"
-        weight: 1
-        inputs:
-          pos_err_params: "PosErr_DetectionTransformer"
+  #         options_class: "Options_Classifier"
+  # Options_Confusion:
+  #   train: 0
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
+  #   epoch_num: 100
+  #   inputs:
+  #     init_pos: "dataset"
+  #     command_pos: "dataset"
+  #     peg_type: "dataset"
+  #     hole_type: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     options_class:
+  #       loss: "CE"
+  #       loss_name: "Options_Confusion"
+  #       weight: 1
+  #       inputs:
+  #         hole_est: "Options_Classifier"
+  # Options_Confusion_Mat:
+  #   train: 0
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202004150859_debugging_21_10HZ/"
+  #   epoch_num: 1
+  #   inputs:
+  #     init_pos: "dataset"
+  #     command_pos: "dataset"
+  #     peg_type: "dataset"
+  #     hole_type: "dataset"
+  #     hole_est: "Options_Classifier"
+  # Insertion_PredictionResNet:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     init_pos: "dataset"
+  #     command_pos: "dataset"
+  #     peg_type: "dataset"
+  #     hole_type: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     insert_class:
+  #       loss: "BCE"
+  #       loss_name: "Insert_Class"
+  #       weight: 1
+  #       inputs:
+  #         insertion: "dataset"
+
 

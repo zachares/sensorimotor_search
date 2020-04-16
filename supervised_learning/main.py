@@ -103,7 +103,7 @@ if __name__ == '__main__':
         else:
             save_model_flag = True
 
-
+    save_val_interval = 25 ### EXPLAIN
     ##################################################################################
     # hardware and low level training details
     ##################################################################################
@@ -171,7 +171,7 @@ if __name__ == '__main__':
             ##### Validation #########
             ##################################################################################
             # performed at the end of each epoch
-            if val_ratio is not 0 and (i_epoch % 25) == 0:
+            if val_ratio is not 0 and (i_epoch % save_val_interval) == 0:
                 
                 print("Calculating validation results after #{} epochs".format(i_epoch))
 
@@ -195,7 +195,7 @@ if __name__ == '__main__':
                     os.mkdir(logger.models_folder)
                 trainer.save(i_epoch)
 
-            elif save_model_flag and (i_epoch % 25) == 0:
+            elif save_model_flag and (i_epoch % save_val_interval) == 0:
                 trainer.save(i_epoch)
 
     else:

@@ -22,87 +22,23 @@ sys.path.insert(0, "../robosuite/")
 sys.path.insert(0, "../models/") 
 sys.path.insert(0, "../robosuite/") 
 sys.path.insert(0, "../datalogging/") 
-sys.path.insert(0, "../supervised_learning/") 
+sys.path.insert(0, "../supervised_learning/")
+sys.path.insert(0, "../data_collection/")
 
 from models import *
 from logger import Logger
 from decision_model import *
+from datacollection_util import *
 
 import robosuite
 import robosuite.utils.transform_utils as T
 from robosuite.wrappers import IKWrapper
 
-def T_angle(angle):
-    TWO_PI = 2 * np.pi
-    ones = np.ones_like(angle)
-    zeros = np.zeros_like(angle)
-
-    case1 = np.where(angle < -TWO_PI, angle + TWO_PI * np.ceil(abs(angle) / TWO_PI), zeros)
-    case2 = np.where(angle > TWO_PI, angle - TWO_PI * np.floor(angle / TWO_PI), zeros)
-    case3 = np.where(angle > -TWO_PI, ones, zeros) * np.where(angle < 0, TWO_PI + angle, zeros)
-    case4 = np.where(angle < TWO_PI, ones, zeros) * np.where(angle > 0, angle, zeros)
-
-    return case1 + case2 + case3 + case4
-
-def productofgauss(mean0, mean1, cov0, cov1):
-	inv_cov0 = torch.inverse(cov0)
-	inv_cov1 = torch.inverse(cov1)
-	cov = torch.inverse(inv_cov0 + inv_cov1)
-	mean = torch.mm(cov, torch.mm(inv_cov0, mean0.unsqueeze(1))) + torch.mm(cov, torch.mm(inv_cov1, mean1.unsqueeze(1)))
-	return mean.squeeze(), cov
-
-def save_obs(obs_dict, keys, tensor_dict):
-	for key in keys:
-		if key == "rgbd":
-			obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.unint8)
-			obs0 = resize(obs, (128, 128))
-			obs0 = np.transpose(obs, (2, 1, 0))
-			obs0 = np.expand_dims(obs, axis = 0)
-			obs1 = np.rot90(obs_dict['depth'], k = 2).astype(np.unint8)
-			obs1 = resize(obs, (128, 128))
-			obs1 = np.expand_dims(np.expand_dims(obs, axis = 0), axis = 0)
-			obs = np.concatenate([obs0, obs1], dim = 1)
-		else:
-			obs = np.expand_dims(obs_dict[key], axis = 0)
-
-		if key in tensor_dict.keys():
-			tensor_dict[key].append(torch.from_numpy(obs).float().to(device).unsqueeze(0))
-		else:
-			tensor_dict[key] = [torch.from_numpy(obs).float().to(device).unsqueeze(0)]
-
-def movetogoal(env, points_list, tol, tol_ang, step_threshold, display_bool, point_idx, obs, obs_dict = None):
-	step_count = 0
-	goal = points_list[point_idx][0]
-	point_type = points_list[point_idx][1]
-
-	while env._check_poserr(goal, tol, tol_ang) == False and step_count < step_threshold:
-		action, action_euler = env._pose_err(goal)
-		pos_err = kp * action_euler[:3]
-		noise = np.random.normal(0.0, 0.1, pos_err.size)
-		noise[2] = -1.0 * abs(noise[2])
-		pos_err += noise_parameter * noise
-
-		obs['action'] = env.controller.transform_action(pos_err)
-
-		if point_type == 1 and obs_dict is not None:
-			save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
-			# curr_pose = env._get_eepos()
-
-		obs, reward, done, info = env.step(pos_err)
-		# obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
-		
-		if display_bool:
-			env.render()
-
-
-		step_count += 1
-
-	point_idx += 1
-
-	if obs_dict is not None:
-		return point_idx, obs, obs_dict
-	else:
-		return point_idx, obs
+def move_down(env, display_bool):
+	obs, reward, done, info = env.step(np.array([0,0, -0.1]))
+	
+	if display_bool:
+		env.render()
 
 if __name__ == '__main__':
 
@@ -119,7 +55,7 @@ if __name__ == '__main__':
 		cfg = yaml.safe_load(ymlfile)
 	display_bool = cfg['perception_params']['display_bool']
 	kp = np.array(cfg['perception_params']['kp'])
-	noise_parameter = np.array(cfg['perception_params']['noise_parameter'])
+	noise_parameters = np.array(cfg['perception_params']['noise_parameters'])
 	ctrl_freq = np.array(cfg['perception_params']['control_freq'])
 	num_trials = cfg['perception_params']['num_trials']
 
@@ -176,14 +112,18 @@ if __name__ == '__main__':
     ##########################################################
     ### Initializing and loading model
     ##########################################################
-	eval_model = Options_ClassifierTransformer("", "Options_ClassifierTransformer", info_flow, force_size, proprio_size,\
-	 action_dim, num_options, 0, device = device).to(device)
-	pred_model = Options_PredictionResNet("", "Options_PredictionResNet", info_flow, pose_size, num_options, device = device).to(device)
-	# origin_model = Origin_DetectionTransformer("", "Origin_DetectionTransformer", info_flow,\
-	# 	 force_size, proprio_size, action_dim, num_options, 0, device = device).to(device)
-	eval_model.eval()
-	pred_model.eval()
-	# origin_model.eval()
+	sensor = Options_Classifier("", "Options_Classifier", info_flow,\
+		 force_size, proprio_size, action_dim, num_options, device = device).to(device)
+	confusion = Options_Net("", "Options_Confusion", info_flow, pose_size, num_options, device = device).to(device)
+	sensor_pred = Options_Net("", "Options_Prediction", info_flow, pose_size, num_options, device = device).to(device)
+	confusion_mat = Options_Mat("", "Options_Confusion_Mat", info_flow, pose_size, num_options, device = device).to(device)
+	insert_model = Insertion_PredictionResNet("", "Insertion_PredictionResNet", info_flow, pose_size, device = device).to(device)
+
+	sensor.eval()
+	confusion.eval()
+	confusion_mat.eval()
+	sensor_pred.eval()
+	insert_model.eval()
 	#######################################################
 	### Setting up the test environment and extracting the goal locations
 	######################################################### 
@@ -192,7 +132,6 @@ if __name__ == '__main__':
 	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
 	  gripper_type ="CrossPegwForce", controller='position', camera_depth=True)
 
-	obs = env.reset()
 	env.viewer.set_camera(camera_id=2)
 
 	tol = 0.01 # position tolerance
@@ -200,73 +139,99 @@ if __name__ == '__main__':
 
 	ori_action = np.array([np.pi, 0, np.pi])
 	plus_offset = np.array([0, 0, 0.04, 0,0,0])
+	peg_idx = 0
 
 	hole_poses = []
 	for idx, peg_type in enumerate(peg_types):
 		peg_top_site = peg_type + "Peg_top_site"
 		top = np.concatenate([env._get_sitepos(peg_top_site) - np.array([0, 0, 0.01]), ori_action])
+		top_height = top[2]
 		hole_poses.append((top, peg_type))
 
 	############################################################
 	### Declaring decision model
 	############################################################
 	decision_model = DecisionModel(hole_poses, num_options, workspace_dim, num_samples,\
-	 ori_action, plus_offset, pred_model, eval_model)
+	 ori_action, plus_offset, sensor, confusion, confusion_mat, sensor_pred, insert_model)
 
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
-	save_model_flag = False
-	logger = Logger(cfg, debugging_flag, save_model_flag)
-	logging_dict = {}
+	# logger = Logger(cfg, debugging_flag, False)
+	# logging_dict = {}
+	obs = {}
+	fixed_params = (kp, noise_parameters, tol, tol_ang, step_threshold, display_bool,top_height, obs_keys)
     ############################################################
     ### Starting tests
     ###########################################################
 	for trial_num in range(num_trials):
 		#choosing random peg
 		decision_model.reset_memory()
-		peg_idx = random.choice(range(len(hole_poses)))
 		decision_model.set_pegidx(peg_idx)
-
-		env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-		 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
-		  gripper_type = peg_types[peg_idx] + "PegwForce", controller='position', camera_depth=True)
-
-		obs = env.reset()
-		env.viewer.set_camera(camera_id=2)
-
-		converge_count = 0
-		# glb_cnt = 0
 		# logging_dict['scalar'] = {}
 
-		while converge_count < converge_thresh:
-			decision_model.choose_hole()
+		gripper_type = peg_types[peg_idx] + "PegwForce" 
+
+		env.reset(gripper_type)
+		env.viewer.set_camera(camera_id=2)
+		if display_bool:
+			env.render()
+
+		peg_idx += 1
+		peg_idx = peg_idx % len(peg_types)
+
+		num_steps = 0
+
+		print("\n")
+		print("############################################################")
+		print("######                BEGINNING NEW TRIAL              #####")
+		print("############################################################")
+		print("\n")
+		decision_model.print_hypothesis()
+		# a = input("Continue?")
+
+		while True and num_steps < 20:
+			# decision_model.choose_hole()
+			# points_list = decision_model.choose_action()
 			points_list = decision_model.choose_both()
 
 			point_idx = 0
 			goal = points_list[point_idx][0]
 			point_type = points_list[point_idx][1]
 
-			point_idx, obs = movetogoal(env, points_list, tol, tol_ang, step_threshold, display_bool, point_idx, obs)
-			point_idx, obs = movetogoal(env, points_list, tol, tol_ang, step_threshold, display_bool, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, fixed_params, points_list, point_idx, obs)
 
-			print("moved to initial position")
+			# print("moved to initial position")
 
 			obs_dict = {}
 
 			while point_idx < len(points_list):
-				point_idx, obs, obs_dict = movetogoal(env, points_list, tol, tol_ang, step_threshold, display_bool, point_idx, obs, obs_dict)
+				point_idx, done_bool, obs, obs_dict = movetogoal(env,fixed_params, points_list, point_idx, obs, obs_dict)
+
+				if done_bool:
+					point_idx == len(points_list)
+
+			if done_bool:
+				for i in range(20):
+					move_down(env, display_bool)
+
+				print("\n")
+				print("############################################################")
+				print("######                INSERTED                         #####")
+				print("############################################################")
+				print("\n")			
+				break
 
 			decision_model.new_obs(obs_dict)
-			prob = decision_model.print_hypothesis()
+			decision_model.print_hypothesis()
+			num_steps += 1
 
-			if prob == 1:
-				converge_count = converge_thresh
-			# logging_dict['scalar'][peg_type + "_" + hole_type + "/" + peg_types[0] + "_prob" ] = options_probs[0].item()
-			# logging_dict['scalar'][peg_type + "_" + hole_type + "/" + peg_types[1] + "_prob" ] = options_probs[1].item()
-			# logging_dict['scalar'][peg_type + "_" + hole_type + "/" + peg_types[2] + "_prob" ] = options_probs[2].item()
+			# a = input("Continue?")
 
-			# # logger.save_scalars(logging_dict, glb_cnt, 'evaluation/')
-			# glb_cnt += 1
+		# logging_dict['scalar']["Number of Steps"] = num_steps
+		# logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.hole_memory[decision_model.correct_idx]
+		# logging_dict['scalar']["Insertion"] = done_bool * 1.0
+		# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
 
-			converge_count += 1
+		# logger.save_scalars(logging_dict, trial_num, 'evaluation/')

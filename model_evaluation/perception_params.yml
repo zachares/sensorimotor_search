@@ -4,13 +4,13 @@ perception_params:
   workspace_dim: 0.04
   discretization: 8
   kp: [4, 4, 4]
-  noise_parameter: [0.4, 0.4, 0.4]
+  noise_parameters: [0.4, 0.4, 0.4]
   control_freq: 10
   step_threshold: 75
   use_GPU: True
-  num_trials: 9
+  num_trials: 20
   converge_thresh: 10
-  num_samples: 1000
+  num_samples: 100
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
@@ -28,14 +28,18 @@ info_flow:
       proprio: [12]
       contact: [1]
       num_options: 3
-  Options_ClassifierTransformer:
-    model_folder: "/scr-ssd/sens_search_logging/models/202002261236_debugging_11_10HZ/"
-    epoch_num: 1225
-  Options_PredictionResNet:
-    model_folder: "/scr-ssd/sens_search_logging/models/202002291410_debugging_21_10HZ/"
-    epoch_num: 625
-  Origin_DetectionTransformer:
-    model_folder: "/scr-ssd/sens_search_logging/models/202003061811_debugging_17_10HZ/"
-    epoch_num: 2375
-
-# 
+  Options_Classifier:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004142111_debugging_24_10HZ/"
+    epoch_num: 2500
+  Options_Confusion:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
+    epoch_num: 100
+  Options_Prediction:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
+    epoch_num: 100
+  Options_Confusion_Mat:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004150859_debugging_21_10HZ/"
+    epoch_num: 0
+  Insertion_PredictionResNet:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004051512_debugging_24_10HZ/"
+    epoch_num: 700

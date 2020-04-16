@@ -531,14 +531,7 @@ class Transformer_Decoder(Proto_Model):
     def forward(self, tgt_seq, src_seq, mem_padding_mask = None, tgt_padding_mask = None):
         # print("Padding mask size: ", mem_padding_mask.size())
         # print("input size: ", tgt_seq.size())
-        if mem_padding_mask is None and tgt_padding_mask is None:
-            return self.model(tgt_seq, src_seq)
-        elif mem_padding_mask is None :
-            return self.model(tgt_seq, src_seq, tgt_key_padding_mask = tgt_padding_mask)
-        elif tgt_padding_mask is None:
-            return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask)
-        else:
-            return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask, tgt_key_padding_mask = tgt_padding_mask)
+        return self.model(tgt_seq, src_seq, memory_key_padding_mask = mem_padding_mask, tgt_key_padding_mask = tgt_padding_mask)
 ######################################
 # Current Macromodel Types Supported
 #####################################
@@ -599,7 +592,9 @@ class ResNetFCN(Proto_Macromodel):
 
     def forward(self, x):
         for idx, model in enumerate(self.model_list):
-            if idx == 0:
+            if idx == 0 and self.num_layers == 1:
+                output = model(x)
+            elif idx == 0 and self.num_layers != 1:
                 output = model(x) + x
                 residual = output.clone()
 

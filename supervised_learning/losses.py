@@ -60,7 +60,7 @@ def record_diff(est, tar, label, logging_dict):
 	# logging_dict['scalar']['var/err_' + label] = tar_error.var().item()
 	
 def log_normal(x, m, v):
-    return -0.5 * ((x - m).pow(2)/ v + torch.log(2 * np.pi * v)).sum(-1).unsqueeze(-1)
+    return -0.5 * ((x - m).pow(2)/ v + 4 * torch.log(2 * np.pi * v)).sum(-1).unsqueeze(-1)
 
 def det3(mats):
     return mats[:,0,0] * (mats[:,1,1] * mats[:,2,2] - mats[:,1,2] *mats[:,2,1]) -\
@@ -162,6 +162,7 @@ class CrossEnt_Loss(Proto_Loss):
 		accuracy = torch.where(test > 0, torch.zeros_like(test), torch.ones_like(test))
 
 		loss = weight * self.loss_function(logits, labels.max(1)[1])
+
 		accuracy_rate = accuracy.mean()
 
 		logging_dict['scalar']["loss/" + label] = loss.item()
@@ -228,6 +229,24 @@ class GaussianNegLogProb_multistep_Loss(Proto_MultiStep_Loss):
 		logging_dict['scalar']["loss/" + label] = loss.item()
 		logging_dict['scalar']['accuracy/average_error/' + label] = mean_error_mag / len(logits_list)
 		logging_dict['scalar']['accuracy/max_variance/' + label] = torch.abs(varis).max().item()
+
+		return loss
+
+class GaussianNegLogProb_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__()
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		params = input_tuple[0]
+		labels = input_tuple[1]
+
+		means, varis = params			
+
+		loss = -1.0 * weight * log_normal(labels, means, varis).sum(1).mean()
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']['avg_err/' + label] =(means - labels).pow(2).sum(1).mean(0).item()
+		logging_dict['scalar']['avg_var_err/' + label] =((means - labels).pow(2).sum(1) - varis.sum(1)).mean(0).item()
 
 		return loss
 
@@ -328,6 +347,52 @@ class BinaryEst_MultiStep_Loss(Proto_MultiStep_Loss):
 		logging_dict['scalar']['accuracy/' + label] = accuracy_rate.item()	
 
 		return loss / len(logits_list)
+
+class BinaryEst_Loss(Proto_Loss):
+	def __init__(self):
+	    super().__init__(loss_function = nn.BCEWithLogitsLoss())
+
+	def loss(self, input_tuple, logging_dict, weight, label):
+		logits = input_tuple[0].squeeze()
+		labels = input_tuple[1].squeeze()
+
+		# probs = torch.sigmoid(logits).squeeze()
+		# samples = torch.where(probs > 0.5, torch.ones_like(probs), torch.zeros_like(probs))
+		# accuracy = torch.where(samples == labels, torch.ones_like(probs), torch.zeros_like(probs))
+
+		probs = torch.sigmoid(logits)
+		ui_probs = torch.where(probs == torch.sigmoid(torch.tensor(-600).float().to(logits.device)), torch.zeros_like(probs), torch.ones_like(probs))
+
+		# print(logits.size())
+		# print(labels.size())
+		logits_n = logits[ui_probs.nonzero(as_tuple=True)]
+		labels_n = labels[ui_probs.nonzero(as_tuple=True)]
+
+		probs = torch.sigmoid(logits_n).squeeze()
+
+		pos_probs = probs[labels_n.nonzero(as_tuple=True)]
+
+		samples = torch.where(probs > 0.5, torch.ones_like(probs), torch.zeros_like(probs))
+		accuracy = torch.where(samples == labels_n, torch.ones_like(probs), torch.zeros_like(probs))
+		pos_accuracy = torch.where(pos_probs > 0.5, torch.ones_like(pos_probs), torch.zeros_like(pos_probs))
+
+
+		loss = weight * self.loss_function(logits_n, labels_n)
+
+		# if len(labels_n.nonzero(as_tuple=True)[0]) > 0:
+		# 	logits_p = logits_n[labels_n.nonzero(as_tuple=True)]
+		# 	labels_p = labels_n[labels_n.nonzero(as_tuple=True)]
+		# 	loss += weight * self.loss_function(logits_p, labels_p) 
+
+		logging_dict['scalar']["loss/" + label] = loss.item()
+		logging_dict['scalar']['accuracy/' + label] = accuracy.mean().item()
+
+		if len(labels_n.nonzero(as_tuple=True)[0]) > 0:
+			logging_dict['scalar']['pos_accuracy/' + label] = pos_accuracy.mean().item()
+		else:
+			logging_dict['scalar']['pos_accuracy/' + label] = 1	
+
+		return loss
 
 class CrossEnt_MultiStep_Loss(Proto_MultiStep_Loss):
 	def __init__(self):

@@ -5,23 +5,13 @@ from scipy.interpolate import make_interp_spline as spline_funct
 from scipy.misc import imresize as resize
 import matplotlib.pyplot as plt
 import random
+import copy
 
 def plot_image(image):
 	image = np.rot90(image, k =2)
 	imgplot = plt.imshow(image)
 	plt.show()
-
-def T_angle(angle):
-    TWO_PI = 2 * np.pi
-    ones = np.ones_like(angle)
-    zeros = np.zeros_like(angle)
-
-    case1 = np.where(angle < -TWO_PI, angle + TWO_PI * np.ceil(abs(angle) / TWO_PI), zeros)
-    case2 = np.where(angle > TWO_PI, angle - TWO_PI * np.floor(angle / TWO_PI), zeros)
-    case3 = np.where(angle > -TWO_PI, ones, zeros) * np.where(angle < 0, TWO_PI + angle, zeros)
-    case4 = np.where(angle < TWO_PI, ones, zeros) * np.where(angle > 0, angle, zeros)
-
-    return case1 + case2 + case3 + case4
+    
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
 		if key == "rgbd":
@@ -44,46 +34,18 @@ def save_obs(obs_dict, keys, array_dict):
 		else:
 			array_dict[key] = [obs]
 
-def gridpoints(workspace_dim, peg_top_site, num_points = 10):
-	xmin = peg_top_site[0] - workspace_dim
-	xmax = peg_top_site[0] + workspace_dim
+def T_angle(angle):
+    TWO_PI = 2 * np.pi
+    ones = np.ones_like(angle)
+    zeros = np.zeros_like(angle)
 
-	ymin = peg_top_site[1] - workspace_dim
-	ymax = peg_top_site[1] + workspace_dim
+    case1 = np.where(angle < -TWO_PI, angle + TWO_PI * np.ceil(abs(angle) / TWO_PI), zeros)
+    case2 = np.where(angle > TWO_PI, angle - TWO_PI * np.floor(angle / TWO_PI), zeros)
+    case3 = np.where(angle > -TWO_PI, ones, zeros) * np.where(angle < 0, TWO_PI + angle, zeros)
+    case4 = np.where(angle < TWO_PI, ones, zeros) * np.where(angle > 0, angle, zeros)
 
-	zmin = peg_top_site[2] - 0.008
-	zmax = peg_top_site[2] + 2 * workspace_dim
+    return case1 + case2 + case3 + case4
 
-	print("Zs: ", zmin, " ",zmax)
-	x = np.random.uniform(low=xmin, high=xmax, size = num_points)#np.linspace(xmin, xmax, num = num_points, endpoint = True)
-	y = np.random.uniform(low=ymin, high=ymax, size=num_points)#np.linspace(ymin, ymax, num = num_points, endpoint = True)
-	z = np.random.uniform(low=zmin, high=zmax, size=num_points)#np.linspace(zmin, zmax, num = num_points, endpoint = True)
-
-	xfloor = np.random.uniform(low=xmin, high=xmax, size = int(0.5 *(num_points**(3))))
-	yfloor = np.random.uniform(low=ymin, high=ymax, size= int(0.5 * (num_points**(3))))
-
-	nc_point_list = []
-	c_point_list = []
-
-
-	for idx_x in range(xfloor.size):
-		for idx_y in range(yfloor.size):
-				x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-				y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-				z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-				c_point_list.append(np.expand_dims(np.array([xfloor[idx_x], yfloor[idx_y], zmin, x_ang, y_ang, z_ang]), axis = 0))
-
-	# for idx_x in range(num_points):
-	# 	for idx_y in range(num_points):
-	# 		for idx_z in range(num_points):
-	# 			x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-	# 			y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-	# 			z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-	# 			nc_point_list.append(np.expand_dims(np.array([x[idx_x], y[idx_y], z[idx_z], x_ang, y_ang, z_ang]), axis = 0))
-
-	point_list = c_point_list + nc_point_list
-
-	return np.concatenate(point_list, axis = 0)
 
 def slidepoints(workspace_dim, num_trajectories = 10):
 	zmin = - 0.00
@@ -93,11 +55,6 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 	theta_delta = np.random.uniform(low=3 * np.pi / 4, high=np.pi, size = num_trajectories)
 	theta_sign = np.random.choice([-1, 1], size = num_trajectories)
 	theta_final = T_angle(theta_init + theta_delta * theta_sign)
-
-	# print("Init angles", theta_init * 180 / np.pi)
-	# print("final_angles", theta_final * 180 / np.pi)
-	# print("final_angles", T_angle(theta_final) * 180 / np.pi)
-
 
 	c_point_list = []
 
@@ -114,40 +71,60 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 
 		# print("Initial point: ", x_init, y_init)
 		# print("Final point: ", x_final, y_final)
-		c_point_list.append(np.expand_dims(np.array([x_init, y_init, zmin, x_ang, y_ang, z_ang]), axis = 0))
-		c_point_list.append(np.expand_dims(np.array([x_final, y_final, zmin, x_ang, y_ang, z_ang]), axis = 0))
+		c_point_list.append(np.expand_dims(np.array([x_init, y_init, zmin, x_final, y_final, zmin]), axis = 0))
 
 	return np.concatenate(c_point_list, axis = 0)
-# def gridpoints(workspace, peg_top_site, num_points = 10):
-# 	xmin = workspace[0,0]
-# 	xmax = workspace[1,0]
 
-# 	ymin = workspace[0,1]
-# 	ymax = workspace[1,1]
 
-# 	zmin = workspace[0,2]
-# 	zmax = workspace[1,2]
+def movetogoal(env, fixed_params, points_list, point_idx, obs, obs_dict = None):
+	kp, noise_parameters, tol, tol_ang, step_threshold, display_bool,top_height, obs_keys = fixed_params
 
-# 	print("Zs: ", zmin, " ",zmax)
-# 	x = np.linspace(xmin, xmax, num = num_points, endpoint = True)
-# 	y = np.linspace(ymin, ymax, num = num_points, endpoint = True)
-# 	z = np.linspace(zmin, zmax, num = num_points, endpoint = True)
+	step_count = 0
+	goal = points_list[point_idx][0]
+	point_type = points_list[point_idx][1]
+	done_bool = False
 
-# 	point_list = []
+	while env._check_poserr(goal, tol, tol_ang) == False and step_count < step_threshold:
+		action, action_euler = env._pose_err(goal)
+		pos_err = kp * action_euler[:3]
+		noise = np.random.normal(0.0, 0.1, pos_err.size)
+		noise[2] = -1.0 * abs(noise[2])
+		pos_err += noise_parameters * noise
 
-# 	for idx_x in range(num_points):
-# 		for idx_y in range(num_points):
-# 			for idx_z in range(num_points):
-# 				init_pos = np.array([x[idx_x], y[idx_y], z[idx_z]])
-# 				vect = peg_top_site[:3] - init_pos
-# 				vect = vect / np.linalg.norm(vect)
-# 				x_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-# 				y_ang = 0 #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
-# 				z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
+		obs['action'] = env.controller.transform_action(pos_err)
 
-# 				point_list.append(np.expand_dims(np.array([x[idx_x], y[idx_y], z[idx_z], x_ang, y_ang, z_ang]), axis = 0))
+		if point_type == 1 and obs_dict is not None:
+			save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
+			# curr_pose = env._get_eepos()
 
-	# return np.concatenate(random.shuffle(point_list), axis = 0)
+		obs, reward, done, info = env.step(pos_err)
+		# obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
+		
+		if display_bool:
+			env.render()
 
+		# print(obs['proprio'][2] - top_height)
+
+		if obs['proprio'][2] < (top_height - 0.0001) and point_type == 1:
+			obs['insertion'] = np.array([1.0])
+			done_bool = True
+			step_count == step_threshold
+		else:
+			obs['insertion'] = np.array([0.0])
+
+		# if display_bool:
+		# 	plt.scatter(glb_ts, obs['force'][2])
+		# 	# plt.scatter(glb_ts, obs['contact'])
+		# 	plt.pause(0.001)
+		# glb_ts += 1
+
+		step_count += 1
+
+	point_idx += 1
+
+	if obs_dict is not None:
+		return point_idx, done_bool, obs, obs_dict
+	else:
+		return point_idx, done_bool, obs
 
 

@@ -57,46 +57,6 @@ def calc_angerr(target, current):
 
     return error * error2 + (error + TWO_PI) * error0 + (error - TWO_PI) * error1
 
-def selfsupervised_filenum(filenum):
-    offset = 633
-    idx_list = [634, 1267, 1900, 2533, 3166, 3799, 4432, 5065,  5698]
-    choice = np.random.choice(2) + 1
-
-    if filenum < 1900:
-        if filenum < 634:
-            return filenum + offset * choice
-
-        elif filenum >= 634 and filenum < 1267:
-            if choice == 1:
-                return filenum - offset
-            else:
-                return filenum + offset
-        else:
-            return filenum - offset * choice
-
-    elif filenum >= 1900 and filenum < 3799:
-        if filenum < 2533:
-            return filenum + offset * choice
-
-        elif filenum >= 2533 and filenum < 3166:
-            if choice == 1:
-                return filenum - offset
-            else:
-                return filenum + offset
-        else:
-            return filenum - offset * choice
-    else:
-        if filenum < 4432:
-            return filenum + offset * choice
-
-        elif filenum >= 4432 and filenum < 5065:
-            if choice == 1:
-                return filenum - offset
-            else:
-                return filenum + offset
-        else:
-            return filenum - offset * choice
-
 class H5_DataLoader(Dataset):
     ### h5py file type dataloader dataset ###
     def __init__(self, model_folder, loading_dict, val_ratio, num_trajectories, min_length, idx_dict = None, device = None, transform=None):
@@ -197,79 +157,60 @@ class H5_DataLoader(Dataset):
                 if self.max_length < square_length:
                     self.max_length = square_length
 
-                train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 9) ### 1 is train, 0 is val
+                train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 3) ### 1 is train, 0 is val
 
                 if train_val_bool[0] == 1:
                     self.idx_dict['train'][self.train_length] = (cross_cross, int(cross_length)) #, filename_ss)
-                    self.train_length += 1  
+                    self.idx_dict['train'][self.train_length + 1] = (cross_rect, int(cross_length)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 2] = (cross_square, int(cross_length)) #, filename_ss)
+                    self.train_length += 3  
                 else:
-                    self.idx_dict['val'][self.val_length] = (cross_cross, int(cross_length)) #, filename_ss) 
-                    self.val_length += 1         
+                    self.idx_dict['val'][self.val_length] = (cross_cross, int(cross_length)) #, filename_ss)
+                    self.idx_dict['val'][self.val_length + 1] = (cross_rect, int(cross_length)) #, filename_ss)
+                    self.idx_dict['val'][self.val_length + 2] = (cross_square, int(cross_length)) #, filename_ss) 
+                    self.val_length += 3          
 
                 if train_val_bool[1] == 1:
-                    self.idx_dict['train'][self.train_length] = (cross_rect, int(cross_length)) #, filename_ss)
-                    self.train_length += 1  
-                else:
-                    self.idx_dict['val'][self.val_length] = (cross_rect, int(cross_length)) #, filename_ss) 
-                    self.val_length += 1                  
-
-                if train_val_bool[2] == 1:
-                    self.idx_dict['train'][self.train_length] = (cross_square, int(cross_length)) #, filename_ss)
-                    self.train_length += 1  
-                else:
-                    self.idx_dict['val'][self.val_length] = (cross_square, int(cross_length)) #, filename_ss) 
-                    self.val_length += 1   
-
-                if train_val_bool[3] == 1:
                     self.idx_dict['train'][self.train_length] = (rect_cross, int(rect_length)) #, filename_ss)
-                    self.train_length += 1  
+                    self.idx_dict['train'][self.train_length + 1] = (rect_rect, int(rect_length)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 2] = (rect_square, int(rect_length)) #, filename_ss)
+                    self.train_length += 3  
                 else:
                     self.idx_dict['val'][self.val_length] = (rect_cross, int(rect_length)) #, filename_ss) 
-                    self.val_length += 1   
+                    self.idx_dict['val'][self.val_length + 1] = (rect_rect, int(rect_length)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length + 2] = (rect_square, int(rect_length)) #, filename_ss)
+                    self.val_length += 3   
 
-                if train_val_bool[4] == 1:
-                    self.idx_dict['train'][self.train_length] = (rect_rect, int(rect_length)) #, filename_ss)
-                    self.train_length += 1  
-                else:
-                    self.idx_dict['val'][self.val_length] = (rect_rect, int(rect_length)) #, filename_ss) 
-                    self.val_length += 1 
-
-                if train_val_bool[5] == 1:
-                    self.idx_dict['train'][self.train_length] = (rect_square, int(rect_length)) #, filename_ss)
-                    self.train_length += 1  
-                else:
-                    self.idx_dict['val'][self.val_length] = (rect_square, int(rect_length)) #, filename_ss) 
-                    self.val_length += 1  
-
-                if train_val_bool[6] == 1:
+                if train_val_bool[2] == 1:
                     self.idx_dict['train'][self.train_length] = (square_cross, int(square_length)) #, filename_ss)
-                    self.train_length += 1  
+                    self.idx_dict['train'][self.train_length + 1] = (square_rect, int(square_length)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 2] = (square_square, int(square_length)) #, filename_ss)
+                    self.train_length += 3  
                 else:
                     self.idx_dict['val'][self.val_length] = (square_cross, int(square_length)) #, filename_ss) 
-                    self.val_length += 1
+                    self.idx_dict['val'][self.val_length + 1] = (square_rect, int(square_length)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length + 2] = (square_square, int(square_length)) #, filename_ss) 
+                    self.val_length += 3
 
-                if train_val_bool[7] == 1:
-                    self.idx_dict['train'][self.train_length] = (square_rect, int(square_length)) #, filename_ss)
-                    self.train_length += 1  
-                else:
-                    self.idx_dict['val'][self.val_length] = (square_rect, int(square_length)) #, filename_ss) 
-                    self.val_length += 1 
-
-                if train_val_bool[8] == 1:
-                    self.idx_dict['train'][self.train_length] = (square_square, int(square_length)) #, filename_ss)
-                    self.train_length += 1  
-                else:
-                    self.idx_dict['val'][self.val_length] = (square_square, int(square_length)) #, filename_ss) 
-                    self.val_length += 1
 
             self.idx_dict["max_length"] = self.max_length
             self.idx_dict["min_length"] = self.min_length
 
         else:
-            self.idx_dict = idx_dict
+
+            switch_bool = False
+
+            if switch_bool:
+                self.idx_dict = {}
+                self.idx_dict['train'] = idx_dict['val']
+                self.idx_dict['val'] = idx_dict['train']
+                self.idx_dict["max_length"] = idx_dict["max_length"]
+                self.idx_dict["min_length"] = idx_dict["min_length"]
+            else:
+                self.idx_dict = idx_dict
+
             self.train_length = len(list(self.idx_dict['train'].keys()))
             self.val_length = len(list(self.idx_dict['val'].keys()))
-
         self.prev_time = time.time()
 
         print("Total data points: ", self.train_length + self.val_length)
@@ -319,12 +260,19 @@ class H5_DataLoader(Dataset):
         for key in self.loading_dict.keys():
             if key == 'pose_err':
                 continue
+
             # print( key , " took ", time.time() - self.prev_time, " seconds")
             # self.prev_time = time.time()
             if key == 'action':
                 sample[key] = np.array(dataset[key][idx0:(idx1 - 1)])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
                 # print("Action size", np.array(sample[key]).shape)
+            elif key == 'insertion':
+                if np.sum(np.array([dataset[key]])) > 0:
+                    sample[key] = np.array([1.0])
+                else:
+                    sample[key] = np.array([0.0])
+                     
             elif key == 'force_hi_freq':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
@@ -354,6 +302,8 @@ class H5_DataLoader(Dataset):
                 sample[key] = np.array(dataset[key])
             elif key == 'final_point':
                 sample["command_pos"] =  np.array(dataset[key][:3])
+
+
             # else:
             #     sample[key] = dataset[key][idx0:idx1] 
             #     print(key, " size", np.array(sample[key]).shape)
@@ -361,8 +311,9 @@ class H5_DataLoader(Dataset):
         dataset.close()
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
+        sample["macro_action"] = np.concatenate([sample["init_pos"], sample["command_pos"]])
         # print(sample["padding_mask"].shape)
-        sample["length"] = np.array([unpadded - 1])
+        # sample["length"] = np.array([unpadded - 1])
         # print("Length size: ", sample["length"].shape)
 
         if self.transform:
