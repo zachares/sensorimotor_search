@@ -103,7 +103,7 @@ if __name__ == '__main__':
         else:
             save_model_flag = True
 
-    save_val_interval = 25 ### EXPLAIN
+    save_val_interval = 10 ### EXPLAIN
     ##################################################################################
     # hardware and low level training details
     ##################################################################################

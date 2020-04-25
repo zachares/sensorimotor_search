@@ -1,5 +1,5 @@
 perception_params:
-  seed: 8888
+  seed: 4321
   display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   workspace_dim: 0.04
   discretization: 8
@@ -28,18 +28,15 @@ info_flow:
       proprio: [12]
       contact: [1]
       num_options: 3
-  Options_Classifier:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004142111_debugging_24_10HZ/"
-    epoch_num: 2500
-  Options_Confusion:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
-    epoch_num: 100
-  Options_Prediction:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
-    epoch_num: 100
-  Options_Confusion_Mat:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004150859_debugging_21_10HZ/"
-    epoch_num: 0
-  Insertion_PredictionResNet:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004051512_debugging_24_10HZ/"
-    epoch_num: 700
+  Options_Sensor:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004191028_debugging_12_10HZ/"
+    epoch_num: 1810
+  Options_Predictor:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004200815_debugging_6_10HZ/"
+    epoch_num: 30
+  Insertion_Predictor:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004200815_debugging_6_10HZ/"
+    epoch_num: 50
+  Feeling_Distance:
+    model_folder: "/scr-ssd/sens_search_logging/models/202004200815_debugging_6_10HZ/"
+    epoch_num: 40

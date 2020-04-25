@@ -65,15 +65,11 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
-		self.model_dict["Options_Classifier"] = Options_Classifier(models_folder, "Options_Classifier", self.info_flow,\
-		 force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
-		# self.model_dict["Options_Confusion"] = Options_Net(models_folder, "Options_Confusion", self.info_flow, pose_size, num_options, device = device).to(device)
-		# self.model_dict["Options_Prediction"] = Options_Net(models_folder, "Options_Prediction", self.info_flow, pose_size, num_options, device = device).to(device)
-		self.model_dict["Options_Confusion_Mat"] = Options_Mat(models_folder, "Options_Confusion_Mat", self.info_flow, pose_size, num_options, device = device).to(device)
-		# self.model_dict["Insertion_PredictionResNet"] = Insertion_PredictionResNet(models_folder, "Insertion_PredictionResNet", self.info_flow,\
-		#  pose_size, device = device).to(device)
-		# self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
-		#  pose_size, num_options, device = device).to(device)
+		self.model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", self.info_flow,\
+		 force_size, proprio_size, action_dim, num_options, device = device).to(device)
+		self.model_dict["Options_Predictor"] = Options_Predictor(models_folder, "Options_Predictor", self.info_flow, pose_size, num_options, device = device).to(device)
+		self.model_dict["Insertion_Predictor"] = Insertion_Predictor(models_folder, "Insertion_Predictor", self.info_flow, pose_size, num_options, device = device).to(device)
+		self.model_dict["Feeling_Distance"] = Feeling_Distance(models_folder, "Feeling_Distance", self.info_flow, pose_size, num_options, device = device).to(device)
 		print("Finished Initialization")	 	
 		###############################################
 		###### Code ends here ########################

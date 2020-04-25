@@ -22,7 +22,7 @@ from robosuite.wrappers import IKWrapper
 if __name__ == '__main__':
 
 	peg_types = ["Cross", "Rect", "Square"]
-	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", 'rgbd' ]
+	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", 'rgbd', 'insertion' ]
 	peg_dict = {}
 
 	with open("datacollection_params.yml", 'r') as ymlfile:
@@ -104,22 +104,22 @@ if __name__ == '__main__':
 
 			macro_action = macro_actions[i]
 			init_point = np.concatenate([macro_action[:3] + top_goal[:3], ori_action])
-			final_point = np.concatenate([macro_action[3:] + top_goal[:3], ori_action])
+			final_point = np.concatenate([macro_action[6:] + top_goal[:3], ori_action])
 
 			points_list.append((top_goal + plus_offset, 0, "top plus"))
 			points_list.append((init_point, 0, "init_point"))
 			points_list.append((final_point, 1, "final_point"))
 			points_list.append((top_goal + plus_offset, 0, "top plus"))
 
-			point_idx, done_bool, obs = movetogoal(env, fixed_params, points_list, point_idx, obs)
-			point_idx, done_bool, obs = movetogoal(env, fixed_params, points_list,  point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list,  point_idx, obs)
 
 			# print("moved to initial position")
 
 			obs_dict = {}
 
 			while point_idx < len(points_list):
-				point_idx, done_bool, obs, obs_dict = movetogoal(env,fixed_params, points_list, point_idx, obs, obs_dict)
+				point_idx, done_bool, obs, obs_dict = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict)
 
 			if logging_data_bool == 1:
 				file_num += 1

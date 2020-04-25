@@ -160,36 +160,36 @@ class H5_DataLoader(Dataset):
                 train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 3) ### 1 is train, 0 is val
 
                 if train_val_bool[0] == 1:
-                    self.idx_dict['train'][self.train_length] = (cross_cross, int(cross_length)) #, filename_ss)
-                    self.idx_dict['train'][self.train_length + 1] = (cross_rect, int(cross_length)) #, filename_ss)
-                    self.idx_dict['train'][self.train_length + 2] = (cross_square, int(cross_length)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (cross_cross, int(cross_length), (1,2)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 1] = (cross_rect, int(cross_length), (-1,1)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 2] = (cross_square, int(cross_length), (-2,-1)) #, filename_ss)
                     self.train_length += 3  
                 else:
-                    self.idx_dict['val'][self.val_length] = (cross_cross, int(cross_length)) #, filename_ss)
-                    self.idx_dict['val'][self.val_length + 1] = (cross_rect, int(cross_length)) #, filename_ss)
-                    self.idx_dict['val'][self.val_length + 2] = (cross_square, int(cross_length)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (cross_cross, int(cross_length), (1,2)) #, filename_ss)
+                    self.idx_dict['val'][self.val_length + 1] = (cross_rect, int(cross_length), (-1,1)) #, filename_ss)
+                    self.idx_dict['val'][self.val_length + 2] = (cross_square, int(cross_length), (-2,-1)) #, filename_ss) 
                     self.val_length += 3          
 
                 if train_val_bool[1] == 1:
-                    self.idx_dict['train'][self.train_length] = (rect_cross, int(rect_length)) #, filename_ss)
-                    self.idx_dict['train'][self.train_length + 1] = (rect_rect, int(rect_length)) #, filename_ss)
-                    self.idx_dict['train'][self.train_length + 2] = (rect_square, int(rect_length)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (rect_cross, int(rect_length), (1,2)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 1] = (rect_rect, int(rect_length), (-1,1)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 2] = (rect_square, int(rect_length), (-2,-1)) #, filename_ss)
                     self.train_length += 3  
                 else:
-                    self.idx_dict['val'][self.val_length] = (rect_cross, int(rect_length)) #, filename_ss) 
-                    self.idx_dict['val'][self.val_length + 1] = (rect_rect, int(rect_length)) #, filename_ss) 
-                    self.idx_dict['val'][self.val_length + 2] = (rect_square, int(rect_length)) #, filename_ss)
+                    self.idx_dict['val'][self.val_length] = (rect_cross, int(rect_length), (1,2)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length + 1] = (rect_rect, int(rect_length), (-1,1)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length + 2] = (rect_square, int(rect_length), (-2,-1)) #, filename_ss)
                     self.val_length += 3   
 
                 if train_val_bool[2] == 1:
-                    self.idx_dict['train'][self.train_length] = (square_cross, int(square_length)) #, filename_ss)
-                    self.idx_dict['train'][self.train_length + 1] = (square_rect, int(square_length)) #, filename_ss)
-                    self.idx_dict['train'][self.train_length + 2] = (square_square, int(square_length)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length] = (square_cross, int(square_length), (1,2)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 1] = (square_rect, int(square_length), (-1,1)) #, filename_ss)
+                    self.idx_dict['train'][self.train_length + 2] = (square_square, int(square_length), (-2,-1)) #, filename_ss)
                     self.train_length += 3  
                 else:
-                    self.idx_dict['val'][self.val_length] = (square_cross, int(square_length)) #, filename_ss) 
-                    self.idx_dict['val'][self.val_length + 1] = (square_rect, int(square_length)) #, filename_ss) 
-                    self.idx_dict['val'][self.val_length + 2] = (square_square, int(square_length)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length] = (square_cross, int(square_length), (1,2)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length + 1] = (square_rect, int(square_length), (-1,1)) #, filename_ss) 
+                    self.idx_dict['val'][self.val_length + 2] = (square_square, int(square_length), (-2,-1)) #, filename_ss) 
                     self.val_length += 3
 
 
@@ -198,19 +198,40 @@ class H5_DataLoader(Dataset):
 
         else:
 
-            switch_bool = False
-
-            if switch_bool:
-                self.idx_dict = {}
-                self.idx_dict['train'] = idx_dict['val']
-                self.idx_dict['val'] = idx_dict['train']
-                self.idx_dict["max_length"] = idx_dict["max_length"]
-                self.idx_dict["min_length"] = idx_dict["min_length"]
-            else:
-                self.idx_dict = idx_dict
-
+            self.idx_dict = idx_dict
+            
             self.train_length = len(list(self.idx_dict['train'].keys()))
             self.val_length = len(list(self.idx_dict['val'].keys()))
+
+            for key in self.idx_dict['train'].keys():
+                d_tuple = self.idx_dict['train'][key]
+                filename = d_tuple[0]
+                hole_char = filename[-9]
+
+                if hole_char == 's':
+                    self.idx_dict['train'][key] = (d_tuple[0], d_tuple[1], (1,2))
+                elif hole_char == 't':
+                    self.idx_dict['train'][key] = (d_tuple[0], d_tuple[1], (-1,1))
+                elif hole_char == 'e':
+                    self.idx_dict['train'][key] = (d_tuple[0], d_tuple[1], (-2,-1))
+                else:
+                    assert hole_char == '!', 'hole_char does not equal any of the expected values'
+
+            for key in self.idx_dict['val'].keys():
+                d_tuple = self.idx_dict['val'][key]
+                filename = d_tuple[0]
+                hole_char = filename[-9]
+
+                if hole_char == 's':
+                    self.idx_dict['val'][key] = (d_tuple[0], d_tuple[1], (1,2))
+                elif hole_char == 't':
+                    self.idx_dict['val'][key] = (d_tuple[0], d_tuple[1], (-1,1))
+                elif hole_char == 'e':
+                    self.idx_dict['val'][key] = (d_tuple[0], d_tuple[1], (-2,-1))
+                else:
+                    assert hole_char == '!', 'hole_char does not equal any of the expected values'
+
+
         self.prev_time = time.time()
 
         print("Total data points: ", self.train_length + self.val_length)
@@ -235,11 +256,12 @@ class H5_DataLoader(Dataset):
 
         dataset = self.load_file(self.idx_dict[key_set][idx][0])
         max_traj_length = self.idx_dict[key_set][idx][1]
+
+        comp_idx = np.random.choice(self.idx_dict[key_set][idx][2]) + idx
+        comp_dataset = self.load_file(self.idx_dict[key_set][comp_idx][0])
+
         max_length = self.idx_dict["max_length"]
         min_length = self.idx_dict["min_length"]
-        # print(max_traj_length)
-        # print(max_length)
-        # print(min_length)
 
         if max_traj_length <= min_length:
             idx0 = 0
@@ -250,76 +272,72 @@ class H5_DataLoader(Dataset):
 
         padded = max_length - idx1 + idx0 + 1
         unpadded = idx1 - idx0 - 1
-        # print(idx0)
-        # print(idx1)
-        # print(padded)
-        # print(unpadded)
-        # print(idx1 - idx0)
         sample = {}
 
         for key in self.loading_dict.keys():
-            if key == 'pose_err':
-                continue
-
-            # print( key , " took ", time.time() - self.prev_time, " seconds")
-            # self.prev_time = time.time()
             if key == 'action':
-                sample[key] = np.array(dataset[key][idx0:(idx1 - 1)])
+                sample[key] = np.array(dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-                # print("Action size", np.array(sample[key]).shape)
-            elif key == 'insertion':
-                if np.sum(np.array([dataset[key]])) > 0:
-                    sample[key] = np.array([1.0])
-                else:
-                    sample[key] = np.array([0.0])
-                     
+
+                sample[key + '_comp'] = np.array(comp_dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
+                sample[key + '_comp'] = np.concatenate([sample[key + '_comp'], np.zeros((padded, sample[key + '_comp'].shape[1]))], axis = 0)                
             elif key == 'force_hi_freq':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
-                # print("Force size", np.array(sample[key]).shape)
+
+                sample[key + '_comp'] = np.array(comp_dataset[key][(idx0 + 1):idx1])
+                sample[key + '_comp'] = np.concatenate([sample[key + '_comp'], np.zeros((padded, sample[key + '_comp'].shape[1], sample[key + '_comp'].shape[2]))], axis = 0)
             elif key == 'proprio':   
-                sample[key] = 100 * np.array(dataset[key][idx0:idx1])
+                sample[key] = np.array(dataset[key][idx0:idx1])
+                init_proprio = sample[key][0,:6]
                 sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
-                error = np.random.normal(0.0, 0.75, 3)
-                sample['init_pos'] = sample[key][0,:3]
-                sample['final_pos'] = sample[key][-1,:3]
-                sample['pose_delta'] = sample['final_pos'] - sample['init_pos']
-                sample['pose_vect'] = np.concatenate([sample['init_pos'] + error, sample['final_pos'] + error, sample['pose_delta']])
-                sample['errorinit_pos'] = sample['init_pos'] + error
-                sample['pos_err'] = error
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
                 sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
-                # print("Proprio size", np.array(sample[key]).shape)
-                # print("Proprio diff size", np.array(sample[key + "_diff"]).shape)
+
+                sample[key + '_comp'] = np.array(comp_dataset[key][idx0:idx1])
+                comp_init_proprio = sample[key + '_comp'][0,:6]
+                sample[key + "_diff_comp"] = sample[key + '_comp'][1:] - sample[key + '_comp'][:-1]
+                sample[key + '_comp'] = np.concatenate([sample[key + '_comp'], np.zeros((padded, sample[key + '_comp'].shape[1]))], axis = 0)
+                sample[key + "_diff_comp"] = np.concatenate([sample[key + "_diff_comp"], np.zeros((padded, sample[key + "_diff_comp"].shape[1]))], axis = 0)
             elif key == 'contact':
                 sample[key] = np.array(dataset[key][idx0:idx1])
                 sample[key + "_diff"] = sample[key][1:].astype(np.int16) - sample[key][:-1].astype(np.int16) 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded))], axis = 0)
-                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded))], axis = 0)   
-                # print("contact size", np.array(sample[key]).shape)
-                # print("contact diff size", np.array(sample[key + "_diff"]).shape)            
-            elif key == 'peg_type' or key == 'hole_type':
+                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded))], axis = 0)
+
+                sample[key + "_comp"] = np.array(comp_dataset[key][idx0:idx1])
+                sample[key + "_diff_comp"] = sample[key + "_comp"][1:].astype(np.int16) - sample[key + "_comp"][:-1].astype(np.int16) 
+                sample[key + "_comp"] = np.concatenate([sample[key + "_comp"], np.zeros((padded))], axis = 0)
+                sample[key + "_diff_comp"] = np.concatenate([sample[key + "_diff_comp"], np.zeros((padded))], axis = 0)     
+            elif key == 'insertion':
+                sample[key] = np.array(dataset[key][idx0:idx1,0])
+                sample[key] = np.concatenate([sample[key], np.zeros((padded))], axis = 0)
+                sample['insertion_sum'] = np.array([np.sum(sample[key])])   
+                if sample['insertion_sum'] > 0:
+                    sample['insertion_bool'] = np.array([1])
+                else:
+                    sample['insertion_bool'] = np.array([0])
+
+                sample[key + "_comp"] = np.array(comp_dataset[key][idx0:idx1,0])
+                sample[key + "_comp"] = np.concatenate([sample[key + "_comp"], np.zeros((padded))], axis = 0)
+                sample['insertion_sum_comp'] = np.array([np.sum(sample[key + "_comp"])])   
+                if sample['insertion_sum_comp'] > 0:
+                    sample['insertion_bool_comp'] = np.array([1])
+                else:
+                    sample['insertion_bool_comp'] = np.array([0])
+
+            elif key == 'peg_type' or key == 'hole_type' or key == 'macro_action':
                 sample[key] = np.array(dataset[key])
-            elif key == 'final_point':
-                sample["command_pos"] =  np.array(dataset[key][:3])
+                sample[key + "_comp"] = np.array(comp_dataset[key])
 
-
-            # else:
-            #     sample[key] = dataset[key][idx0:idx1] 
-            #     print(key, " size", np.array(sample[key]).shape)
-
+        comp_dataset.close()
         dataset.close()
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
-        sample["macro_action"] = np.concatenate([sample["init_pos"], sample["command_pos"]])
-        # print(sample["padding_mask"].shape)
-        # sample["length"] = np.array([unpadded - 1])
-        # print("Length size: ", sample["length"].shape)
+        sample["macro_action"] = np.concatenate([init_proprio, sample['macro_action'][6:]])
+        sample["macro_action_comp"] = np.concatenate([comp_init_proprio, sample['macro_action_comp'][6:]])
 
-        if self.transform:
-            sample = self.transform(sample)
-
-        return sample
+        return self.transform(sample)
 
     def load_file(self, path):
         return h5py.File(path, 'r', swmr=True, libver = 'latest')

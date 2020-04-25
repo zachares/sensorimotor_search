@@ -15,6 +15,7 @@ def plot_image(image):
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
 		if key == "rgbd":
+			continue
 			obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.uint8)
 			obs0 = resize(obs0, (128, 128))
 			obs0 = np.transpose(obs0, (2, 1, 0))
@@ -48,7 +49,7 @@ def T_angle(angle):
 
 
 def slidepoints(workspace_dim, num_trajectories = 10):
-	zmin = - 0.00
+	zmin = - 0.01
 	# print("Zs: ", zmin)
 
 	theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
@@ -71,13 +72,13 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 
 		# print("Initial point: ", x_init, y_init)
 		# print("Final point: ", x_final, y_final)
-		c_point_list.append(np.expand_dims(np.array([x_init, y_init, zmin, x_final, y_final, zmin]), axis = 0))
+		c_point_list.append(np.expand_dims(np.array([x_init, y_init, zmin, 0, 0, 0, x_final, y_final, zmin]), axis = 0))
 
 	return np.concatenate(c_point_list, axis = 0)
 
 
-def movetogoal(env, fixed_params, points_list, point_idx, obs, obs_dict = None):
-	kp, noise_parameters, tol, tol_ang, step_threshold, display_bool,top_height, obs_keys = fixed_params
+def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict = None):
+	kp, noise_parameters, tol, tol_ang, step_threshold, display_bool, top_height, obs_keys = fixed_params
 
 	step_count = 0
 	goal = points_list[point_idx][0]
@@ -87,9 +88,10 @@ def movetogoal(env, fixed_params, points_list, point_idx, obs, obs_dict = None):
 	while env._check_poserr(goal, tol, tol_ang) == False and step_count < step_threshold:
 		action, action_euler = env._pose_err(goal)
 		pos_err = kp * action_euler[:3]
-		noise = np.random.normal(0.0, 0.1, pos_err.size)
-		noise[2] = -1.0 * abs(noise[2])
-		pos_err += noise_parameters * noise
+
+		# noise = np.random.normal(0.0, 0.1, pos_err.size)
+		# noise[2] = -1.0 * abs(noise[2])
+		# pos_err += noise_parameters * noise
 
 		obs['action'] = env.controller.transform_action(pos_err)
 
@@ -98,17 +100,18 @@ def movetogoal(env, fixed_params, points_list, point_idx, obs, obs_dict = None):
 			# curr_pose = env._get_eepos()
 
 		obs, reward, done, info = env.step(pos_err)
-		# obs['proprio'][:top_goal.size] = obs['proprio'][:top_goal.size] - top_goal
+		obs['proprio'][:3] = obs['proprio'][:3] - top_goal[:3]
 		
 		if display_bool:
 			env.render()
 
-		# print(obs['proprio'][2] - top_height)
+		# print(obs['proprio'][2])
 
-		if obs['proprio'][2] < (top_height - 0.0001) and point_type == 1:
+		if obs['proprio'][2] < - 0.0001 and point_type == 1:
+			# print("Inserted")
 			obs['insertion'] = np.array([1.0])
 			done_bool = True
-			step_count == step_threshold
+			step_count = step_threshold
 		else:
 			obs['insertion'] = np.array([0.0])
 

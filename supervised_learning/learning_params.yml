@@ -4,11 +4,11 @@ model_params:
   num_options: 3
 
 dataloading_params:
-  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide/"
-  num_workers: 4
+  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_2020417/"
+  num_workers: 0
   batch_size: 64
   num_trajectories: 500
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202004142024_debugging_13_10HZ/val_train_split.pkl"
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202004180840_debugging_0_10HZ/val_train_split.pkl"
 
 
 training_params:
@@ -18,7 +18,7 @@ training_params:
   beta1: 0.9
   beta2: 0.99
   max_training_epochs: 2500
-  val_ratio: 0.33
+  val_ratio: 0.1
   use_GPU: True
   
 logging_params:
@@ -38,28 +38,29 @@ info_flow:
       joint_vel: [7]
       force_hi_freq: [6, 250]
       action: [3]
+      macro_action: [6]
       proprio: [12]
       contact: [1]
       peg_type: [3]
       hole_type: [3]
-      final_point: [3]
-      pose_err: [3]
       insertion: [1]
-  Options_Classifier:
+  Options_Sensor:
     train: 0
-    model_folder: "/scr-ssd/sens_search_logging/models/202004142111_debugging_24_10HZ/"
-    epoch_num: 2500
-    # train: 1
-    # model_folder: ""
-    # epoch_num: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/202004191028_debugging_12_10HZ/"
+    epoch_num: 1810
     inputs:
       proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
       macro_action: "dataset"
       peg_type: "dataset"
-      hole_type: "dataset"
       contact_diff: "dataset"
+      proprio_diff_comp: "dataset"
+      force_hi_freq_comp: "dataset"
+      action_comp: "dataset"
+      macro_action_comp: "dataset"
+      peg_type_comp: "dataset"
+      contact_diff_comp: "dataset"
       padding_mask: "dataset"
       epoch: "dataset"
     outputs:
@@ -69,23 +70,84 @@ info_flow:
         weight: 1
         inputs:
           hole_type: "dataset"
-  # Options_Prediction:
-  #   train: 0
-  #   model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
-  #   epoch_num: 100
-  #   inputs:
-  #     init_pos: "dataset"
-  #     command_pos: "dataset"
-  #     peg_type: "dataset"
-  #     hole_type: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     options_class:
-  #       loss: "Mult_KL"
-  #       loss_name: "Options_Class"
-  #       weight: 1
-  #       inputs:
-  #         options_class: "Options_Classifier"
+      options_class_comp:
+        loss: "CE"
+        loss_name: "Options_Class_Comp"
+        weight: 1
+        inputs:
+          hole_type_comp: "dataset"
+  Insertion_Predictor:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      macro_action: "dataset"
+      peg_type: "dataset"
+      hole_type: "dataset"
+      epoch: "dataset"
+    outputs:
+      insert_class:
+        loss: "BCE"
+        loss_name: "Insert_Pred"
+        weight: 1
+        inputs:
+          insertion_bool: "dataset"
+  Options_Predictor:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      macro_action: "dataset"
+      peg_type: "dataset"
+      hole_type: "dataset"
+      macro_action_comp: "dataset"
+      peg_type_comp: "dataset"
+      hole_type_comp: "dataset"
+      epoch: "dataset"
+    outputs:
+      options_class:
+        loss: "Mult_KL"
+        loss_name: "Options_Class"
+        weight: 1
+        inputs:
+          options_class: "Options_Sensor"
+      conf_class:
+        loss: "CE"
+        loss_name: "Confusion_Class"
+        weight: 1
+        inputs:
+          hole_est: "Options_Sensor"
+      options_comp_class:
+        loss: "Mult_KL"
+        loss_name: "Options_Class_Comp"
+        weight: 1
+        inputs:
+          options_class_comp: "Options_Sensor"
+      conf_comp_class:
+        loss: "CE"
+        loss_name: "Confusion_Class_Comp"
+        weight: 1
+        inputs:
+          hole_est_comp: "Options_Sensor"
+  Feeling_Distance:
+    train: 1
+    model_folder: ""
+    epoch_num: 0
+    inputs:
+      macro_action: "dataset"
+      macro_action_comp: "dataset"
+      peg_type: "dataset"
+      peg_type_comp: "dataset"
+      hole_type: "dataset"
+      hole_type_comp: "dataset"
+      epoch: "dataset"
+    outputs:
+      distances:
+        loss: "MSE"
+        loss_name: "Feeling_Distance_Pred"
+        weight: 1
+        inputs:
+          distances: "Options_Sensor"
   # Options_Confusion:
   #   train: 0
   #   model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
@@ -113,22 +175,6 @@ info_flow:
   #     peg_type: "dataset"
   #     hole_type: "dataset"
   #     hole_est: "Options_Classifier"
-  # Insertion_PredictionResNet:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
-  #   inputs:
-  #     init_pos: "dataset"
-  #     command_pos: "dataset"
-  #     peg_type: "dataset"
-  #     hole_type: "dataset"
-  #     epoch: "dataset"
-  #   outputs:
-  #     insert_class:
-  #       loss: "BCE"
-  #       loss_name: "Insert_Class"
-  #       weight: 1
-  #       inputs:
-  #         insertion: "dataset"
+
 
 

@@ -46,7 +46,7 @@ if __name__ == '__main__':
 	### Declaring options and required modalities
 	###################################################
 	peg_types = ["Cross", "Rect", "Square"] # this ordering is very important, it must be the same as the ordering the network was trained using
-	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel" ]
+	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", "insertion" ]
 	
 	###################################################
 	### Loading run parameters from yaml file
@@ -112,18 +112,17 @@ if __name__ == '__main__':
     ##########################################################
     ### Initializing and loading model
     ##########################################################
-	sensor = Options_Classifier("", "Options_Classifier", info_flow,\
-		 force_size, proprio_size, action_dim, num_options, device = device).to(device)
-	confusion = Options_Net("", "Options_Confusion", info_flow, pose_size, num_options, device = device).to(device)
-	sensor_pred = Options_Net("", "Options_Prediction", info_flow, pose_size, num_options, device = device).to(device)
-	confusion_mat = Options_Mat("", "Options_Confusion_Mat", info_flow, pose_size, num_options, device = device).to(device)
-	insert_model = Insertion_PredictionResNet("", "Insertion_PredictionResNet", info_flow, pose_size, device = device).to(device)
+	sensor = Options_Sensor("", "Options_Sensor", info_flow, force_size, proprio_size, action_dim, num_options, device = device).to(device)
+	sensor_pred = Options_Predictor("", "Options_Predictor", info_flow, pose_size, num_options, device = device).to(device)
+	insert_model = Insertion_Predictor("", "Insertion_Predictor", info_flow, pose_size, num_options, device = device).to(device)
+	distance_model = Feeling_Distance("", "Feeling_Distance", info_flow, pose_size, num_options, device = device).to(device)
 
 	sensor.eval()
-	confusion.eval()
-	confusion_mat.eval()
 	sensor_pred.eval()
 	insert_model.eval()
+	distance_model.eval()
+
+	model_ensemble = (sensor, sensor_pred, insert_model, distance_model)
 	#######################################################
 	### Setting up the test environment and extracting the goal locations
 	######################################################### 
@@ -152,13 +151,14 @@ if __name__ == '__main__':
 	### Declaring decision model
 	############################################################
 	decision_model = DecisionModel(hole_poses, num_options, workspace_dim, num_samples,\
-	 ori_action, plus_offset, sensor, confusion, confusion_mat, sensor_pred, insert_model)
+	 ori_action, plus_offset, model_ensemble)
 
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
-	# logger = Logger(cfg, debugging_flag, False)
-	# logging_dict = {}
+	logger = Logger(cfg, debugging_flag, False)
+	logging_dict = {}
+	logging_dict['scalar'] = {}
 	obs = {}
 	fixed_params = (kp, noise_parameters, tol, tol_ang, step_threshold, display_bool,top_height, obs_keys)
     ############################################################
@@ -190,27 +190,28 @@ if __name__ == '__main__':
 		decision_model.print_hypothesis()
 		# a = input("Continue?")
 
-		while True and num_steps < 20:
-			# decision_model.choose_hole()
-			# points_list = decision_model.choose_action()
-			points_list = decision_model.choose_both()
+		while True and num_steps < converge_thresh:
+			num_steps += 1
+			decision_model.choose_hole()
+			points_list = decision_model.choose_action()
+			# points_list = decision_model.choose_both()
 
 			point_idx = 0
 			goal = points_list[point_idx][0]
 			point_type = points_list[point_idx][1]
 
-			point_idx, done_bool, obs = movetogoal(env, fixed_params, points_list, point_idx, obs)
-			point_idx, done_bool, obs = movetogoal(env, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, decision_model.top_goal, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, decision_model.top_goal, fixed_params, points_list, point_idx, obs)
 
 			# print("moved to initial position")
 
 			obs_dict = {}
 
 			while point_idx < len(points_list):
-				point_idx, done_bool, obs, obs_dict = movetogoal(env,fixed_params, points_list, point_idx, obs, obs_dict)
+				point_idx, done_bool, obs, obs_dict = movetogoal(env, decision_model.top_goal, fixed_params, points_list, point_idx, obs, obs_dict)
 
 				if done_bool:
-					point_idx == len(points_list)
+					point_idx = len(points_list)
 
 			if done_bool:
 				for i in range(20):
@@ -225,13 +226,13 @@ if __name__ == '__main__':
 
 			decision_model.new_obs(obs_dict)
 			decision_model.print_hypothesis()
-			num_steps += 1
+
 
 			# a = input("Continue?")
 
-		# logging_dict['scalar']["Number of Steps"] = num_steps
-		# logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.hole_memory[decision_model.correct_idx]
-		# logging_dict['scalar']["Insertion"] = done_bool * 1.0
+		logging_dict['scalar']["Number of Steps"] = num_steps
+		logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.hole_memory[0,decision_model.correct_idx]
+		logging_dict['scalar']["Insertion"] = done_bool * 1.0
 		# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
 
-		# logger.save_scalars(logging_dict, trial_num, 'evaluation/')
+		logger.save_scalars(logging_dict, trial_num, 'evaluation/')
