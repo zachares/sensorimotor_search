@@ -14,19 +14,20 @@ def plot_image(image):
     
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
-		if key == "rgbd":
-			continue
-			obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.uint8)
-			obs0 = resize(obs0, (128, 128))
-			obs0 = np.transpose(obs0, (2, 1, 0))
-			obs0 = np.expand_dims(obs0, axis = 0)
+		# if key == "rgbd":
+		# 	# continue
+		# 	obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.uint8)
+		# 	obs0 = resize(obs0, (128, 128))
+		# 	obs0 = np.transpose(obs0, (2, 1, 0))
+		# 	obs0 = np.expand_dims(obs0, axis = 0)
 
-			obs1 = np.rot90(obs_dict['depth'], k = 2).astype(np.uint8)
-			obs1 = resize(obs1, (128, 128))
-			obs1 = np.expand_dims(np.expand_dims(obs1, axis = 0), axis = 0)
+		# 	obs1 = np.rot90(obs_dict['depth'], k = 2).astype(np.uint8)
+		# 	obs1 = resize(obs1, (128, 128))
+		# 	obs1 = np.expand_dims(np.expand_dims(obs1, axis = 0), axis = 0)
 
-			obs = np.concatenate([obs0, obs1], axis = 1)
-
+		# 	obs = np.concatenate([obs0, obs1], axis = 1)
+		if key == 'image' or key == 'depth':
+			obs = obs_dict[key][:, ::-1,...]
 		else:
 			obs = np.expand_dims(obs_dict[key], axis = 0)
 
@@ -77,43 +78,60 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 	return np.concatenate(c_point_list, axis = 0)
 
 
-def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict = None):
+def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict = None, noise_std=0):
 	kp, noise_parameters, tol, tol_ang, step_threshold, display_bool, top_height, obs_keys = fixed_params
 
 	step_count = 0
 	goal = points_list[point_idx][0]
 	point_type = points_list[point_idx][1]
 	done_bool = False
+	# if env._check_poserr(goal, tol, tol_ang):
+	# 	print("already there!")
 
 	while env._check_poserr(goal, tol, tol_ang) == False and step_count < step_threshold:
-		action, action_euler = env._pose_err(goal)
+		goal_final = goal.copy()
+
+		if step_count > step_threshold/3 and point_type == 1: 
+			goal_final[2] += 0.015
+
+		action, action_euler = env._pose_err(goal_final)
 		pos_err = kp * action_euler[:3]
 
-		# noise = np.random.normal(0.0, 0.1, pos_err.size)
-		# noise[2] = -1.0 * abs(noise[2])
-		# pos_err += noise_parameters * noise
+		if point_type == 0 and noise_std>0: 
+			noise = np.random.normal(0.0, noise_std, pos_err.size)
+			noise[2] = 0
+			pos_err += noise_parameters * noise
 
-		obs['action'] = env.controller.transform_action(pos_err)
 
-		if point_type == 1 and obs_dict is not None:
-			save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
-			# curr_pose = env._get_eepos()
+		# if point_type == 1 and obs_dict is not None:
+		# 	print("saving?")
+		# 	save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
+		# 	# curr_pose = env._get_eepos()
+		# print("action: ", pos_err)
 
 		obs, reward, done, info = env.step(pos_err)
-		obs['proprio'][:3] = obs['proprio'][:3] - top_goal[:3]
-		
+		#todo: ? 
+		# obs['proprio'][:3] = obs['proprio'][:3] - top_goal[:3]
+		obs['action'] = pos_err.copy()
+		# print("controller action: ", obs['action'])
+
+		if obs_dict is not None:
+			# print("		saving?")
+			save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
+
+
 		if display_bool:
 			env.render()
 
 		# print(obs['proprio'][2])
 
-		if obs['proprio'][2] < - 0.0001 and point_type == 1:
-			# print("Inserted")
-			obs['insertion'] = np.array([1.0])
-			done_bool = True
-			step_count = step_threshold
-		else:
-			obs['insertion'] = np.array([0.0])
+		# if obs['proprio'][2] < - 0.0001 and point_type == 1:
+		# 	# print("Inserted")
+		# 	obs['insertion'] = np.array([1.0])
+		# 	done_bool = True
+		# 	step_count = step_threshold
+		# else:
+		# 	obs['insertion'] = np.array([0.0])
 
 		# if display_bool:
 		# 	plt.scatter(glb_ts, obs['force'][2])

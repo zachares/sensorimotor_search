@@ -21,7 +21,8 @@ from robosuite.wrappers import IKWrapper
 
 if __name__ == '__main__':
 
-	peg_types = ["Cross", "Rect", "Square"]
+	peg_types = ["Square", "Cross", "Rect"]
+
 	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", 'rgbd', 'insertion' ]
 	peg_dict = {}
 
@@ -44,13 +45,17 @@ if __name__ == '__main__':
 	random.seed(seed)
 	np.random.seed(seed)
 
+	if display_bool:
+		obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel",  'insertion' ]
+
+
 	if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
 		os.mkdir(logging_folder )
 
 	print("Robot operating with control frequency: ", ctrl_freq)
 	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
-	  gripper_type ="CrossPegwForce", controller='position', camera_depth=True)
+	 use_camera_obs= not display_bool, has_offscreen_renderer=not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
+	  gripper_type ="SquarePegwForce", controller='position', camera_depth=True)
 
 	env.viewer.set_camera(camera_id=2)
 
@@ -87,7 +92,7 @@ if __name__ == '__main__':
 
 		gripper_type = peg_type + "PegwForce" 
 
-		env.reset(gripper_type)
+		env.reset()
 		env.viewer.set_camera(camera_id=2)
 
 		top_goal = hole_poses[hole_idx][0]
@@ -130,7 +135,10 @@ if __name__ == '__main__':
 				dataset = h5py.File(file_name, 'w')
 
 				for key in obs_dict.keys():
+					print('key: ', key)
+
 					key_list = obs_dict[key]
+
 
 					if key == obs_keys[0]:
 						print("Number of points: ", len(key_list))
