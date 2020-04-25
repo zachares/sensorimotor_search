@@ -43,6 +43,7 @@ class Trainer(object):
 		learning_rate = cfg['training_params']['lrn_rate']
 		beta_1 = cfg['training_params']['beta1']
 		beta_2 = cfg['training_params']['beta2']
+		parallel_bool = cfg['training_params']['parallel_bool']
 
 		self.info_flow = cfg['info_flow']
 		force_size =self.info_flow['dataset']['outputs']['force_hi_freq'] 
@@ -65,12 +66,29 @@ class Trainer(object):
 		##### Declaring models to be trained ##########
 		#################################################
 		##### Note if a path has been provided then the model will load a previous model
+<<<<<<< HEAD
 		self.model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", self.info_flow,\
 		 force_size, proprio_size, action_dim, num_options, device = device).to(device)
 		self.model_dict["Options_Predictor"] = Options_Predictor(models_folder, "Options_Predictor", self.info_flow, pose_size, num_options, device = device).to(device)
 		self.model_dict["Insertion_Predictor"] = Insertion_Predictor(models_folder, "Insertion_Predictor", self.info_flow, pose_size, num_options, device = device).to(device)
 		self.model_dict["Feeling_Distance"] = Feeling_Distance(models_folder, "Feeling_Distance", self.info_flow, pose_size, num_options, device = device).to(device)
 		print("Finished Initialization")	 	
+=======
+		# self.model_dict["Options_ClassifierTransformer"] = Options_ClassifierTransformer(models_folder, "Options_ClassifierTransformer", self.info_flow,\
+		#  force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
+		self.model_dict["PosErr_DetectionTransformer"] = PosErr_DetectionTransformer(models_folder, "PosErr_DetectionTransformer", self.info_flow,\
+		 force_size, proprio_size, action_dim, num_options, min_steps, device = device).to(device)
+		# self.model_dict["Options_PredictionResNet"] = Options_PredictionResNet(models_folder, "Options_PredictionResNet", self.info_flow,\
+		#  pose_size, num_options, device = device).to(device)
+		# self.model_dict["PosErr_PredictionResNet"] = PosErr_PredictionResNet(models_folder, "PosErr_PredictionResNet", self.info_flow,\
+		#  pose_size, num_options, device = device).to(device)
+		print("Finished Initialization")
+
+		if parallel_bool == 1:
+			for key in self.model_dict.keys():
+				self.model_dict[key].set_parallel(True)
+				print(key, "is now parallelizable between GPUs")
+>>>>>>> 10a8b14ea707ef5df635768ee9825bb787bc8c7d
 		###############################################
 		###### Code ends here ########################
 		################################################
