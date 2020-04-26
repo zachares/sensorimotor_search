@@ -99,8 +99,8 @@ if __name__ == '__main__':
     def append_x(l, item, times):
         for i in range(times):
             l.append(item)
-    append_x(noise_list, 0.0, 50)
-    # append_x(noise_list, 0.1, 20)
+    # append_x(noise_list, 0.0, 50)
+    append_x(noise_list, 0.1, 20)
 
 
     print(noise_list)
