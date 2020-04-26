@@ -53,16 +53,17 @@ if __name__ == '__main__':
 		os.mkdir(logging_folder )
 
 	print("Robot operating with control frequency: ", ctrl_freq)
-	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs= not display_bool, 
-	 has_offscreen_renderer=not display_bool, 
-	 gripper_visualization=True, 
-	 control_freq=ctrl_freq,\
-	 gripper_type ="SquarePegwForce", 
-	 controller='position', 
-	 camera_depth=True,
-	 camera_width=128,
-	 camera_height=128
+	env = robosuite.make("PandaPegInsertion", 
+	has_renderer= not display_bool, ignore_done=True,\
+	use_camera_obs= not display_bool, 
+	has_offscreen_renderer=not display_bool, 
+	gripper_visualization=True, 
+	control_freq=ctrl_freq,\
+	gripper_type ="SquarePegwForce", 
+	controller='position', 
+	camera_depth=True,
+	camera_width=128,
+	camera_height=128
 	 )
 
 	# env.viewer.set_camera(camera_id=2)
@@ -118,7 +119,8 @@ if __name__ == '__main__':
 		gripper_type = peg_type + "PegwForce" 
 
 		env.reset()
-		env.viewer.set_camera(camera_id=3)
+		if display_bool: 
+			env.viewer.set_camera(camera_id=3)
 
 		top_goal = hole_poses[hole_idx][0]
 

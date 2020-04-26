@@ -2,7 +2,7 @@ import scipy as sp
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.interpolate import make_interp_spline as spline_funct
-from scipy.misc import imresize as resize
+# from scipy.misc import imresize as resize
 import matplotlib.pyplot as plt
 import random
 import copy
@@ -27,7 +27,8 @@ def save_obs(obs_dict, keys, array_dict):
 
 		# 	obs = np.concatenate([obs0, obs1], axis = 1)
 		if key == 'image' or key == 'depth':
-			obs = obs_dict[key][:, ::-1,...]
+			obs = obs_dict[key][::-1,...]
+			obs = np.expand_dims(obs, axis = 0)
 		else:
 			obs = np.expand_dims(obs_dict[key], axis = 0)
 
