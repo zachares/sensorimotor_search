@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     print("Robot operating with control frequency: ", ctrl_freq)
     env = robosuite.make("PandaPegInsertion", 
-    has_renderer=not display_bool, ignore_done=True,\
+    has_renderer=display_bool, ignore_done=True,\
     use_camera_obs= not display_bool, 
     has_offscreen_renderer=not display_bool, 
     gripper_visualization=True, 
