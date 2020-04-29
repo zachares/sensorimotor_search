@@ -15,7 +15,6 @@ import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
 
 from tensorboardX import SummaryWriter
 
@@ -31,74 +30,28 @@ from logger import Logger
 from decision_model import *
 from datacollection_util import *
 
-# import robosuite
-# import robosuite.utils.transform_utils as T
-# from robosuite.wrappers import IKWrapper
+def multinomial_KL(logits_q, logits_p):
+	return -(F.softmax(logits_p, dim =-1) * (F.log_softmax(logits_q, dim =-1) - F.log_softmax(logits_p, dim =-1))).sum(-1)
 
-# def multinomial_KL(logits_q, logits_p, dim):
-# 	return -(F.softmax(logits_p, dim =dim) * (F.log_softmax(logits_q, dim = dim) - F.log_softmax(logits_p, dim = dim))).sum(dim)
+def DJS(logits):
+	# logits of size batch_size x num_options x num_options
+	div_js = torch.zeros(logits.size(0)).to(logits.device).float()
 
-# def max_avgDivJS(logits, dim):
-# 	# logits of size batch_size x num_options x num_options
-# 	div_js = torch.zeros(logits.size()).to(logits.device).float().sum(2)
+	for idx0 in range(logits.size(1) - 1):
+		for idx1 in range(idx0 + 1, logits.size(1)):
+			if idx0 == idx1:
+				continue
 
-# 	for idx0 in range(logits.size(1) - 1):
-# 		for idx1 in range(idx0 + 1, logits.size(1)):
-# 			if idx0 == idx1:
-# 				continue
+			dis0 = logits[:,idx0]
+			dis1 = logits[:,idx1]
+			djs_distrs = 0.5 * (multinomial_KL(dis0, dis1) + multinomial_KL(dis1, dis0))
+			div_js[:] += djs_distrs 
+			div_js[:] += djs_distrs
 
-# 			dis0 = logits[:,idx0]
-# 			dis1 = logits[:,idx1]
-# 			djs_distrs = 0.5 * (multinomial_KL(dis0, dis1, dim =dim) + multinomial_KL(dis1, dis0, dim=dim))
-# 			div_js[:, idx0] += djs_distrs 
-# 			div_js[:, idx1] += djs_distrs
-
-# 	return div_js.max(0)[1][0] # 0 at the end picks the first value in the tensor which is a maximum
-
-# def exp_logprobs(logits, logprobs):
-
-# 	exp_logprobs = torch.zeros_like(logits[:,0])
-
-# 	for i in range(logits.size(1)):
-# 		logs = logits[:,i]
-# 		lprobs = F.log_softmax((F.log_softmax(logs, dim =1) + logprobs), dim = 1)
-# 		exp_logprobs += torch.exp(logprobs)[:,i] * lprobs 
-
-# 	return exp_logprobs
-
-def mat_conf_logprobs(peg_type, hole_type, probs):
-	conf_logprobs = torch.zeros_like(peg_type[:,0])
-	certainty = 180
-	uncertainty = 20
-
-	conf_matrix = np.array([\
-		[[certainty, uncertainty, uncertainty],\
-		[uncertainty, certainty, uncertainty],\
-		[uncertainty, uncertainty, certainty]],\
-		[[certainty, uncertainty, uncertainty],\
-		[uncertainty, certainty, uncertainty],\
-		[uncertainty, uncertainty, certainty]],\
-		[[certainty, uncertainty, uncertainty],\
-		[uncertainty, certainty, uncertainty],\
-		[uncertainty, uncertainty, certainty]],\
-		])
-
-	conf_matrix = conf_matrix / np.tile(np.expand_dims(np.sum(conf_matrix, axis = 2), axis = 2), (1,1,peg_type.shape[1]))
-
-	conf_matrix = torch.log(torch.from_numpy(conf_matrix).float().to(peg_type.device))
-
-	for i in range(peg_type.size(0)):
-		p_idx = peg_type[i].max(0)[1]
-		h_idx = hole_type[i].max(0)[1]
-		c_idx = probs[i].max(0)[1]
-
-		conf_logprobs[i] = conf_matrix[p_idx, h_idx, c_idx]
-
-	return conf_logprobs
-
+	return div_js
 
 def calc_entropy(belief):
-	return np.where(belief != 0, -1.0 * belief * np.log(belief), 0).sum(-1)
+	return torch.where(belief != 0, -1.0 * belief * torch.log(belief), torch.zeros_like(belief)).sum(-1)
 
 def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 	tensor_dict = {}
@@ -106,268 +59,330 @@ def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 		tensor_dict[key] = torch.from_numpy(np.concatenate(numpy_dict[key], axis = 0)).float().unsqueeze(0).to(device)
 	return tensor_dict
 
-class DecisionModel(object):
-	def __init__(self, hole_poses, num_options, workspace_dim, num_samples, ori_action, plus_offset, model_ensemble, peg_idx = 0):
-		sensor, sensor_pred, insert_model, distance_model = model_ensemble
+def gen_state_dict(pos_info, option_names, constraint = True):
+	state_dict = {}
 
-		self.hole_poses = hole_poses # list
+	if constraint:
+		state_dict["states"] = tuple(itertools.permutations(range(len(option_names)), len(pos_info.keys())))
+	else:
+		state_dict["states"] = tuple(itertools.product(range(len(option_names)), repeat = len(pos_info.keys())))
+
+	for k, state in enumerate(state_dict["states"]):
+		correct = True
+		for i, j in enumerate(state):
+			if pos_info[i]["name"] != option_names[j]:
+				correct = False
+
+		if correct:
+			state_dict["correct_state"] = state
+			state_dict["correct_idx"] = k
+
+	state_dict["option_names"] = option_names
+	state_dict["num_options"] = len(option_names)
+	state_dict["num_pos"] = len(pos_info.keys())
+	state_dict["num_states"] = len(state_dict["states"])
+
+	return state_dict
+
+def gen_conf_mat(num_options, num_actions, uncertainty_range):
+	if num_actions == 0:
+		return np.expand_dims(create_confusion(num_options, uncertainty_range), axis = 0)
+	else:
+		conf_mat = []
+		for i in range(num_actions):
+			conf_mat.append(np.expand_dims(create_confusion(num_options, uncertainty_range), axis = 0))
+
+		return np.concatenate(conf_mat, axis = 0)
+
+def create_confusion(num_options, u_r):
+	uncertainty = u_r[0] + (u_r[1] - u_r[0]) * np.random.random_sample()
+	confusion_matrix = uncertainty * np.random.random_sample((num_options, num_options))
+
+	confusion_matrix[range(num_options), range(num_options)] = 1.0
+
+	confusion_matrix = confusion_matrix / np.tile(np.expand_dims(np.sum(confusion_matrix, axis = 1), axis = 1), (1, num_options))
+
+	return confusion_matrix
+
+class Action_PegInsertion(object):
+	def __init__(self, hole_info, workspace_dim, ori_action, plus_offset, num_actions):
 		self.ori_action = ori_action
 		self.plus_offset = plus_offset
-
-		self.num_options = num_options
-
 		self.workspace_dim = workspace_dim
-		self.num_samples = num_samples
+		self.hole_info = hole_info
+		self.num_actions = num_actions
 
-		self.sensor = sensor
-		self.sensor_pred = sensor_pred
-		self.insert_model = insert_model
-		self.distance_model = distance_model
-		self.random = False
-		self.mat = False
+	def generate_actions(self):
+		self.actions = slidepoints(self.workspace_dim, self.num_actions)
 
-		self.set_pegidx(peg_idx)
+	def get_action(self, act_idx):
+		return self.actions[act_idx]
 
-		self.reset_memory()
+	def transform_action(self, pos_idx, act_idx):
+		action = self.actions[act_idx]
+		top_goal = self.hole_info[pos_idx]["pos"]
+		init_point = np.concatenate([action[:3] + top_goal[:3], self.ori_action]) # ori action to compensate for only doing position control
+		final_point = np.concatenate([action[6:] + top_goal[:3], self.ori_action])
 
-	def reset_memory(self):
-
-		self.perms = set(permutations(range(self.num_options)))
-
-		for i, perm in enumerate(self.perms):
-			if perm[0] == 0 and perm[1] == 1 and perm[2] == 2:
-				self.correct_idx = i
-
-		self.hole_memory = np.expand_dims(np.ones(len(self.perms)) / len(self.perms), axis = 0)
-
-	def set_pegidx(self, peg_idx):
-		self.peg_idx = peg_idx
-		self.peg_vector = np.zeros(self.num_options)
-		self.peg_vector[self.peg_idx] = 1
-
-	def toTorch(self, array):
-		return torch.from_numpy(array).to(self.sensor.device).float()
-
-	def transform_action(self, macro_action):
-		init_point = np.concatenate([macro_action[0,:3] + self.top_goal[:3], self.ori_action]) # ori action to compensate for only doing position control
-		final_point = np.concatenate([macro_action[0,6:] + self.top_goal[:3], self.ori_action])
-
-		top_plus = self.top_goal + self.plus_offset
+		top_plus = top_goal + self.plus_offset
 
 		return [(top_plus, 0, "top_plus"), (init_point, 0, "init_point"), (final_point, 1, "final_point"), (top_plus, 0, "top_plus")]
 
-	def sample_actions(self):
-		return slidepoints(self.workspace_dim, self.num_samples)
+class Probability_PegInsertion(object):
+	def __init__(self, sensor, confusion_model, num_options):
+		self.sensor = sensor
+		self.conf = confusion_model
+		self.num_options = num_options
+		self.device = self.sensor.device
 
-	def choose_hole(self):
+	def toTorch(self, array):
+		return torch.from_numpy(array).to(self.device).float()
+
+	def expand(self, idx, size):
+		vector = np.zeros(self.num_options)
+		vector[idx] = 1
+		return self.toTorch(vector).unsqueeze(0).repeat_interleave(size, dim = 0)
+
+	def set_tool_idx(self, tool_idx):
+		self.tool_idx = tool_idx
+
+	def record_test(self, obs):
+		if len(obs['force_hi_freq']) < 10: # magic number / edge case when num sensor readings is too small
+			return False
+		else:
+			return True
+
+	def transform_action(self, obs, actions_np):
+		proprio = obs["proprio"][0]
+		return np.expand_dims(np.concatenate([proprio[0,:6], actions_np[6:]]), axis = 0)
+
+	def sensor_obs(self, obs, actions_np):
+		action = self.toTorch(actions_np)
+		sample = obs2Torch(obs, self.device)
+		sample['peg_type'] = self.expand(self.tool_idx, 1)
+		
+		return self.sensor.probs(sample, action).max(1)[1]
+
+	def conf_logits(self, actions_np):
+		actions = self.toTorch(actions_np)
+		batch_size = actions.size(0)
+		peg_type = self.expand(self.tool_idx, batch_size)
+		
+		return self.conf.logits(peg_type, actions)
+
+	def conf_logprob(self, options_idx, actions_np, obs_idx):
+		actions = self.toTorch(actions_np)
+		batch_size = actions.size(0)
+		tool_type = self.expand(self.tool_idx, batch_size)
+		options_type = self.expand(options_idx, batch_size)
+
+		return self.conf.conf_logprobs(tool_type, options_type, actions, obs_idx)
+
+class Action_Ideal(object):
+	def __init__(self, num_actions):
+		self.num_actions = num_actions
+
+	def generate_actions(self):
+		if self.num_actions == 0:
+			return np.array([0])
+		else:
+			self.actions = np.array(range(self.num_actions))
+
+	def get_action(self, act_idx):
+		return self.actions[act_idx]
+
+	def transform_action(self, pos_idx, act_idx):
+		return (pos_idx, act_idx)
+
+class Probability_Ideal(object):
+	def __init__(self, num_options, num_actions, uncertainty_range, device):
+		self.num_options = num_options
+		self.num_actions = num_actions
+		self.u_r = uncertainty_range
+		self.device = device
+
+		self.gen_cm()
+
+	def gen_cm(self):
+		self.conf = gen_conf_mat(self.num_options, self.num_actions, self.u_r)
+
+	def toTorch(self, array):
+		return torch.from_numpy(array).to(self.device).float()
+
+	def record_test(self, obs):
+		return True
+
+	def transform_action(self, options_idx, act_idx):
+		return np.array([act_idx])
+
+	def sensor_obs(self, options_idx, act_idx):
+		probs = self.conf[act_idx[0], options_idx]
+		return np.random.multinomial(1, probs, size = 1).argmax()
+
+	def conf_logits(self, actions):
+		return torch.log(self.toTorch(self.conf))
+
+	def conf_logprob(self, options_idx, act_idx, obs_idx):
+		return torch.log(self.toTorch(self.conf[act_idx, [options_idx]*len(act_idx), [obs_idx]*len(act_idx)]))
+
+class Decision_Model(object):
+	def __init__(self, state_dict, prob_model, act_model):
+		self.state_dict = state_dict
+		self.prob_model = prob_model
+		self.act_model = act_model
+		self.device = self.prob_model.device
+
+		self.reset_dis()
+
+	def reset_dis(self):
+		self.state_dis = torch.ones((1,self.state_dict["num_states"])) / self.state_dict["num_states"]
+		self.state_dis = self.state_dis.to(self.device).float()
+		self.max_entropy = calc_entropy(self.state_dis).item()
+		self.curr_entropy = calc_entropy(self.state_dis).item()
+
+		self.step_count = 0
+
+	def max_ent_pos(self):
 		max_entropy = 0
-		for i in range(self.num_options):
-			prob = self.marginalize(self.hole_memory, hole_idx = i)[0]
+		for i in range(self.state_dict["num_pos"]):
+			prob = self.marginalize(self.state_dis, pos_idx = i).squeeze()
 			entropy = calc_entropy(prob)
 			if entropy > max_entropy:
 				idx = i
 				max_entropy = entropy
 
-		self.hole_idx = idx
-		self.hole_type = self.hole_poses[self.hole_idx][1]
-		self.top_goal = self.hole_poses[self.hole_idx][0]
+		return idx
 
-	def calc_exp_pred_entropy(self, hole_i, macro_actions):
-		exp_pred_entropy = np.zeros(macro_actions.shape[0])
+	def max_ent_action(self, actions):
+		logits = self.prob_model.conf_logits(actions)
+		div_js = DJS(logits)
 
-		for i, perm in enumerate(self.perms):
-			hole_idx = perm[hole_i]
-			probs = self.pred_sensor_probs(hole_idx, macro_actions)
-			hole_memory = self.expected_memory(hole_i, macro_actions, probs)
-			peg_memory = self.marginalize(hole_memory, shape_idx = self.peg_idx)
-			exp_pred_entropy += self.hole_memory[0,i] * calc_entropy(peg_memory)
+		return div_js.max(0)[1]
 
-		return exp_pred_entropy
+	def choose_action(self, pol_num):
+		self.act_model.generate_actions()
+		print("Current entropy is: " + str(self.curr_entropy)[:5])
 
-	def choose_action(self):
-		macro_actions = self.sample_actions()
+		if pol_num == 0:
+			pos_idx = np.random.choice(range(self.state_dict["num_pos"]))
+			act_idx = np.random.choice(range(self.act_model.num_actions))
 
-		if self.random:
-			max_idx = np.random.choice(range(self.num_samples))
+		elif pol_num == 1:
+			pos_idx = self.max_ent_pos()
+			act_idx = self.max_ent_action(self.act_model.actions)
+
+		elif pol_num == 2:
+			min_entropy = copy.deepcopy(self.max_entropy)
+
+			for k in range(self.state_dict["num_pos"]):
+				exp_entropy = self.expected_entropy(k, self.act_model.actions)
+
+				if exp_entropy.min(0)[0] < min_entropy:
+					pos_idx = copy.deepcopy(k)
+					act_idx = exp_entropy.min(0)[1]
+					min_entropy = exp_entropy.min(0)[0]
+			
+			print("Entropy is expected to decrease to: " + str(min_entropy)[:5])
+
+		self.pos_idx = pos_idx
+		self.act_idx = act_idx
+
+		print("\n#####################\n")
+
+		return self.act_model.transform_action(self.pos_idx, self.act_idx)
+
+	def marginalize(self, state_dis, pos_idx = None, options_idx = None):
+		if pos_idx is not None:
+			margin = torch.zeros((self.state_dict["num_options"], state_dis.size(0))).to(self.device)
+			for i, state in enumerate(self.state_dict["states"]):
+				margin[state[pos_idx]] += state_dis.transpose(0,1)[i]
 		else:
-			distances = self.calc_distances(macro_actions)
-			distances = distances - distances.min()
+			margin = torch.zeros((self.state_dict["num_pos"], state_dis.size(0))).to(self.device)
+			for i, state in enumerate(self.state_dict["states"]):
+				if options_idx in state:
+					idx = state.index(options_idx)
+					margin[idx] += state_dis.transpose(0,1)[i]
 
-			curr_peg_memory = self.marginalize(self.hole_memory, shape_idx = self.peg_idx)
-			curr_entropy = calc_entropy(curr_peg_memory)[0]
+		return margin.transpose(0,1)
 
-			exp_pred_entropy = self.calc_exp_pred_entropy(self.hole_idx, macro_actions)
+	def expected_entropy(self, pos_idx, actions):
+		batch_size = actions.shape[0]
+		prior_logprobs = torch.log(self.state_dis.repeat_interleave(batch_size, dim = 0))
+		expected_entropy = torch.zeros(batch_size).float().to(self.device)
 
-			print("CHOOSING TO COLLECT INFORMATION")
-			print("Current entropy is: " + str(curr_entropy)[:5] + "\nEntropy is predicted to decrease to: " + str(exp_pred_entropy.min())[:5]) 
+		for obs_idx in range(self.state_dict["num_options"]):
+			p_o_given_a = torch.zeros(batch_size).float().to(self.device)
 
-			max_idx = exp_pred_entropy.argmin()
+			for j, state in enumerate(self.state_dict["states"]):
+				options_idx = state[pos_idx]
 
-			print("\n#####################\n")
+				conf_logprobs = self.prob_model.conf_logprob(options_idx, actions, obs_idx)
 
-		self.macro_action = np.expand_dims(macro_actions[max_idx], axis = 0)
+				# print(conf_logprobs.size())
 
-		return self.transform_action(self.macro_action)
+				p_o_given_a[:] += torch.exp(prior_logprobs[:,j] + conf_logprobs)
 
-	def calc_distances(self, macro_actions_np):
-		peg_type = self.toTorch(self.peg_vector).unsqueeze(0).repeat_interleave(self.num_samples, dim = 0)
-		macro_actions = self.toTorch(macro_actions_np)
+			expected_entropy[:] += p_o_given_a[:] * calc_entropy(self.update_dis(pos_idx, actions, obs_idx))
 
-		return self.distance_model.distances(peg_type, macro_actions).min(1)[0].detach().cpu().numpy()
+		return expected_entropy
 
-	def calc_insert_probs(self, macro_actions_np):
-		peg_type = self.toTorch(self.peg_vector).unsqueeze(0).repeat_interleave(self.num_samples, dim = 0)
-		macro_actions = self.toTorch(macro_actions_np)
-		return torch.sigmoid(self.insert_model.process(macro_actions, peg_type, peg_type))
+	def update_dis(self, pos_idx, actions, obs_idx):
+		batch_size = actions.shape[0]
+		prior_logprobs = torch.log(self.state_dis.repeat_interleave(batch_size, dim = 0))
+		state_dis = torch.zeros_like(prior_logprobs)
 
-	# def choose_both(self):
-	# 	macro_actions = self.sample_actions()
-	# 	distances = self.calc_distances(macro_actions)
-	# 	distances = distances - distances.min()
+		for j, state in enumerate(self.state_dict["states"]):
+			options_idx = state[pos_idx]
 
-	# 	#### Insertion calculation #####
-	# 	insert_probs = self.calc_insert_probs(macro_actions).squeeze()
+			conf_logprobs =self.prob_model.conf_logprob(options_idx, actions, obs_idx)
 
-	# 	curr_peg_memory = self.marginalize(self.hole_memory, shape_idx = self.peg_idx)[0]
+			# print(conf_logprobs.size())
 
-	# 	insert_prob = insert_probs.max(0)[0] * curr_peg_memory.max()
+			state_dis[:,j] = conf_logprobs + prior_logprobs[:,j]
 
-	# 	max_insert_idx = insert_probs.max(0)[1]
-	# 	hole_insert_idx = curr_peg_memory.argmax()
+			# print(conf_logprobs)
+			# print(state_dis)
 
-	# 	curr_entropy = calc_entropy(curr_peg_memory) - distances.min()
+		state_dis = F.softmax(state_dis, dim = 1)
 
-	# 	min_pred_entropy = np.inf
+		return state_dis
 
-	# 	for k in range(len(self.hole_poses)):
-	# 		exp_pred_entropy = self.calc_exp_pred_entropy(k, macro_actions)
+	def new_obs(self, obs):
+		if self.prob_model.record_test(obs):
+			action = self.act_model.get_action(self.act_idx)
+			# print(action)
+			action = self.prob_model.transform_action(obs, action)
+			# print(action)
+			obs_idx = self.prob_model.sensor_obs(obs, action)
+			# print(obs_idx)
+			# print(self.state_dis)
 
-	# 		if exp_pred_entropy.min() < min_pred_entropy:
-	# 			hole_info_idx = copy.deepcopy(k)
-	# 			max_info_idx = exp_pred_entropy.argmin()
-	# 			min_pred_entropy = exp_pred_entropy.min()
+			self.state_dis = self.update_dis(self.pos_idx, action, obs_idx)
+			# print(self.state_dis)
 
-	# 	print("##################")
-	# 	print("# Action Choice #\n")
-	# 	if self.marginalize(self.hole_memory, shape_idx = self.peg_idx)[0].max() > 0.9:
-	# 		print("CHOOSING TO INSERT")
-	# 		self.hole_idx = hole_insert_idx
-	# 		self.insert_bool = 1.0
-	# 		max_idx = max_insert_idx
-	# 	else:
-	# 		print("CHOOSING TO COLLECT INFORMATION")
-	# 		print("Current entropy is: " + str(curr_entropy)[:5] + "\nEntropy is predicted to decrease to: " + str(min_pred_entropy)[:5])
-	# 		self.hole_idx = hole_info_idx
-	# 		self.insert_bool = 0.0
-	# 		max_idx = max_info_idx
-
-	# 	self.hole_type = self.hole_poses[self.hole_idx][1]
-	# 	self.top_goal = self.hole_poses[self.hole_idx][0]
-
-	# 	print("\n#####################\n")
-	# 	self.macro_action = np.expand_dims(macro_actions[max_idx], axis = 0)
-
-	# 	return self.transform_action(self.macro_action)
-
-	def marginalize(self, hole_memory, hole_idx = None, shape_idx = None):
-		margin = np.zeros((hole_memory.shape[0], self.num_options))
-		if hole_idx is not None:
-			for i, perm in enumerate(self.perms):
-				margin[:, perm[hole_idx]] += hole_memory[:,i]
-		else:
-			for i, perm in enumerate(self.perms):
-				idx = list(perm).index(shape_idx)
-				margin[:,idx] += hole_memory[:,i]
-
-		return margin
-
-	def update_memory(self, hole_pos_idx, macro_actions_np, obs):
-		macro_actions = self.toTorch(macro_actions_np)
-		prior_logprobs = torch.log(self.toTorch(self.hole_memory)).repeat_interleave(macro_actions.size(0), dim = 0)
-		hole_memory = torch.zeros_like(prior_logprobs)
-		peg_type = self.toTorch(self.peg_vector).unsqueeze(0).repeat_interleave(macro_actions.size(0), dim = 0)
-
-		for j, perm in enumerate(self.perms):
-			hole_idx = perm[hole_pos_idx]
-
-			hole_vector = np.zeros(self.num_options)
-
-			hole_vector[hole_idx] = 1
-
-			hole_type = self.toTorch(hole_vector).unsqueeze(0).repeat_interleave(macro_actions.size(0), dim = 0)
-
-			probs = self.sensor.probs(obs, peg_type, macro_actions)
-
-			if self.mat:
-				conf_logprobs = mat_conf_logprobs(peg_type, hole_type, probs)
-			else:
-				conf_logprobs = self.sensor_pred.conf_logprobs(peg_type, hole_type, macro_actions, probs = probs)
-
-			hole_memory[:,j] = conf_logprobs + prior_logprobs[:,j]
-
-		hole_memory = F.softmax(hole_memory, dim = 1)
-
-		return hole_memory.detach().cpu().numpy()
-
-	def pred_sensor_probs(self, hole_type_idx, macro_actions_np):
-		macro_actions = self.toTorch(macro_actions_np)
-		hole_vector = np.zeros(self.num_options)
-		hole_vector[hole_type_idx] = 1
-		hole_type = self.toTorch(hole_vector).unsqueeze(0).repeat_interleave(macro_actions.size(0), dim = 0)
-		peg_type = self.toTorch(self.peg_vector).unsqueeze(0).repeat_interleave(macro_actions.size(0), dim = 0)
-
-		return self.sensor_pred.sensor_probs(peg_type, hole_type, macro_actions)
-
-	def expected_memory(self, hole_pos_idx, macro_actions_np, probs):
-		macro_actions = self.toTorch(macro_actions_np)
-		prior_logprobs = torch.log(self.toTorch(self.hole_memory)).repeat_interleave(macro_actions.size(0), dim = 0)
-		hole_memory = torch.zeros_like(prior_logprobs)
-		peg_type = self.toTorch(self.peg_vector).unsqueeze(0).repeat_interleave(macro_actions.size(0), dim = 0)
-
-		for j, perm in enumerate(self.perms):
-			hole_idx = perm[hole_pos_idx]
-			hole_vector = np.zeros(self.num_options)
-			hole_vector[hole_idx] = 1
-			hole_type = self.toTorch(hole_vector).unsqueeze(0).repeat_interleave(macro_actions.size(0), dim = 0)
-
-			if self.mat:
-				conf_logprobs = mat_conf_logprobs(peg_type, hole_type, probs)
-			else:
-				conf_logprobs = self.sensor_pred.conf_logprobs(peg_type, hole_type, macro_actions, probs = probs)
-
-			hole_memory[:,j] = conf_logprobs + prior_logprobs[:,j]
-
-		hole_memory = F.softmax(hole_memory, dim = 1)
-
-		return hole_memory.detach().cpu().numpy()
-
-	def new_obs(self, observations):
-
-		observations['peg_type'] = [self.peg_vector]
-		sample = obs2Torch(observations, self.sensor.device)
-
-		if sample['force_hi_freq'].size(1) > 10: # magic number / edge case when num sensor readings is too small
-			self.macro_action = np.expand_dims(np.concatenate([np.array(observations['proprio'])[0,0,:6], self.macro_action[0,6:]]), axis = 0)
-			self.hole_memory = self.update_memory(self.hole_idx, self.macro_action, sample)
+			self.curr_entropy = calc_entropy(self.state_dis).item()
+			self.step_count += 1
 
 	def print_hypothesis(self):
-		block_length = 8 # magic number
+		block_length = 10 # magic number
 		histogram_height = 10 # magic number
 		fill = "#"
 		line = "-"
 		gap = " "
 
-		for i in range(self.num_options):
-			probs = self.marginalize(self.hole_memory, hole_idx = i)[0]
-			counts = np.round(probs * histogram_height)
+		for i in range(self.state_dict["num_pos"]):
+			probs = self.marginalize(self.state_dis, pos_idx = i)
 
-			print("Model Hypthesis:", self.hole_poses[np.argmax(probs)][1] , " , Ground Truth:", self.hole_poses[i][1])
-			print("With the following histograms:")
+			counts = torch.round(probs * histogram_height).squeeze()
 
+			print("Model Hypthesis:", self.state_dict["option_names"][probs.max(1)[1]] ,\
+			 " , Ground Truth:", self.state_dict["option_names"][self.state_dict["correct_state"][i]])
+			
+			print("Probabilities", probs.detach().cpu().numpy())
 			for line_idx in range(histogram_height, 0, -1):
 				string = "   "
 
-				for i in range(self.num_options):
+				for i in range(self.state_dict["num_options"]):
 					count = counts[i]
 					if count < line_idx:
 						string += (block_length * gap)
@@ -380,16 +395,15 @@ class DecisionModel(object):
 
 			string = "   "
 
-			for hole_pose in self.hole_poses:
-				hole_type = hole_pose[1]
-				remainder = block_length - len(hole_type)
+			for option_name in self.state_dict["option_names"]:
+				remainder = block_length - len(option_name)
 
 				if remainder % 2 == 0:
 					offset = int(remainder / 2)
-					string += ( offset * line + hole_type + offset * line)
+					string += ( offset * line + option_name + offset * line)
 				else:
 					offset = int((remainder - 1) / 2)
-					string += ( (offset + 1) * line + hole_type + offset * line)
+					string += ( (offset + 1) * line + option_name + offset * line)
 
 				string += "   "
 
@@ -397,17 +411,124 @@ class DecisionModel(object):
 
 			string = "   "
 
-			for i in range(self.num_options):
+			for i in range(self.state_dict["num_options"]):
 				string += (block_length * line)
 				string += "   "
 
 			print(string)
 			print("\n")
 
-		most_prob_config = 0
+		print("##############################################\n")
 
-		for i in range(self.num_options):
-			prob = self.marginalize(self.hole_memory, shape_idx = self.peg_idx)[0]
 
-		print("Robot estimates that the correct position\n is the", self.hole_poses[prob.argmax()][1], "hole with certainty", str(prob.max())[:5], "\n")
+def main():
 
+	option_names = ["Apple", "Orange", "Banana", "Bread"]
+	pos_info = {}
+	pos_info[0] = {"name": "Orange"}
+	pos_info[1] = {"name": "Bread"}
+
+	num_options = len(option_names)
+	num_actions = 20
+
+	uncertainty_range = [0.5, 0.5]
+
+	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+	act_model = Action_Ideal(num_actions)
+
+	prob_model = Probability_Ideal(num_options, num_actions, uncertainty_range, device)
+
+	state_dict = gen_state_dict(pos_info, option_names)
+
+	decision_model = Decision_Model(state_dict, prob_model, act_model)
+
+
+	num_trials = 1000
+	pol_type = [0, 1, 2]
+	step_counts = np.zeros((len(pol_type), num_trials))
+
+	pol_idx = 0
+	trial_idx = 0
+
+	while trial_idx < num_trials:
+		pos_idx, act_idx = decision_model.choose_action(pol_idx)
+		options_idx = decision_model.state_dict["correct_state"][pos_idx]
+		decision_model.new_obs(options_idx)
+		decision_model.print_hypothesis()
+		a = input("Continue?")
+
+		if decision_model.curr_entropy < 0.3:
+			step_counts[pol_idx, trial_idx] =  decision_model.step_count
+			pol_idx += 1
+
+			if pol_idx == len(pol_type):
+				decision_model.prob_model.gen_cm()
+				pol_idx = pol_idx % len(pol_type)
+				trial_idx += 1
+
+			decision_model.reset_dis()
+
+			if (trial_idx + 1) % 50 == 0 and pol_idx == (len(pol_type) - 1):
+				print(trial_idx + 1, " trials completed of ", num_trials)
+
+	print("Averages steps: ", np.mean(step_counts, axis = 1))
+
+if __name__ == "__main__":
+	main()
+
+		#### Insertion calculation #####
+		# insert_probs = self.calc_insert_probs(macro_actions).squeeze()
+
+		# curr_peg_memory = self.marginalize(self.hole_memory, shape_idx = self.peg_idx)[0]
+
+		# insert_prob = insert_probs.max(0)[0] * curr_peg_memory.max()
+
+		# max_insert_idx = insert_probs.max(0)[1]
+		# hole_insert_idx = curr_peg_memory.argmax()
+
+		# print("##################")
+		# print("# Action Choice #\n")
+		# if self.marginalize(self.hole_memory, shape_idx = self.peg_idx)[0].max() > 0.9:
+		# 	print("CHOOSING TO INSERT")
+		# 	self.hole_idx = hole_insert_idx
+		# 	self.insert_bool = 1.0
+		# 	max_idx = max_insert_idx
+		# else:
+
+	# def calc_insert_probs(self, macro_actions):
+	# 	peg_type = self.expand(self.peg_idx, macro_actions.size(0))
+	# 	return torch.sigmoid(self.insert_model.process(macro_actions, peg_type, peg_type))
+# def mat_conf_logprobs(peg_type, hole_type, probs):
+# 	conf_logprobs = torch.zeros_like(peg_type[:,0])
+# 	certainty = 180
+# 	uncertainty = 20
+
+# 	conf_matrix = np.array([\
+# 		[[certainty, uncertainty, uncertainty],\
+# 		[uncertainty, certainty, uncertainty],\
+# 		[uncertainty, uncertainty, certainty]],\
+# 		[[certainty, uncertainty, uncertainty],\
+# 		[uncertainty, certainty, uncertainty],\
+# 		[uncertainty, uncertainty, certainty]],\
+# 		[[certainty, uncertainty, uncertainty],\
+# 		[uncertainty, certainty, uncertainty],\
+# 		[uncertainty, uncertainty, certainty]],\
+# 		])
+
+# 	conf_matrix = conf_matrix / np.tile(np.expand_dims(np.sum(conf_matrix, axis = 2), axis = 2), (1,1,peg_type.shape[1]))
+
+# 	conf_matrix = torch.log(torch.from_numpy(conf_matrix).float().to(peg_type.device))
+
+# 	for i in range(peg_type.size(0)):
+# 		p_idx = peg_type[i].max(0)[1]
+# 		h_idx = hole_type[i].max(0)[1]
+# 		c_idx = probs[i].max(0)[1]
+
+# 		conf_logprobs[i] = conf_matrix[p_idx, h_idx, c_idx]
+
+# 	return conf_logprobs
+
+
+# def calc_entropy(belief):
+# 	return np.where(belief != 0, -1.0 * belief * np.log(belief), 0).sum(-1)

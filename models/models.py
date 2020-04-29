@@ -239,17 +239,26 @@ class Options_Sensor(Proto_Macromodel):
             'hole_est_comp': hole_est_comp,
         }
 
-    def probs(self, input_dict, peg_type, macro_action):
+    def probs(self, input_dict, macro_action):
         proprios = input_dict["proprio"].to(self.device)
         forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
         contacts = input_dict["contact"].to(self.device)
         actions = input_dict["action"].to(self.device)[:, :-1]
+        peg_type = input_dict["peg_type"].to(self.device)        
 
         proprio_diffs = proprios[:,1:] - proprios[:, :-1]
         contact_diffs = contacts[:,1:] - contacts[:, :-1]
         force_clipped = forces[:,1:]
 
         options_logits, conf_logits = self.get_logits(proprio_diffs, contact_diffs, force_clipped, actions, macro_action, peg_type)
+
+        # print(proprio_diffs.size())
+        # print(contact_diffs.size())
+        # print(force_clipped.size())
+
+        # print(peg_type)
+        # print(macro_action)
+        # print(F.softmax(options_logits, dim = 1))
 
         return F.softmax(options_logits, dim = 1)
 
@@ -330,35 +339,26 @@ class Options_Predictor(Proto_Macromodel):
             'conf_comp_class': conf_logits_comp,
         }
 
-    def sensor_probs(self, peg_type, hole_type, macro_action):
-        options_logits = torch.zeros_like(peg_type)
+    def logits(self, peg_type, macro_action):
+        logits_list = []
 
-        for key in self.model_dict.keys():
-            expand_state, options_pred, conf_pred = self.model_dict[key]
-            i, j = key #peg, hole
-            peg_bool = peg_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
-            hole_bool = hole_type[:,j].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
-            estate = expand_state(macro_action)
-            options_logits += peg_bool * hole_bool * options_pred(estate)
+        for i in range(self.num_options):
+            hole_type = torch.zeros_like(peg_type)
+            hole_type[:, i] = 1.0
+            options_logits, conf_logits = self.get_pred(macro_action, peg_type, hole_type)
 
-        return F.softmax(options_logits, dim = 1)
+            logits_list.append(conf_logits.unsqueeze(1))
 
-    def conf_logprobs(self, peg_type, hole_type, macro_action, probs):
-        conf_logits = torch.zeros_like(peg_type)
-        uninformative_prior = torch.log(torch.ones_like(peg_type) / self.num_options)
+        return torch.cat(logits_list, dim = 1)
 
-        for key in self.model_dict.keys():
-            expand_state, options_pred, conf_pred = self.model_dict[key]
-            i, j = key #peg, hole
-            peg_bool = peg_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
-            hole_bool = hole_type[:,j].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
-
-            estate = expand_state(macro_action)
-            conf_logits += peg_bool * hole_bool * conf_pred(estate)
+    def conf_logprobs(self, peg_type, hole_type, macro_action, obs_idx):
+        options_logits, conf_logits = self.get_pred(macro_action, peg_type, hole_type)
             
         conf_logprobs = F.log_softmax(torch.log(F.softmax(conf_logits, dim = 1) + 0.2), dim = 1)
 
-        conf_logprob = conf_logprobs[torch.arange(conf_logprobs.size(0)), probs.max(1)[1]]
+        # print(obs_idx)
+
+        conf_logprob = conf_logprobs[torch.arange(conf_logprobs.size(0)), obs_idx]
 
         return conf_logprob
 

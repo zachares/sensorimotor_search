@@ -58,6 +58,7 @@ if __name__ == '__main__':
 	noise_parameters = np.array(cfg['perception_params']['noise_parameters'])
 	ctrl_freq = np.array(cfg['perception_params']['control_freq'])
 	num_trials = cfg['perception_params']['num_trials']
+	policy_num = cfg['perception_params']['policy_num']
 
 	workspace_dim = cfg['perception_params']['workspace_dim']
 	seed = cfg['perception_params']['seed']
@@ -113,16 +114,10 @@ if __name__ == '__main__':
     ### Initializing and loading model
     ##########################################################
 	sensor = Options_Sensor("", "Options_Sensor", info_flow, force_size, proprio_size, action_dim, num_options, device = device).to(device)
-	sensor_pred = Options_Predictor("", "Options_Predictor", info_flow, pose_size, num_options, device = device).to(device)
-	insert_model = Insertion_Predictor("", "Insertion_Predictor", info_flow, pose_size, num_options, device = device).to(device)
-	distance_model = Feeling_Distance("", "Feeling_Distance", info_flow, pose_size, num_options, device = device).to(device)
+	confusion = Options_Predictor("", "Options_Predictor", info_flow, pose_size, num_options, device = device).to(device)
 
 	sensor.eval()
-	sensor_pred.eval()
-	insert_model.eval()
-	distance_model.eval()
-
-	model_ensemble = (sensor, sensor_pred, insert_model, distance_model)
+	confusion.eval()
 	#######################################################
 	### Setting up the test environment and extracting the goal locations
 	######################################################### 
@@ -140,18 +135,26 @@ if __name__ == '__main__':
 	plus_offset = np.array([0, 0, 0.04, 0,0,0])
 	peg_idx = 0
 
-	hole_poses = []
+	hole_info = {}
 	for idx, peg_type in enumerate(peg_types):
 		peg_top_site = peg_type + "Peg_top_site"
 		top = np.concatenate([env._get_sitepos(peg_top_site) - np.array([0, 0, 0.01]), ori_action])
 		top_height = top[2]
-		hole_poses.append((top, peg_type))
+		hole_info[idx] = {}
+		hole_info[idx]["pos"] = top
+		hole_info[idx]["name"] = peg_type
+
 
 	############################################################
 	### Declaring decision model
 	############################################################
-	decision_model = DecisionModel(hole_poses, num_options, workspace_dim, num_samples,\
-	 ori_action, plus_offset, model_ensemble)
+	act_model = Action_PegInsertion(hole_info, workspace_dim, ori_action, plus_offset, num_samples)
+
+	prob_model = Probability_PegInsertion(sensor, confusion, len(peg_types))
+
+	state_dict = gen_state_dict(hole_info, peg_types)
+
+	decision_model = Decision_Model(state_dict, prob_model, act_model)
 
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
@@ -166,8 +169,8 @@ if __name__ == '__main__':
     ###########################################################
 	for trial_num in range(num_trials):
 		#choosing random peg
-		decision_model.reset_memory()
-		decision_model.set_pegidx(peg_idx)
+		decision_model.reset_dis()
+		decision_model.prob_model.set_tool_idx(peg_idx)
 		# logging_dict['scalar'] = {}
 
 		gripper_type = peg_types[peg_idx] + "PegwForce" 
@@ -192,37 +195,36 @@ if __name__ == '__main__':
 
 		while True and num_steps < converge_thresh:
 			num_steps += 1
-			decision_model.choose_hole()
-			points_list = decision_model.choose_action()
-			# points_list = decision_model.choose_both()
+			points_list = decision_model.choose_action(policy_num)
+			top_goal = decision_model.act_model.hole_info[decision_model.pos_idx]["pos"]
 
 			point_idx = 0
 			goal = points_list[point_idx][0]
 			point_type = points_list[point_idx][1]
 
-			point_idx, done_bool, obs = movetogoal(env, decision_model.top_goal, fixed_params, points_list, point_idx, obs)
-			point_idx, done_bool, obs = movetogoal(env, decision_model.top_goal, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
 
 			# print("moved to initial position")
 
 			obs_dict = {}
 
 			while point_idx < len(points_list):
-				point_idx, done_bool, obs, obs_dict = movetogoal(env, decision_model.top_goal, fixed_params, points_list, point_idx, obs, obs_dict)
+				point_idx, done_bool, obs, obs_dict = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict)
 
-				if done_bool:
-					point_idx = len(points_list)
+				# if done_bool:
+				# 	point_idx = len(points_list)
 
-			if done_bool:
-				for i in range(20):
-					move_down(env, display_bool)
+			# if done_bool:
+			# 	for i in range(20):
+			# 		move_down(env, display_bool)
 
-				print("\n")
-				print("############################################################")
-				print("######                INSERTED                         #####")
-				print("############################################################")
-				print("\n")			
-				break
+			# 	print("\n")
+			# 	print("############################################################")
+			# 	print("######                INSERTED                         #####")
+			# 	print("############################################################")
+			# 	print("\n")			
+			# 	break
 
 			decision_model.new_obs(obs_dict)
 			decision_model.print_hypothesis()
@@ -231,8 +233,9 @@ if __name__ == '__main__':
 			# a = input("Continue?")
 
 		logging_dict['scalar']["Number of Steps"] = num_steps
-		logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.hole_memory[0,decision_model.correct_idx]
-		logging_dict['scalar']["Insertion"] = done_bool * 1.0
+		logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.state_dis[0,decision_model.state_dict["correct_idx"]]
+		logging_dict['scalar']['Entropy'] = decision_model.curr_entropy
+		# logging_dict['scalar']["Insertion"] = done_bool * 1.0
 		# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
 
 		logger.save_scalars(logging_dict, trial_num, 'evaluation/')

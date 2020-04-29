@@ -111,7 +111,7 @@ def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dic
 			# print("Inserted")
 			obs['insertion'] = np.array([1.0])
 			done_bool = True
-			step_count = step_threshold
+			# step_count = step_threshold
 		else:
 			obs['insertion'] = np.array([0.0])
 
