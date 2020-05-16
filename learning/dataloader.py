@@ -134,7 +134,6 @@ class H5_DataLoader(Dataset):
         ###########################################################
         ##### Project Specific Code Here ##########################
         ###########################################################
-
         def load_file(path):
             return h5py.File(path, 'r', swmr=True, libver = 'latest')
 

@@ -10,23 +10,31 @@ import time
 from models_modules import *
 
 def declare_models(cfg, models_folder, device):
-    force_size =cfg['custom_params']['force_size'] 
-    proprio_size = cfg['custom_params']['proprio_size'] 
-    pose_size = cfg['custom_params']['pose_size']
-    action_size =cfg['custom_params']['action_size']
-    num_options = cfg["custom_params"]["num_options"]
-    num_tools = cfg["custom_params"]["num_tools"]
-
     info_flow = cfg['info_flow']
-
     model_dict = {}
     ###############################################
     ##### Declaring models to be trained ##########
     #################################################
     ##### Note if a path has been provided then the model will load a previous model
-    model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", info_flow, force_size, proprio_size, action_size, num_tools, num_options, device = device).to(device)
-    model_dict["Options_ConfNet"] = Options_ConfNet(models_folder, "Options_ConfNet", info_flow, pose_size, num_tools, num_options, device = device).to(device)
-    # model_dict["Options_ConfMat"] = Options_ConfMat(models_folder, "Options_ConfMat", self.info_flow, num_tools, num_options, device = device).to(device)
+    if "Options_Sensor" in info_flow.keys():
+        force_size =cfg['custom_params']['force_size'] 
+        proprio_size = cfg['custom_params']['proprio_size'] 
+        action_size =cfg['custom_params']['action_size']
+        num_options = cfg["custom_params"]["num_options"]
+        num_tools = cfg["custom_params"]["num_tools"]
+        model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", info_flow, force_size, proprio_size, action_size, num_tools, num_options, device = device).to(device)
+    
+    if "Optoins_ConfNet" in info_flow.keys():
+        num_options = cfg["custom_params"]["num_options"]
+        num_tools = cfg["custom_params"]["num_tools"]
+        pose_size = cfg['custom_params']['pose_size']
+        model_dict["Options_ConfNet"] = Options_ConfNet(models_folder, "Options_ConfNet", info_flow, pose_size, num_tools, num_options, device = device).to(device)
+
+    if "Options_ConfMat" in info_flow.keys():
+        num_options = cfg["custom_params"]["num_options"]
+        num_tools = cfg["custom_params"]["num_tools"]
+        model_dict["Options_ConfMat"] = Options_ConfMat(models_folder, "Options_ConfMat", self.info_flow, num_tools, num_options, device = device).to(device)
+
     print("Finished Initialization")
     return model_dict
 
@@ -55,7 +63,6 @@ class Options_Sensor(Proto_Macromodel):
 
         self.action_dim = action_size
         self.proprio_size = proprio_size
-        self.pos_size = 3
         self.force_size = force_size
         self.contact_size = 1
         self.frc_enc_size =  8 * 3 * 2
@@ -149,7 +156,7 @@ class Options_Sensor(Proto_Macromodel):
 
         return {
             'options_class': options_logits,
-            'options_est': probs.max(1)[1],
+            'option_est': probs.max(1)[1],
         }
 
     def probs(self, input_dict):
