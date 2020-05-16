@@ -3,23 +3,22 @@ import torch
 import numpy as np
 import copy
 import time
+import os
 
 from torch.utils.data import Dataset
+from utils import read_h5
+from sklearn.linear_model import LinearRegression
 
 ## ADD data normalization
-class H5_DataLoader(Dataset):
-    ### h5py file type dataloader dataset ###
+class Custom_DataLoader(Dataset):
     def __init__(self, cfg, idx_dict = None, device = None, transform=None):
-        
         dataset_path = cfg['dataloading_params']['dataset_path']
-
-        num_trajectories = cfg['custom_params']['num_trajectories']
-        min_length = cfg['custom_params']['min_length']
-
         dataset_keys = cfg['dataset_keys']
 
         val_ratio = cfg['training_params']['val_ratio']
+
         dev_num = cfg['training_params']['dev_num']
+
         ###############################################
         ######### Dataset Loading ###########
         ###############################################
@@ -41,13 +40,11 @@ class H5_DataLoader(Dataset):
         self.val_bool = False
         self.dev_bool = False
         self.val_ratio = val_ratio
-        self.dev_ratio = dev_num / (9 * num_trajectories)
+        self.dev_ratio = 0
 
         self.train_length = 0
         self.val_length = 0
         self.dev_length = 0
-
-        self.min_length = int(min_length)
 
         if idx_dict == None:
             self.idx_dict = {}
@@ -60,7 +57,19 @@ class H5_DataLoader(Dataset):
             ##### Project Specific Code Here ##########################
             ###########################################################            
             self.max_length = 0
+
             option_types = ["Cross", "Rect", "Square"]
+            num_trajectories = cfg['custom_params']['num_trajectories']
+            min_length = cfg['custom_params']['min_length']
+
+            self.num_trajectories = num_trajectories
+            self.min_length = min_length
+            self.option_types = options_types
+
+            self.dev_ratio = dev_num / (9 * num_trajectories)
+
+            self.idx_dict["min_length"] = self.min_length
+            self.idx_dict["options_types"] = options_types
 
             for idx in range(num_trajectories):
                 for peg in option_types:
@@ -72,7 +81,7 @@ class H5_DataLoader(Dataset):
 
                         filename = model_folder + peg + "_" + hole + "_" + str(idx + 1).zfill(4) + ".h5" 
 
-                        dataset = self.load_file(filename)
+                        dataset = read_h5(filename)
 
                         if "proprio" not in dataset.keys():
                             continue
@@ -99,7 +108,6 @@ class H5_DataLoader(Dataset):
                             self.dev_length += 1
 
             self.idx_dict["max_length"] = self.max_length
-            self.idx_dict["min_length"] = self.min_length
             ##########################################################    
             ##### End of Project Specific Code #######################
             ##########################################################
@@ -109,6 +117,7 @@ class H5_DataLoader(Dataset):
             
             self.train_length = len(list(self.idx_dict['train'].keys()))
             self.val_length = len(list(self.idx_dict['val'].keys()))
+            self.dev_length = len(list(self.idx_dict['dev'].keys()))
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
@@ -134,10 +143,7 @@ class H5_DataLoader(Dataset):
         ###########################################################
         ##### Project Specific Code Here ##########################
         ###########################################################
-        def load_file(path):
-            return h5py.File(path, 'r', swmr=True, libver = 'latest')
-
-        dataset = load_file(self.idx_dict[key_set][idx])
+        dataset = read_h5(self.idx_dict[key_set][idx])
         max_traj_length = np.array(dataset['proprio']).shape[0]
 
         max_length = self.idx_dict["max_length"]

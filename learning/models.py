@@ -24,7 +24,7 @@ def declare_models(cfg, models_folder, device):
         num_tools = cfg["custom_params"]["num_tools"]
         model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", info_flow, force_size, proprio_size, action_size, num_tools, num_options, device = device).to(device)
     
-    if "Optoins_ConfNet" in info_flow.keys():
+    if "Options_ConfNet" in info_flow.keys():
         num_options = cfg["custom_params"]["num_options"]
         num_tools = cfg["custom_params"]["num_tools"]
         pose_size = cfg['custom_params']['pose_size']

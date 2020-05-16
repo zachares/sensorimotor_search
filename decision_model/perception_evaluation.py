@@ -18,11 +18,9 @@ from torch.distributions import Normal
 
 from tensorboardX import SummaryWriter
 
-sys.path.insert(0, "../robosuite/") 
-sys.path.insert(0, "../models/") 
-sys.path.insert(0, "../robosuite/") 
-sys.path.insert(0, "../datalogging/") 
-sys.path.insert(0, "../supervised_learning/")
+sys.path.insert(0, "../../robosuite/") 
+sys.path.insert(0, "../learning/models/") 
+sys.path.insert(0, "../../supervised_learning/") 
 sys.path.insert(0, "../data_collection/")
 
 from models import *

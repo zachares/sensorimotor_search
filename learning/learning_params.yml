@@ -12,7 +12,7 @@ training_params:
   lrn_rate: 0.0001
   beta1: 0.9
   beta2: 0.99
-  max_training_epochs: 1000
+  max_training_epochs: 2500
   val_ratio: 0.1
   dev_num: 20 # number of datapoints in the development set
   use_GPU: True
