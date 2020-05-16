@@ -1,9 +1,9 @@
 datacollection_params:
   seed: 1234
-  logging_folder: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_20200428/"
+  logging_folder: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_expandedactions_20200513/"
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
-  workspace_dim: 0.04
+  workspace_dim: 0.06
   num_trajectories: 500
   kp: [4, 4, 4]
   noise_parameters: [0.4, 0.4, 0.4]

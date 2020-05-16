@@ -160,8 +160,9 @@ class Probability_PegInsertion(object):
 		action = self.toTorch(actions_np)
 		sample = obs2Torch(obs, self.device)
 		sample['peg_type'] = self.expand(self.tool_idx, 1)
+		sample['macro_action'] = action
 		
-		return self.sensor.probs(sample, action).max(1)[1]
+		return self.sensor.probs(sample).max(1)[1]
 
 	def conf_logits(self, actions_np):
 		actions = self.toTorch(actions_np)
@@ -241,6 +242,7 @@ class Decision_Model(object):
 		self.curr_entropy = calc_entropy(self.state_dis).item()
 
 		self.step_count = 0
+		self.num_mc = 0
 
 	def max_ent_pos(self):
 		max_entropy = 0
@@ -282,7 +284,7 @@ class Decision_Model(object):
 					act_idx = exp_entropy.min(0)[1]
 					min_entropy = exp_entropy.min(0)[0]
 			
-			print("Entropy is expected to decrease to: " + str(min_entropy)[:5])
+			print("Entropy is expected to decrease to: " + str(min_entropy.item())[:5])
 
 		self.pos_idx = pos_idx
 		self.act_idx = act_idx
@@ -362,6 +364,12 @@ class Decision_Model(object):
 
 			self.curr_entropy = calc_entropy(self.state_dis).item()
 			self.step_count += 1
+
+			corr_idx = self.state_dict['correct_state'][self.pos_idx]
+
+			# print("Obs idx: ", obs_idx, " Corr idx: ", corr_idx)
+			if corr_idx != obs_idx.item():
+				self.num_mc += 1
 
 	def print_hypothesis(self):
 		block_length = 10 # magic number

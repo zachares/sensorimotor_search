@@ -10,7 +10,7 @@ perception_params:
   use_GPU: True
   num_trials: 20
   converge_thresh: 5
-  num_samples: 1000
+  num_samples: 100
   policy_num: 2
 
 logging_params:
@@ -30,14 +30,11 @@ info_flow:
       contact: [1]
       num_options: 3
   Options_Sensor:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004191028_debugging_12_10HZ/"
-    epoch_num: 1810
-  Options_Predictor:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004200815_debugging_6_10HZ/"
-    epoch_num: 30
-  Insertion_Predictor:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004200815_debugging_6_10HZ/"
-    epoch_num: 50
-  Feeling_Distance:
-    model_folder: "/scr-ssd/sens_search_logging/models/202004200815_debugging_6_10HZ/"
-    epoch_num: 40
+    model_folder: "/scr-ssd/sens_search_logging/models/202005011635_debugging_3_conf_testing/"
+    epoch_num: 2275
+  Options_ConfNet:
+    model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
+    epoch_num: 210
+  Options_ConfMat:
+    model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
+    epoch_num: 210

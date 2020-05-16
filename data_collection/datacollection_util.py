@@ -53,9 +53,11 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 	# print("Zs: ", zmin)
 
 	theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
-	theta_delta = np.random.uniform(low=3 * np.pi / 4, high=np.pi, size = num_trajectories)
-	theta_sign = np.random.choice([-1, 1], size = num_trajectories)
-	theta_final = T_angle(theta_init + theta_delta * theta_sign)
+	theta_final = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
+	r_init = np.random.uniform(low=0, high =workspace_dim, size = num_trajectories)
+	r_final = np.random.uniform(low=0, high =workspace_dim, size = num_trajectories)
+	# theta_sign = np.random.choice([-1, 1], size = num_trajectories)
+	# theta_final = T_angle(theta_init + theta_delta * theta_sign)
 
 	c_point_list = []
 
@@ -65,10 +67,10 @@ def slidepoints(workspace_dim, num_trajectories = 10):
 		z_ang = np.pi #+ 0.2 * 2 * (np.random.random_sample(1) - 0.5)
 		theta0 = theta_init[idx]
 		theta1 = theta_final[idx]
-		x_init = workspace_dim * np.cos(theta0)
-		y_init = workspace_dim * np.sin(theta0)
-		x_final = workspace_dim * np.cos(theta1)
-		y_final = workspace_dim * np.sin(theta1) 
+		x_init = r_init[idx] * np.cos(theta0)
+		y_init = r_init[idx] * np.sin(theta0)
+		x_final = r_final[idx] * np.cos(theta1)
+		y_final = r_final[idx] * np.sin(theta1) 
 
 		# print("Initial point: ", x_init, y_init)
 		# print("Final point: ", x_final, y_final)
@@ -130,4 +132,26 @@ def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dic
 	else:
 		return point_idx, done_bool, obs
 
+
+def calc_angerr(target, current):
+    TWO_PI = 2 * np.pi
+    ones = np.ones_like(target)
+    zeros = np.zeros_like(target)
+
+    targ = np.where(target < 0, TWO_PI + target, target)
+    curr = np.where(current < 0, TWO_PI + current, current)
+
+    curr0 = np.where(abs(targ - (curr + TWO_PI)) < abs(targ - curr), ones , zeros) # curr + TWO_PI
+    curr1 = np.where(abs(targ - (curr - TWO_PI)) < abs(targ - curr), ones, zeros) # curr - TWO_PI
+    curr2 = ones - curr0 - curr1
+
+    curr_fin = curr0 * (curr + TWO_PI) + curr1 * (curr - TWO_PI) + curr2 * curr
+
+    error = targ - curr_fin
+
+    error0 = np.where(abs(error + TWO_PI) < abs(error), ones, zeros)
+    error1 = np.where(abs(error - TWO_PI) < abs(error), ones, zeros)
+    error2 = ones - error0 - error1
+
+    return error * error2 + (error + TWO_PI) * error0 + (error - TWO_PI) * error1
 

@@ -1,15 +1,10 @@
-model_params:
-  z_dim: 64
-  min_steps: 20
-  num_options: 3
+relative_path: "../../supervised_learning/"
 
 dataloading_params:
-  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_2020417/"
-  num_workers: 0
+  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_expandedactions_20200513/" #"/scr2/muj_senssearch_dataset10HZ_slide_nonoise_expandedactions_20200512/" #"/scr2/muj_senssearch_dataset10HZ_slide_nonoise_20200428/"
+  num_workers: 4
   batch_size: 64
-  num_trajectories: 500
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202004180840_debugging_0_10HZ/val_train_split.pkl"
-
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202005140913_training_14_fit_wexpanded_action/val_train_split.pkl" #"/scr-ssd/sens_search_logging/runs/202005131146_debugging_8_fit_wexpanded_action/val_train_split.pkl" #"/scr-ssd/sens_search_logging/runs/202005011634_debugging_2_conf_testing/val_train_split.pkl"
 
 training_params:
   seed: 4321
@@ -17,164 +12,91 @@ training_params:
   lrn_rate: 0.0001
   beta1: 0.9
   beta2: 0.99
-  max_training_epochs: 2500
+  max_training_epochs: 1000
   val_ratio: 0.1
+  dev_num: 20 # number of datapoints in the development set
   use_GPU: True
-  
+  run_mode: 1 # 0 - development, 1 - training, 2 - testing
+
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_description: "debugging" #Options include: debugging, training, testing
-  run_notes: "_10HZ"
+  run_notes: "_fit_wexpanded_action"
+  save_val_interval: 10 # epoch interval after which a validation run and save model is executed, i.e. a model is saved at 0, 10, 20, ..., 1000 epochs
 
-debugging_params:
-  debugging_val: 1.0 ### 1.0 for True,  0.0 for False
-  save_model_val: 0.0 ### 1.0 for True,  0.0 for False 
+custom_params:
+  num_tools: 3
+  num_options: 2
+  force_size: [6, 50]
+  action_size: 3
+  pose_size: 3
+  proprio_size: 12
+  min_length: 20
+  num_trajectories: 500
+  
+dataset_keys:
+  # rgbd:
+  # joint_pos:
+  # joint_vel:
+  force_hi_freq:
+  action:
+  macro_action:
+  proprio:
+  contact:
+  peg_type:
+  hole_type:
+  fit_type:
+  # insertion:
 
 info_flow:
-  dataset:
-    outputs:
-      # rgbd: [4, 128, 128]
-      joint_pos: [7]
-      joint_vel: [7]
-      force_hi_freq: [6, 250]
-      action: [3]
-      macro_action: [6]
-      proprio: [12]
-      contact: [1]
-      peg_type: [3]
-      hole_type: [3]
-      insertion: [1]
   Options_Sensor:
-    train: 0
-    model_folder: "/scr-ssd/sens_search_logging/models/202004191028_debugging_12_10HZ/"
-    epoch_num: 1810
+    train: 1
+    model_folder: ""
+    epoch_num: 0
     inputs:
       proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
-      macro_action: "dataset"
       peg_type: "dataset"
       contact_diff: "dataset"
-      proprio_diff_comp: "dataset"
-      force_hi_freq_comp: "dataset"
-      action_comp: "dataset"
-      macro_action_comp: "dataset"
-      peg_type_comp: "dataset"
-      contact_diff_comp: "dataset"
       padding_mask: "dataset"
       epoch: "dataset"
     outputs:
       options_class:
-        loss: "CE"
+        loss: "Multinomial_NLL"
         loss_name: "Options_Class"
         weight: 1
         inputs:
-          hole_type: "dataset"
-      options_class_comp:
-        loss: "CE"
-        loss_name: "Options_Class_Comp"
-        weight: 1
-        inputs:
-          hole_type_comp: "dataset"
-  Insertion_Predictor:
+          fit_label: "dataset"
+        evals:
+          Multinomial_Accuracy:
+          Multinomial_Entropy:
+  Options_ConfNet:
     train: 1
     model_folder: ""
     epoch_num: 0
     inputs:
       macro_action: "dataset"
       peg_type: "dataset"
-      hole_type: "dataset"
+      option_type: "dataset"
       epoch: "dataset"
     outputs:
-      insert_class:
-        loss: "BCE"
-        loss_name: "Insert_Pred"
-        weight: 1
-        inputs:
-          insertion_bool: "dataset"
-  Options_Predictor:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      macro_action: "dataset"
-      peg_type: "dataset"
-      hole_type: "dataset"
-      macro_action_comp: "dataset"
-      peg_type_comp: "dataset"
-      hole_type_comp: "dataset"
-      epoch: "dataset"
-    outputs:
-      options_class:
-        loss: "Mult_KL"
-        loss_name: "Options_Class"
-        weight: 1
-        inputs:
-          options_class: "Options_Sensor"
       conf_class:
-        loss: "CE"
+        loss: "Multinomial_NLL"
         loss_name: "Confusion_Class"
         weight: 1
         inputs:
-          hole_est: "Options_Sensor"
-      options_comp_class:
-        loss: "Mult_KL"
-        loss_name: "Options_Class_Comp"
-        weight: 1
-        inputs:
-          options_class_comp: "Options_Sensor"
-      conf_comp_class:
-        loss: "CE"
-        loss_name: "Confusion_Class_Comp"
-        weight: 1
-        inputs:
-          hole_est_comp: "Options_Sensor"
-  Feeling_Distance:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
-    inputs:
-      macro_action: "dataset"
-      macro_action_comp: "dataset"
-      peg_type: "dataset"
-      peg_type_comp: "dataset"
-      hole_type: "dataset"
-      hole_type_comp: "dataset"
-      epoch: "dataset"
-    outputs:
-      distances:
-        loss: "MSE"
-        loss_name: "Feeling_Distance_Pred"
-        weight: 1
-        inputs:
-          distances: "Options_Sensor"
-  # Options_Confusion:
-  #   train: 0
-  #   model_folder: "/scr-ssd/sens_search_logging/models/202004150827_debugging_5_10HZ/"
-  #   epoch_num: 100
+          options_est: "Options_Sensor"
+        evals:
+          Multinomial_Accuracy:
+          Multinomial_Entropy:
+  # Options_ConfMat:
+  #   train: 1
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
+  #   epoch_num: 210
   #   inputs:
-  #     init_pos: "dataset"
-  #     command_pos: "dataset"
   #     peg_type: "dataset"
   #     hole_type: "dataset"
+  #     hole_est: "Options_Sensor"
   #     epoch: "dataset"
-  #   outputs:
-  #     options_class:
-  #       loss: "CE"
-  #       loss_name: "Options_Confusion"
-  #       weight: 1
-  #       inputs:
-  #         hole_est: "Options_Classifier"
-  # Options_Confusion_Mat:
-  #   train: 0
-  #   model_folder: "/scr-ssd/sens_search_logging/models/202004150859_debugging_21_10HZ/"
-  #   epoch_num: 1
-  #   inputs:
-  #     init_pos: "dataset"
-  #     command_pos: "dataset"
-  #     peg_type: "dataset"
-  #     hole_type: "dataset"
-  #     hole_est: "Options_Classifier"
-
 
 

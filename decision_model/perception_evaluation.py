@@ -114,8 +114,9 @@ if __name__ == '__main__':
     ### Initializing and loading model
     ##########################################################
 	sensor = Options_Sensor("", "Options_Sensor", info_flow, force_size, proprio_size, action_dim, num_options, device = device).to(device)
-	confusion = Options_Predictor("", "Options_Predictor", info_flow, pose_size, num_options, device = device).to(device)
-
+	# confusion = Options_ConfNet("", "Options_ConfNet", info_flow, pose_size, num_options, device = device).to(device)
+	confusion = Options_ConfMat("", "Options_ConfMat", info_flow, num_options, device = device).to(device)
+	
 	sensor.eval()
 	confusion.eval()
 	#######################################################
@@ -123,7 +124,7 @@ if __name__ == '__main__':
 	######################################################### 
 	print("Robot operating with control frequency: ", ctrl_freq)
 	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
+	 use_camera_obs= not display_bool, gripper_visualization=False, control_freq=ctrl_freq,\
 	  gripper_type ="CrossPegwForce", controller='position', camera_depth=True)
 
 	env.viewer.set_camera(camera_id=2)
@@ -231,10 +232,10 @@ if __name__ == '__main__':
 
 
 			# a = input("Continue?")
-
-		logging_dict['scalar']["Number of Steps"] = num_steps
+		# logging_dict['scalar']["Number of Steps"] = num_steps
 		logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.state_dis[0,decision_model.state_dict["correct_idx"]]
 		logging_dict['scalar']['Entropy'] = decision_model.curr_entropy
+		logging_dict['scalar']['Num_Misclassified'] = decision_model.num_mc
 		# logging_dict['scalar']["Insertion"] = done_bool * 1.0
 		# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
 

@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
 	print("Robot operating with control frequency: ", ctrl_freq)
 	env = robosuite.make("PandaPegInsertion", has_renderer=True, ignore_done=True,\
-	 use_camera_obs= not display_bool, gripper_visualization=True, control_freq=ctrl_freq,\
+	 use_camera_obs= not display_bool, gripper_visualization=False, control_freq=ctrl_freq,\
 	  gripper_type ="CrossPegwForce", controller='position', camera_depth=True)
 
 	env.viewer.set_camera(camera_id=2)
@@ -106,6 +106,8 @@ if __name__ == '__main__':
 			init_point = np.concatenate([macro_action[:3] + top_goal[:3], ori_action])
 			final_point = np.concatenate([macro_action[6:] + top_goal[:3], ori_action])
 
+			top_goal_noise = top_goal[:]
+
 			points_list.append((top_goal + plus_offset, 0, "top plus"))
 			points_list.append((init_point, 0, "init_point"))
 			points_list.append((final_point, 1, "final_point"))
@@ -144,9 +146,9 @@ if __name__ == '__main__':
 				dataset.create_dataset("peg_type", data = peg_vector)
 
 				if peg_type == hole_type:
-					dataset.create_dataset("fit", data = np.array([1]))
+					dataset.create_dataset("fit_type", data = np.array([1, 0]))
 				else:
-					dataset.create_dataset("fit", data = np.array([0]))
+					dataset.create_dataset("fit_type", data = np.array([0, 1]))
 
 				dataset.close()
 
