@@ -1,10 +1,10 @@
 relative_path: "../../supervised_learning/"
 
 dataloading_params:
-  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_expandedactions_20200513/" #"/scr2/muj_senssearch_dataset10HZ_slide_nonoise_expandedactions_20200512/" #"/scr2/muj_senssearch_dataset10HZ_slide_nonoise_20200428/"
+  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_20200517/"
   num_workers: 4
   batch_size: 128
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/202005140913_training_14_fit_wexpanded_action/val_train_split.pkl" #"/scr-ssd/sens_search_logging/runs/202005131146_debugging_8_fit_wexpanded_action/val_train_split.pkl" #"/scr-ssd/sens_search_logging/runs/202005011634_debugging_2_conf_testing/val_train_split.pkl"
+  idx_dict_path: ""
 
 training_params:
   seed: 4321
@@ -24,27 +24,17 @@ logging_params:
   save_val_interval: 10 # epoch interval after which a validation run and save model is executed, i.e. a model is saved at 0, 10, 20, ..., 1000 epochs
 
 custom_params:
-  num_tools: 3
-  num_options: 2
   force_size: [6, 50]
   action_size: 3
-  pose_size: 3
+  macro_action_size: 10
   proprio_size: 12
   min_length: 20
   num_trajectories: 500
   
-dataset_keys:
+dataset_keys: ["force_hi_freq", "action", "macro_action", "proprio", "contact", "peg_type", "hole_type", "fit_type"]
   # rgbd:
   # joint_pos:
   # joint_vel:
-  force_hi_freq:
-  action:
-  macro_action:
-  proprio:
-  contact:
-  peg_type:
-  hole_type:
-  fit_type:
   # insertion:
 
 info_flow:
@@ -67,9 +57,7 @@ info_flow:
         weight: 1
         inputs:
           fit_label: "dataset"
-        evals:
-          Multinomial_Accuracy:
-          Multinomial_Entropy:
+        evals: ["Multinomial_Accuracy", "Multinomial_Entropy"]
   Options_ConfNet:
     train: 1
     model_folder: ""
@@ -86,9 +74,7 @@ info_flow:
         weight: 1
         inputs:
           option_est: "Options_Sensor"
-        evals:
-          Multinomial_Accuracy:
-          Multinomial_Entropy:
+        evals: ["Multinomial_Accuracy", "Multinomial_Entropy"]
   # Options_ConfMat:
   #   train: 1
   #   model_folder: ""

@@ -8,6 +8,7 @@ import copy
 import numpy as np
 import time
 from models_modules import *
+import yaml
 
 def declare_models(cfg, models_folder, device):
     info_flow = cfg['info_flow']
@@ -16,23 +17,29 @@ def declare_models(cfg, models_folder, device):
     ##### Declaring models to be trained ##########
     #################################################
     ##### Note if a path has been provided then the model will load a previous model
+
+    dataset_path = cfg['dataloading_params']['dataset_path']
+
+    with open(dataset_path + "datacollection_params.yml", 'r') as ymlfile:
+        cfg1 = yaml.safe_load(ymlfile)
+
+    tool_types = cfg1['peg_names']
+    option_types = cfg1['fit_names']
+
+    num_tools = len(tool_types)
+    num_options = len(option_types)
+
     if "Options_Sensor" in info_flow.keys():
         force_size =cfg['custom_params']['force_size'] 
         proprio_size = cfg['custom_params']['proprio_size'] 
         action_size =cfg['custom_params']['action_size']
-        num_options = cfg["custom_params"]["num_options"]
-        num_tools = cfg["custom_params"]["num_tools"]
         model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", info_flow, force_size, proprio_size, action_size, num_tools, num_options, device = device).to(device)
     
     if "Options_ConfNet" in info_flow.keys():
-        num_options = cfg["custom_params"]["num_options"]
-        num_tools = cfg["custom_params"]["num_tools"]
-        pose_size = cfg['custom_params']['pose_size']
-        model_dict["Options_ConfNet"] = Options_ConfNet(models_folder, "Options_ConfNet", info_flow, pose_size, num_tools, num_options, device = device).to(device)
+        macro_action_size = cfg['custom_params']['macro_action_size']
+        model_dict["Options_ConfNet"] = Options_ConfNet(models_folder, "Options_ConfNet", info_flow, macro_action_size, num_tools, num_options, device = device).to(device)
 
     if "Options_ConfMat" in info_flow.keys():
-        num_options = cfg["custom_params"]["num_options"]
-        num_tools = cfg["custom_params"]["num_tools"]
         model_dict["Options_ConfMat"] = Options_ConfMat(models_folder, "Options_ConfMat", self.info_flow, num_tools, num_options, device = device).to(device)
 
     print("Finished Initialization")
@@ -181,7 +188,7 @@ class Options_Sensor(Proto_Macromodel):
         return F.softmax(options_logits, dim = 1)
 
 class Options_ConfNet(Proto_Macromodel):
-    def __init__(self, model_folder, model_name, info_flow, pose_size, num_tools, num_options, device = None):
+    def __init__(self, model_folder, model_name, info_flow, macro_action_size, num_tools, num_options, device = None):
         super().__init__()
 
         if info_flow[model_name]["model_folder"] != "":
@@ -198,10 +205,8 @@ class Options_ConfNet(Proto_Macromodel):
         self.num_tools = num_tools
         self.num_options = num_options
 
-        self.pos_size = 3
-        self.macro_action_size = 3 * self.pos_size + 1
+        self.macro_action_size = macro_action_size
         self.z_dim = 32
-
         self.nl = 2
 
         # first number indicates index in peg vector, second number indicates number in ensemble

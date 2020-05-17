@@ -121,12 +121,13 @@ if __name__ == '__main__':
 			if logging_data_bool == 1:
 				file_num += 1
 				option_file_num += 1
-				print("On ", file_num, " of ", len(macro_actions) * len(peg_hole_options), " trajectories")
+				print("On ", file_num, " of ", num_samples * len(peg_hole_options), " trajectories")
 				file_name = logging_folder + peg_type + "_" + hole_type + "_" + str(option_file_num).zfill(4) + ".h5"
 
 				dataset = h5py.File(file_name, 'w')
 
 				for key in obs_dict.keys():
+
 					key_list = obs_dict[key]
 
 					if key == dataset_keys[0]:

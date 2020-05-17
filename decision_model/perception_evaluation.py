@@ -73,7 +73,6 @@ if __name__ == '__main__':
 	hole_shapes = cfg1['hole_names']
 	option_types = cfg1['fit_names']
 
-	num_cand = len(hole_shapes)
 	num_tools = len(tool_types)
 	num_options = len(option_types)
     ##################################################################################
@@ -141,6 +140,8 @@ if __name__ == '__main__':
 		hole_info[i] = {}
 		hole_info[i]["pos"] = top
 		hole_info[i]["name"] = hole_shape
+
+	num_cand = len(list(hole_info.keys()))
 	############################################################
 	### Declaring decision model
 	############################################################
@@ -151,7 +152,6 @@ if __name__ == '__main__':
 	state_dict = gen_state_dict(num_cand, option_types, constraint_type)
 
 	decision_model = Decision_Model(state_dict, prob_model, act_model, policy_number)
-
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################

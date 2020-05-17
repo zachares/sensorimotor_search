@@ -21,18 +21,14 @@ model_params:
   use_GPU: True
   force_size: [6, 50]
   action_size: 3
-  pose_size: 3
+  macro_action_size: 10
   proprio_size: 12
 
-dataset_keys:
+dataset_keys: ["force_hi_freq", "action", "proprio", "contact"]
   # rgbd:
   # joint_pos:
   # joint_vel:
-  force_hi_freq:
-  action:
   # macro_action:
-  proprio:
-  contact:
   # peg_type:
   # hole_type:
   # fit_type:
