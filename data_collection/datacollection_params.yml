@@ -1,11 +1,30 @@
-datacollection_params:
-  seed: 1234
-  logging_folder: "/scr2/muj_senssearch_dataset10HZ_slide_nonoise_expandedactions_20200513/"
-  logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+control_params:
   workspace_dim: 0.06
-  num_trajectories: 500
   kp: [4, 4, 4]
-  noise_parameters: [0.4, 0.4, 0.4]
   control_freq: 10
   step_threshold: 75
+  tol: 0.002
+  seed: 4321
+  # noise_parameters: [0.4, 0.4, 0.4]
+
+datacollection_params:
+  logging_folder: "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
+  logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  num_samples: 500
+  plus_offset: [ 0, 0, 0.04]
+
+dataset_keys:
+  force_hi_freq:
+  proprio:
+  action:
+  contact:
+  joint_pos:
+  joint_vel:
+  # rgbd:
+  insertion:
+
+#### these lists are important and should be saved with the dataset
+peg_names: [ "Cross","Rect", "Square"]
+hole_names: ["Cross", "Rect", "Square"]
+fit_names: ["Fit", "Not_fit"]

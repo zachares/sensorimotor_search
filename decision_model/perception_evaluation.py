@@ -1,94 +1,97 @@
 import yaml
 import numpy as np
-import scipy
-import scipy.misc
 import time
 import h5py
 import sys
 import copy
 import os
-import matplotlib.pyplot as plt
 import random
 import itertools
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
-
-from tensorboardX import SummaryWriter
 
 sys.path.insert(0, "../../robosuite/") 
-sys.path.insert(0, "../learning/models/") 
+sys.path.insert(0, "../learning/") 
 sys.path.insert(0, "../../supervised_learning/") 
-sys.path.insert(0, "../data_collection/")
+sys.path.insert(0, "../")
 
 from models import *
 from logger import Logger
 from decision_model import *
-from datacollection_util import *
+from project_utils import *
+from task_models import *
 
 import robosuite
 import robosuite.utils.transform_utils as T
 from robosuite.wrappers import IKWrapper
 
-def move_down(env, display_bool):
-	obs, reward, done, info = env.step(np.array([0,0, -0.1]))
-	
-	if display_bool:
-		env.render()
-
 if __name__ == '__main__':
-
-	###################################################
-	### Declaring options and required modalities
-	###################################################
-	peg_types = ["Cross", "Rect", "Square"] # this ordering is very important, it must be the same as the ordering the network was trained using
-	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", "insertion" ]
-	
 	###################################################
 	### Loading run parameters from yaml file
 	#####################################################
 	with open("perception_params.yml", 'r') as ymlfile:
 		cfg = yaml.safe_load(ymlfile)
-	display_bool = cfg['perception_params']['display_bool']
-	kp = np.array(cfg['perception_params']['kp'])
-	noise_parameters = np.array(cfg['perception_params']['noise_parameters'])
-	ctrl_freq = np.array(cfg['perception_params']['control_freq'])
-	num_trials = cfg['perception_params']['num_trials']
-	policy_num = cfg['perception_params']['policy_num']
 
-	workspace_dim = cfg['perception_params']['workspace_dim']
-	seed = cfg['perception_params']['seed']
+	display_bool = cfg['logging_params']['display_bool']
 
-	step_threshold = cfg['perception_params']['step_threshold']
+	policy_number = cfg['decision_params']['policy_number']
+	num_samples = cfg['decision_params']['num_samples']
+	converge_thresh = cfg['decision_params']['converge_thresh']
+	constraint_type = cfg['decision_params']['constraint_type']
 
-	use_cuda = cfg['perception_params']['use_GPU'] and torch.cuda.is_available()
 
-	debugging_val = cfg['debugging_params']['debugging_val']
+	use_cuda = cfg['model_params']['use_GPU'] and torch.cuda.is_available()
+	force_size =cfg['model_params']['force_size'] 
+	action_size =cfg['model_params']['action_size']
+	proprio_size = cfg['model_params']['proprio_size']
+	pose_size = cfg['model_params']['pose_size']
 
 	info_flow = cfg['info_flow']
 
-	force_size =info_flow['dataset']['outputs']['force_hi_freq'] 
-	action_dim =info_flow['dataset']['outputs']['action']
-	proprio_size = info_flow['dataset']['outputs']['proprio']
-	num_options = info_flow['dataset']['outputs']['num_options']
+	run_mode = cfg['logging_params']['run_mode']
+	num_trials = cfg['logging_params']['num_trials']
+	step_by_step = cfg['logging_params']['step_by_step']
 
-	pose_size = 3 ### magic number
+	dataset_keys = cfg['dataset_keys']
 
-	num_samples = cfg['perception_params']['num_samples']
+	dataset_path = cfg['dataset_params']['dataset_path']
 
-	converge_thresh = cfg['perception_params']['converge_thresh']
+	with open(dataset_path + "datacollection_params.yml", 'r') as ymlfile:
+		cfg1 = yaml.safe_load(ymlfile)
+
+	workspace_dim = cfg1['control_params']['workspace_dim']
+	kp = np.array(cfg1['control_params']['kp'])
+	ctrl_freq = np.array(cfg1['control_params']['control_freq'])
+	step_threshold = cfg1['control_params']['step_threshold']
+	tol = cfg1['control_params']['tol']
+	seed = cfg1['control_params']['seed']
+
+	plus_offset = np.array(cfg1['datacollection_params']['plus_offset'])
+
+	tool_types = cfg1['peg_names']
+	hole_shapes = cfg1['hole_names']
+	option_types = cfg1['fit_names']
+
+	num_cand = len(hole_shapes)
+	num_tools = len(tool_types)
+	num_options = len(option_types)
     ##################################################################################
     ### Setting Debugging Flag
     ##################################################################################
-	if debugging_val == 1.0:
+	if run_mode == 0:
 		debugging_flag = True
-		var = input("Debugging flag activated. No Results will be saved. Continue with debugging [y,n]: ")
-		if var != "y":
-			debugging_flag = False
+		run_description = "development"
 	else:
 		debugging_flag = False
+		if var == "yes":
+			debugging_flag = True
+			run_description = "evaluation"
+		elif var == "no":
+			debugging_flag = False
+			run_description = "evaluation"
+		else:
+			raise Exception("Sorry, " + var + " is not a valid input for determine whether to run in debugging mode")
 
 	if debugging_flag:
 		print("Currently Debugging")
@@ -111,9 +114,11 @@ if __name__ == '__main__':
     ##########################################################
     ### Initializing and loading model
     ##########################################################
-	sensor = Options_Sensor("", "Options_Sensor", info_flow, force_size, proprio_size, action_dim, num_options, device = device).to(device)
-	# confusion = Options_ConfNet("", "Options_ConfNet", info_flow, pose_size, num_options, device = device).to(device)
-	confusion = Options_ConfMat("", "Options_ConfMat", info_flow, num_options, device = device).to(device)
+	sensor = Options_Sensor("", "Options_Sensor", info_flow, force_size, proprio_size,\
+	 action_size, num_tools, num_options, device = device).to(device)
+	confusion = Options_ConfNet("", "Options_ConfNet", info_flow, pose_size,\
+	 num_tools, num_options, device = device).to(device)
+	# confusion = Options_ConfMat("", "Options_ConfMat", info_flow, num_options, device = device).to(device)
 	
 	sensor.eval()
 	confusion.eval()
@@ -127,80 +132,89 @@ if __name__ == '__main__':
 
 	env.viewer.set_camera(camera_id=2)
 
-	tol = 0.01 # position tolerance
-	tol_ang = 100 #this is so high since we are only doing position control
-
-	ori_action = np.array([np.pi, 0, np.pi])
-	plus_offset = np.array([0, 0, 0.04, 0,0,0])
-	peg_idx = 0
-
 	hole_info = {}
-	for idx, peg_type in enumerate(peg_types):
-		peg_top_site = peg_type + "Peg_top_site"
-		top = np.concatenate([env._get_sitepos(peg_top_site) - np.array([0, 0, 0.01]), ori_action])
+	for i, hole_shape in enumerate(hole_shapes):
+		top_site = hole_shape + "Peg_top_site"
+		top = env._get_sitepos(top_site)
+		print(top)
 		top_height = top[2]
-		hole_info[idx] = {}
-		hole_info[idx]["pos"] = top
-		hole_info[idx]["name"] = peg_type
-
-
+		hole_info[i] = {}
+		hole_info[i]["pos"] = top
+		hole_info[i]["name"] = hole_shape
 	############################################################
 	### Declaring decision model
 	############################################################
-	act_model = Action_PegInsertion(hole_info, workspace_dim, ori_action, plus_offset, num_samples)
+	act_model = Action_PegInsertion(hole_info, workspace_dim, tol, plus_offset, num_samples)
 
-	prob_model = Probability_PegInsertion(sensor, confusion, len(peg_types))
+	prob_model = Probability_PegInsertion(sensor, confusion, num_tools, num_options)
 
-	state_dict = gen_state_dict(hole_info, peg_types)
+	state_dict = gen_state_dict(num_cand, option_types, constraint_type)
 
-	decision_model = Decision_Model(state_dict, prob_model, act_model)
+	decision_model = Decision_Model(state_dict, prob_model, act_model, policy_number)
 
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
-	logger = Logger(cfg, debugging_flag, False)
-	logging_dict = {}
-	logging_dict['scalar'] = {}
+	if not debugging_flag:
+		logger = Logger(cfg, debugging_flag, False, run_description)
+		logging_dict = {}
+
 	obs = {}
-	fixed_params = (kp, noise_parameters, tol, tol_ang, step_threshold, display_bool,top_height, obs_keys)
+	tool_idx = -1
+	fixed_params = (0, kp, tol, step_threshold, display_bool,top_height, dataset_keys)
     ############################################################
     ### Starting tests
     ###########################################################
 	for trial_num in range(num_trials):
-		#choosing random peg
-		decision_model.reset_dis()
-		decision_model.prob_model.set_tool_idx(peg_idx)
-		# logging_dict['scalar'] = {}
-
-		gripper_type = peg_types[peg_idx] + "PegwForce" 
-
-		env.reset(gripper_type)
-		env.viewer.set_camera(camera_id=2)
-		if display_bool:
-			env.render()
-
-		peg_idx += 1
-		peg_idx = peg_idx % len(peg_types)
-
-		num_steps = 0
-
 		print("\n")
 		print("############################################################")
 		print("######                BEGINNING NEW TRIAL              #####")
 		print("############################################################")
 		print("\n")
+
+		if not debugging_flag:
+			logging_dict['scalar'] = {}
+
+		# tool_idx += 1
+		# tool_idx = tool_idx % len(tool_types)
+
+		gripper_type = tool_types[tool_idx] + "PegwForce" 
+
+		env.reset(gripper_type)
+		env.viewer.set_camera(camera_id=2)
+
+		if display_bool:
+			env.render()
+
+		num_steps = 0
+
+		correct_option = []
+
+		#### code necessary for this specific problem, but not the general problem
+		if "Fit" not in option_types or "Not Fit" not in option_types:
+			raise Exception("The code below does not reflect the problem")
+
+		for key in hole_info.keys():
+			name = hole_info[key]["name"]
+			tool_name = tool_types[tool_idx]
+
+			if name == tool_name:
+				correct_option.append("Fit")
+			else:
+				correct_option.append("Not Fit")
+		############################################################
+
+		decision_model.reset_probs(correct_option)
+		decision_model.prob_model.set_tool_idx(tool_idx)
 		decision_model.print_hypothesis()
 		# a = input("Continue?")
 
 		while True and num_steps < converge_thresh:
 			num_steps += 1
-			points_list = decision_model.choose_action(policy_num)
-			top_goal = decision_model.act_model.hole_info[decision_model.pos_idx]["pos"]
+			points_list = decision_model.choose_action()
+			top_goal = decision_model.act_model.hole_info[decision_model.cand_idx]["pos"]
 
 			point_idx = 0
-			goal = points_list[point_idx][0]
-			point_type = points_list[point_idx][1]
-
 			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
 			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
 
@@ -227,14 +241,15 @@ if __name__ == '__main__':
 
 			decision_model.new_obs(obs_dict)
 			decision_model.print_hypothesis()
+			if step_by_step == 1.0:
+				a = input("Continue?")
 
+		if not debugging_flag:
+			# logging_dict['scalar']["Number of Steps"] = num_steps
+			logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.state_dis[0,decision_model.state_dict["correct_idx"]]
+			logging_dict['scalar']['Entropy'] = decision_model.curr_entropy
+			logging_dict['scalar']['Num_Misclassified'] = decision_model.num_misclassifcations
+			# logging_dict['scalar']["Insertion"] = done_bool * 1.0
+			# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
 
-			# a = input("Continue?")
-		# logging_dict['scalar']["Number of Steps"] = num_steps
-		logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.state_dis[0,decision_model.state_dict["correct_idx"]]
-		logging_dict['scalar']['Entropy'] = decision_model.curr_entropy
-		logging_dict['scalar']['Num_Misclassified'] = decision_model.num_mc
-		# logging_dict['scalar']["Insertion"] = done_bool * 1.0
-		# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
-
-		logger.save_scalars(logging_dict, trial_num, 'evaluation/')
+			logger.save_scalars(logging_dict, trial_num, 'evaluation/')

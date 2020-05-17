@@ -1,40 +1,50 @@
-perception_params:
-  seed: 4321
-  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
-  workspace_dim: 0.04
-  discretization: 8
-  kp: [4, 4, 4]
-  noise_parameters: [0.4, 0.4, 0.4]
-  control_freq: 10
-  step_threshold: 75
-  use_GPU: True
-  num_trials: 20
+dataset_params: 
+# want to use the same control parameters, peg list, options list and fit list
+# as those used to collect the dataset which was used to train the networks
+  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
+
+decision_params:
   converge_thresh: 5
   num_samples: 100
-  policy_num: 2
+  policy_number: 0
+  constraint_type: 2
 
 logging_params:
+  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
-  run_description: "testing" #Options include: debugging, training, testing
+  run_mode: 0 #Options include: 0 -> development, 1 -> evaluation
+  num_trials: 20
   run_notes: "_spring_testing"
+  step_by_step: 0.0
 
-debugging_params:
-  debugging_val: 0.0 ### 1.0 for True,  0.0 for False 
+model_params:
+  use_GPU: True
+  force_size: [6, 50]
+  action_size: 3
+  pose_size: 3
+  proprio_size: 12
+
+dataset_keys:
+  # rgbd:
+  # joint_pos:
+  # joint_vel:
+  force_hi_freq:
+  action:
+  # macro_action:
+  proprio:
+  contact:
+  # peg_type:
+  # hole_type:
+  # fit_type:
+  # insertion:
 
 info_flow:
-  dataset:
-    outputs:
-      force_hi_freq: [6, 250]
-      action: [3]
-      proprio: [12]
-      contact: [1]
-      num_options: 3
   Options_Sensor:
-    model_folder: "/scr-ssd/sens_search_logging/models/202005011635_debugging_3_conf_testing/"
-    epoch_num: 2275
+    model_folder: "/scr-ssd/sens_search_logging/models/202005152152_training_67_fit_wexpanded_action/"
+    epoch_num: 2500
   Options_ConfNet:
-    model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
-    epoch_num: 210
-  Options_ConfMat:
-    model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
-    epoch_num: 210
+    model_folder: "/scr-ssd/sens_search_logging/models/202005152152_training_67_fit_wexpanded_action/"
+    epoch_num: 2500
+  # Options_ConfMat:
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
+  #   epoch_num: 210

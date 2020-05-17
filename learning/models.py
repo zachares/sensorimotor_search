@@ -120,6 +120,7 @@ class Options_Sensor(Proto_Macromodel):
 
         seq_encs = self.get_enc(states, forces, actions, (frc_enc, transformer), batch_size, sequence_size, padding_masks = padding_masks)
 
+        # print("Sequence Encoding:", seq_encs)
         options_logits = options_class(seq_encs)
        
         return options_logits
@@ -167,13 +168,15 @@ class Options_Sensor(Proto_Macromodel):
         actions = input_dict["action"].to(self.device)[:, :-1]
         peg_type = input_dict["peg_type"].to(self.device)        
 
-        macro_action = input_dict["macro_action"].to(self.device)
+        # macro_action = input_dict["macro_action"].to(self.device)
 
         proprio_diffs = proprios[:,1:] - proprios[:, :-1]
         contact_diffs = contacts[:,1:] - contacts[:, :-1]
         force_clipped = forces[:,1:]
 
         options_logits = self.get_logits(proprio_diffs, contact_diffs, force_clipped, actions, peg_type)
+
+        # print("Observation Probs: ", F.softmax(options_logits, dim = 1))
 
         return F.softmax(options_logits, dim = 1)
 
@@ -244,27 +247,43 @@ class Options_ConfNet(Proto_Macromodel):
         }
 
     def logits(self, peg_type, macro_action):
+        batch_size = peg_type.size(0)
         self.eval()
         logits_list = []
 
         for i in range(self.num_options):
-            hole_type = torch.zeros_like(peg_type)
-            hole_type[:, i] = 1.0
-            conf_logits = self.get_pred(macro_action, peg_type, hole_type)
+            option_type = torch.zeros(self.num_options).float().to(self.device).unsqueeze(0).repeat_interleave(batch_size, dim = 0)
+            option_type[:, i] = 1.0
+            conf_logits = self.get_pred(macro_action, peg_type, option_type)
+
+            print(conf_logits.size())
+
+            print("Peg Type: ", peg_type)
+            print("Option_type: ", Option_type)
+            print("Conf Probs: ", F.softmax(conf_logits, dim = 0))
 
             logits_list.append(conf_logits.unsqueeze(1))
 
         return torch.cat(logits_list, dim = 1)
 
-    def conf_logprobs(self, peg_type, hole_type, macro_action, obs_idx):
+    def conf_logprobs(self, peg_type, option_type, macro_action, obs_idx):
         self.eval()
-        conf_logits = self.get_pred(macro_action, peg_type, hole_type)
+        conf_logits = self.get_pred(macro_action, peg_type, option_type)
 
         uninfo_constant = 0.2
             
         conf_logprobs = F.log_softmax(torch.log(F.softmax(conf_logits, dim = 1) + uninfo_constant), dim = 1)
 
         conf_logprob = conf_logprobs[torch.arange(conf_logprobs.size(0)), obs_idx]
+
+        # print("Peg Type: ", peg_type)
+        # print("Option_Type: ", option_type)
+        # print("Macro action: ", macro_action)
+        # print("Obs Idx: ", obs_idx)
+        # print("Conf probs: ", F.softmax(conf_logits, dim = 1))
+        # print("Conf probs less: ", torch.exp(conf_logprobs))
+        # print("Conf logprobs: ", conf_logprobs)
+        # print("Conf logprob: ", conf_logprob)
 
         return conf_logprob
 
