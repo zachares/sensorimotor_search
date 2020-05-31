@@ -38,11 +38,11 @@ class Action_PegInsertion(object):
 		return [(top_plus, 0, "top_plus"), (init_point, 0, "init_point"), (final_point, 1, "final_point"), (top_plus, 0, "top_plus")]
 
 class Probability_PegInsertion(object):
-	def __init__(self, sensor, confusion_model, num_tools, num_options):
+	def __init__(self, sensor, confusion_model, num_tools, num_substates):
 		self.sensor = sensor
 		self.conf = confusion_model
 		self.num_tools = num_tools
-		self.num_options = num_options
+		self.num_substates = num_substates
 		self.device = self.sensor.device
 		self.step_tensor = self.toTorch(np.array([75])).unsqueeze(0)
 
@@ -58,7 +58,7 @@ class Probability_PegInsertion(object):
 		self.tool_idx = tool_idx
 
 	def record_test(self, obs):
-		if len(obs['force_hi_freq']) < 10: # magic number / edge case when num sensor readings is too small
+		if 'force_hi_freq' not in obs.keys() or len(obs['force_hi_freq']) < 10: # magic number / edge case when num sensor readings is too small
 			return False
 		else:
 			return True
@@ -74,8 +74,8 @@ class Probability_PegInsertion(object):
 		sample['peg_type'] = self.expand(self.tool_idx, 1, self.num_tools)
 		# sample['macro_action'] = torch.cat([action, self.step_tensor], axis = 1)
 
-		return self.sensor.probs(sample).max(1)[1]
-
+		return self.sensor.probs(sample)
+		
 	def conf_logits(self, actions_np):
 		actions = self.toTorch(actions_np)
 		batch_size = actions.size(0)
@@ -86,17 +86,17 @@ class Probability_PegInsertion(object):
 
 		return self.conf.logits(peg_type, macro_actions)
 
-	def conf_logprob(self, options_idx, actions_np, obs_idx):
+	def conf_logprob(self, substates_idx, actions_np, obs_idx):
 		actions = self.toTorch(actions_np)
 		batch_size = actions.size(0)
 
 		tool_type = self.expand(self.tool_idx, batch_size, self.num_tools)
 
-		options_type = self.expand(options_idx, batch_size, self.num_options)
+		substates_type = self.expand(substates_idx, batch_size, self.num_substates)
 
 		macro_actions = torch.cat([actions, self.step_tensor.repeat_interleave(batch_size, dim = 0) ], axis = 1)
 
-		return self.conf.conf_logprobs(tool_type, options_type, macro_actions, obs_idx)
+		return self.conf.conf_logprobs(tool_type, substates_type, macro_actions, obs_idx)
 
 class Action_Ideal(object):
 	def __init__(self, num_actions):

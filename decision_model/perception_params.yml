@@ -1,28 +1,24 @@
-dataset_params: 
 # want to use the same control parameters, peg list, options list and fit list
 # as those used to collect the dataset which was used to train the networks
-  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
+dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
 
 decision_params:
-  converge_thresh: 5
-  num_samples: 100
-  policy_number: 0
-  constraint_type: 2
+  converge_thresh: 10
+  num_samples: 50000
+  policy_idxs: [2,2]
+  constraint_type: 1
 
 logging_params:
   display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
-  run_mode: 0 #Options include: 0 -> development, 1 -> evaluation
-  num_trials: 20
+  run_mode: 1 #Options include: 0 -> development, 1 -> evaluation
+  num_trials: 10
   run_notes: "_spring_testing"
   step_by_step: 0.0
 
 model_params:
   use_GPU: True
-  force_size: [6, 50]
-  action_size: 3
-  macro_action_size: 10
-  proprio_size: 12
+  model_path: "/scr-ssd/sens_search_logging/models/202005172248_training_6_fit_wexpanded_action/"
 
 dataset_keys: ["force_hi_freq", "action", "proprio", "contact"]
   # rgbd:
@@ -36,11 +32,13 @@ dataset_keys: ["force_hi_freq", "action", "proprio", "contact"]
 
 info_flow:
   Options_Sensor:
-    model_folder: "/scr-ssd/sens_search_logging/models/202005152152_training_67_fit_wexpanded_action/"
+    model_folder: "/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
     epoch_num: 2500
   Options_ConfNet:
-    model_folder: "/scr-ssd/sens_search_logging/models/202005152152_training_67_fit_wexpanded_action/"
-    epoch_num: 2500
+    model_folder: "/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
+    epoch_num: 150
   # Options_ConfMat:
-  #   model_folder: "/scr-ssd/sens_search_logging/models/202005020835_debugging_3_conf_testing/"
-  #   epoch_num: 210
+  #   model_folder: "/scr-ssd/sens_search_logging/models/202005180914_training_9_fit_wexpanded_action/"
+  #   epoch_num: 300
+
+# "/scr-ssd/sens_search_logging/models/202005180914_training_9_fit_wexpanded_action/" "/scr-ssd/sens_search_logging/models/202005180806_training_6_fit_wexpanded_action/"

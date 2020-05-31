@@ -4,6 +4,7 @@ import numpy as np
 import copy
 import time
 import os
+import yaml
 
 from torch.utils.data import Dataset
 from utils import read_h5
@@ -12,7 +13,7 @@ from sklearn.linear_model import LinearRegression
 ## ADD data normalization
 class Custom_DataLoader(Dataset):
     def __init__(self, cfg, idx_dict = None, device = None, transform=None):
-        dataset_path = cfg['dataloading_params']['dataset_path']
+        dataset_path = cfg['dataset_path']
         dataset_keys = cfg['dataset_keys']
 
         val_ratio = cfg['training_params']['val_ratio']
@@ -58,28 +59,38 @@ class Custom_DataLoader(Dataset):
             ###########################################################            
             self.max_length = 0
 
-            option_types = ["Cross", "Rect", "Square"]
+            with open(self.dataset_path + "datacollection_params.yml", 'r') as ymlfile:
+                cfg1 = yaml.safe_load(ymlfile)
+
+            tool_types = cfg1['peg_names']
+            hole_types = cfg1['hole_names']
+            option_types = cfg1['fit_names']
+
             num_trajectories = cfg['custom_params']['num_trajectories']
             min_length = cfg['custom_params']['min_length']
 
             self.num_trajectories = num_trajectories
             self.min_length = min_length
-            self.option_types = options_types
+            self.option_types = option_types
+            self.tool_types = tool_types
+            self.hole_types = hole_types
 
             self.dev_ratio = dev_num / (9 * num_trajectories)
 
             self.idx_dict["min_length"] = self.min_length
-            self.idx_dict["options_types"] = options_types
+            self.idx_dict["option_types"] = self.option_types
+            self.idx_dict["tool_types"] = self.tool_types
+            self.idx_dict["hole_types"] = self.hole_types
 
             for idx in range(num_trajectories):
-                for peg in option_types:
+                for peg in tool_types:
                     
                     train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
                     dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
 
-                    for hole in option_types:
+                    for hole in hole_types:
 
-                        filename = model_folder + peg + "_" + hole + "_" + str(idx + 1).zfill(4) + ".h5" 
+                        filename = self.dataset_path + peg + "_" + hole + "_" + str(idx + 1).zfill(4) + ".h5" 
 
                         dataset = read_h5(filename)
 
@@ -160,7 +171,7 @@ class Custom_DataLoader(Dataset):
         unpadded = idx1 - idx0 - 1
         sample = {}
 
-        for key in self.dataset_keys.keys():
+        for key in self.dataset_keys:
             if key == 'action':
                 sample[key] = np.array(dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)             
@@ -181,10 +192,14 @@ class Custom_DataLoader(Dataset):
             elif key == 'peg_type' or key == 'hole_type' or key == 'macro_action' or key == 'fit_type':
                 sample[key] = np.array(dataset[key])
 
-                if key == "hole_type":
+                if key == "fit_type":
                     sample["option_type"] = sample[key]
-                elif key == "fit_type":
                     sample["fit_label"] = sample[key].argmax(0)
+                elif key == "peg_type":
+                    sample["tool_type"] = sample[key]
+                elif key == "hole_type":
+                    sample["state_type"] = sample[key]
+                   
 
         dataset.close()
 
@@ -196,8 +211,6 @@ class Custom_DataLoader(Dataset):
         ##########################################################
 
         return self.transform(sample)
-
-    
 
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""

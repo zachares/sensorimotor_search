@@ -35,18 +35,13 @@ if __name__ == '__main__':
 
 	display_bool = cfg['logging_params']['display_bool']
 
-	policy_number = cfg['decision_params']['policy_number']
+	policy_idxs = cfg['decision_params']['policy_idxs']
 	num_samples = cfg['decision_params']['num_samples']
 	converge_thresh = cfg['decision_params']['converge_thresh']
 	constraint_type = cfg['decision_params']['constraint_type']
 
 
 	use_cuda = cfg['model_params']['use_GPU'] and torch.cuda.is_available()
-	force_size =cfg['model_params']['force_size'] 
-	action_size =cfg['model_params']['action_size']
-	proprio_size = cfg['model_params']['proprio_size']
-	pose_size = cfg['model_params']['pose_size']
-
 	info_flow = cfg['info_flow']
 
 	run_mode = cfg['logging_params']['run_mode']
@@ -55,7 +50,7 @@ if __name__ == '__main__':
 
 	dataset_keys = cfg['dataset_keys']
 
-	dataset_path = cfg['dataset_params']['dataset_path']
+	dataset_path = cfg['dataset_path']
 
 	with open(dataset_path + "datacollection_params.yml", 'r') as ymlfile:
 		cfg1 = yaml.safe_load(ymlfile)
@@ -67,14 +62,21 @@ if __name__ == '__main__':
 	tol = cfg1['control_params']['tol']
 	seed = cfg1['control_params']['seed']
 
+	cfg['control_params'] = cfg1['control_params']
+
 	plus_offset = np.array(cfg1['datacollection_params']['plus_offset'])
 
-	tool_types = cfg1['peg_names']
-	hole_shapes = cfg1['hole_names']
-	option_types = cfg1['fit_names']
+	peg_names = cfg1['peg_names']
+	hole_names = cfg1['hole_names']
+	fit_names = cfg1['fit_names']
 
-	num_tools = len(tool_types)
-	num_options = len(option_types)
+	tool_names = peg_names
+	substate_names = hole_names
+	option_names = fit_names
+
+	num_tools = len(tool_names)
+	num_substates = len(substate_names)
+	num_options = len(option_names)
     ##################################################################################
     ### Setting Debugging Flag
     ##################################################################################
@@ -82,6 +84,7 @@ if __name__ == '__main__':
 		debugging_flag = True
 		run_description = "development"
 	else:
+		var = input("Run code in debugging mode? If yes, no Results will be saved.[yes,no]: ")
 		debugging_flag = False
 		if var == "yes":
 			debugging_flag = True
@@ -112,13 +115,12 @@ if __name__ == '__main__':
 	  print("Let's use", torch.cuda.device_count(), "GPUs!")
     ##########################################################
     ### Initializing and loading model
-    ##########################################################
-	sensor = Options_Sensor("", "Options_Sensor", info_flow, force_size, proprio_size,\
-	 action_size, num_tools, num_options, device = device).to(device)
-	confusion = Options_ConfNet("", "Options_ConfNet", info_flow, pose_size,\
-	 num_tools, num_options, device = device).to(device)
-	# confusion = Options_ConfMat("", "Options_ConfMat", info_flow, num_options, device = device).to(device)
-	
+	model_dict = declare_models(cfg, "", device)
+
+	sensor = model_dict["Options_Sensor"]
+	confusion = model_dict["Options_ConfNet"]
+	# confusion = model_dict["Options_ConfMat"]
+
 	sensor.eval()
 	confusion.eval()
 	#######################################################
@@ -131,15 +133,7 @@ if __name__ == '__main__':
 
 	env.viewer.set_camera(camera_id=2)
 
-	hole_info = {}
-	for i, hole_shape in enumerate(hole_shapes):
-		top_site = hole_shape + "Peg_top_site"
-		top = env._get_sitepos(top_site)
-		print(top)
-		top_height = top[2]
-		hole_info[i] = {}
-		hole_info[i]["pos"] = top
-		hole_info[i]["name"] = hole_shape
+	hole_info = hole_dict(env, hole_names)
 
 	num_cand = len(list(hole_info.keys()))
 	############################################################
@@ -147,11 +141,11 @@ if __name__ == '__main__':
 	############################################################
 	act_model = Action_PegInsertion(hole_info, workspace_dim, tol, plus_offset, num_samples)
 
-	prob_model = Probability_PegInsertion(sensor, confusion, num_tools, num_options)
+	prob_model = Probability_PegInsertion(sensor, confusion, num_tools, num_substates)
 
-	state_dict = gen_state_dict(num_cand, option_types, constraint_type)
+	state_dict = gen_state_dict(num_cand, substate_names, option_names, constraint_type)
 
-	decision_model = Decision_Model(state_dict, prob_model, act_model, policy_number)
+	decision_model = Decision_Model(state_dict, prob_model, act_model, policy_idxs)
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
@@ -161,11 +155,11 @@ if __name__ == '__main__':
 
 	obs = {}
 	tool_idx = -1
-	fixed_params = (0, kp, tol, step_threshold, display_bool,top_height, dataset_keys)
+
     ############################################################
     ### Starting tests
     ###########################################################
-	for trial_num in range(num_trials):
+	for trial_num in range(num_trials + 1):
 		print("\n")
 		print("############################################################")
 		print("######                BEGINNING NEW TRIAL              #####")
@@ -176,9 +170,11 @@ if __name__ == '__main__':
 			logging_dict['scalar'] = {}
 
 		# tool_idx += 1
-		# tool_idx = tool_idx % len(tool_types)
+		# tool_idx = tool_idx % len(tool_names)
+		tool_idx = 0
+		decision_model.tool_idx = tool_idx
 
-		gripper_type = tool_types[tool_idx] + "PegwForce" 
+		gripper_type = tool_names[tool_idx] + "PegwForce" 
 
 		env.reset(gripper_type)
 		env.viewer.set_camera(camera_id=2)
@@ -188,23 +184,24 @@ if __name__ == '__main__':
 
 		num_steps = 0
 
-		correct_option = []
+		correct_options = []
 
-		#### code necessary for this specific problem, but not the general problem
-		if "Fit" not in option_types or "Not Fit" not in option_types:
+		### code necessary for this specific problem, but not the general problem
+		if "Fit" not in option_names or "Not_fit" not in option_names:
+			print(option_types)
 			raise Exception("The code below does not reflect the problem")
 
 		for key in hole_info.keys():
 			name = hole_info[key]["name"]
-			tool_name = tool_types[tool_idx]
+			tool_name = tool_names[tool_idx]
 
 			if name == tool_name:
-				correct_option.append("Fit")
+				correct_options.append("Fit")
 			else:
-				correct_option.append("Not Fit")
-		############################################################
+				correct_options.append("Not_fit")
+		###########################################################
 
-		decision_model.reset_probs(correct_option)
+		decision_model.reset_probs(substate_names, correct_options)
 		decision_model.prob_model.set_tool_idx(tool_idx)
 		decision_model.print_hypothesis()
 		# a = input("Continue?")
@@ -215,15 +212,15 @@ if __name__ == '__main__':
 			top_goal = decision_model.act_model.hole_info[decision_model.cand_idx]["pos"]
 
 			point_idx = 0
-			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
-			point_idx, done_bool, obs = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, top_goal, cfg, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, top_goal, cfg, points_list, point_idx, obs)
 
 			# print("moved to initial position")
 
 			obs_dict = {}
 
 			while point_idx < len(points_list):
-				point_idx, done_bool, obs, obs_dict = movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict)
+				point_idx, done_bool, obs, obs_dict = movetogoal(env, top_goal, cfg, points_list, point_idx, obs, obs_dict)
 
 				# if done_bool:
 				# 	point_idx = len(points_list)
@@ -245,10 +242,13 @@ if __name__ == '__main__':
 				a = input("Continue?")
 
 		if not debugging_flag:
+
+			decision_model.calc_metrics()
 			# logging_dict['scalar']["Number of Steps"] = num_steps
-			logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.state_dis[0,decision_model.state_dict["correct_idx"]]
-			logging_dict['scalar']['Entropy'] = decision_model.curr_entropy
-			logging_dict['scalar']['Num_Misclassified'] = decision_model.num_misclassifcations
+			logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.curr_state_prob
+			logging_dict['scalar']["Probability of Correct Fit" ] = decision_model.curr_fit_prob
+			logging_dict['scalar']['Entropy of State Distribution'] = decision_model.curr_state_entropy
+			logging_dict['scalar']['Entropy of Fit Distribution'] = decision_model.curr_fit_entropy
 			# logging_dict['scalar']["Insertion"] = done_bool * 1.0
 			# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
 

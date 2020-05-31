@@ -1,18 +1,21 @@
 relative_path: "../../supervised_learning/"
-
+dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_20200517/" 
+  #
+ # "/scr2/muj_senssearch_dataset10HZ_slide_20200517_cross/"
+# "/scr2/muj_senssearch_dataset10HZ_slide_20200517_rect/" 
 dataloading_params:
-  dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_20200517/"
   num_workers: 4
   batch_size: 128
-  idx_dict_path: ""
-
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/20200530_training_12_fit_wexpanded_action/val_train_split.pkl" # full
+  # "/scr-ssd/sens_search_logging/runs/20200520_training_3_fit_wexpanded_action/val_train_split.pkl" # cross
+#"/scr-ssd/sens_search_logging/runs/20200530_training_8_fit_wexpanded_action/val_train_split.pkl" # rect
 training_params:
   seed: 4321
   regularization_weight: 0.00001
   lrn_rate: 0.0001
   beta1: 0.9
   beta2: 0.99
-  max_training_epochs: 2500
+  max_training_epochs: 3000
   val_ratio: 0.1
   dev_num: 20 # number of datapoints in the development set
   use_GPU: True
@@ -21,7 +24,6 @@ training_params:
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
   run_notes: "_fit_wexpanded_action"
-  save_val_interval: 10 # epoch interval after which a validation run and save model is executed, i.e. a model is saved at 0, 10, 20, ..., 1000 epochs
 
 custom_params:
   force_size: [6, 50]
@@ -30,6 +32,7 @@ custom_params:
   proprio_size: 12
   min_length: 20
   num_trajectories: 500
+  dropout_prob: 0.3
   
 dataset_keys: ["force_hi_freq", "action", "macro_action", "proprio", "contact", "peg_type", "hole_type", "fit_type"]
   # rgbd:
@@ -40,41 +43,70 @@ dataset_keys: ["force_hi_freq", "action", "macro_action", "proprio", "contact", 
 info_flow:
   Options_Sensor:
     train: 1
-    model_folder: ""
-    epoch_num: 0
+    model_folder:  "/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
+    epoch_num: 3000
     inputs:
       proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
-      peg_type: "dataset"
+      tool_type: "dataset"
       contact_diff: "dataset"
       padding_mask: "dataset"
       epoch: "dataset"
     outputs:
       options_class:
-        loss: "Multinomial_NLL"
-        loss_name: "Options_Class"
-        weight: 1
         inputs:
-          fit_label: "dataset"
-        evals: ["Multinomial_Accuracy", "Multinomial_Entropy"]
+          fit_label: dataset
+        losses: 
+          Multinomial_NLL_Ensemble:
+            logging_name: Options_Class
+      options_inputs:
+        inputs:
+          fit_label: dataset
+        evals:
+          Multinomial_Accuracy_Ensemble:
+            logging_name: "classifier_accuracy"
+          Multinomial_Entropy_Ensemble:
+            logging_name: "classifier_entropy"
   Options_ConfNet:
     train: 1
     model_folder: ""
     epoch_num: 0
     inputs:
       macro_action: "dataset"
-      peg_type: "dataset"
-      option_type: "dataset"
+      tool_type: "dataset"
+      state_type: "dataset"
       epoch: "dataset"
     outputs:
-      conf_class:
-        loss: "Multinomial_NLL"
-        loss_name: "Confusion_Class"
-        weight: 1
+      confusion_inputs:
         inputs:
-          option_est: "Options_Sensor"
-        evals: ["Multinomial_Accuracy", "Multinomial_Entropy"]
+          uncertainty_inputs: "Options_Sensor"
+        losses:
+          Multinomial_KL_Ensemble: 
+            logging_name: "Confusion_Class"
+        # evals: 
+        #   Multinomial_Accuracy:
+        #     logging_name: "uncertainty_accuracy"
+        #   Multinomial_Entropy:
+        #     logging_name: "uncertainty_entropy"
+  # Distance_Predictor:
+  #   train: 1
+  #   model_folder: ""
+  #   epoch_num: 0
+  #   inputs:
+  #     macro_action: "dataset"
+  #     tool_type: "dataset"
+  #     option_type: "dataset"
+  #     permutation: "Options_Sensor"
+  #     epoch: "dataset"
+  #   outputs:
+  #     distances:
+  #       loss: "MSE"
+  #       loss_name: "Distance_Prediction"
+  #       weight: 1
+  #       inputs:
+  #         distances: "Options_Sensor"
+  #       evals: ["Continuous_Error"]
   # Options_ConfMat:
   #   train: 1
   #   model_folder: ""
@@ -82,7 +114,7 @@ info_flow:
   #   inputs:
   #     peg_type: "dataset"
   #     option_type: "dataset"
-  #     option_est: "Options_Sensor"
+  #     options_est: "Options_Sensor"
   #     epoch: "dataset"
 
 

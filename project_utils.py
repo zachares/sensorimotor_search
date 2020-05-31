@@ -104,16 +104,17 @@ def print_histogram(probs, labels):
 '''
 Decision Functions
 '''
-def gen_state_dict(num_cand, options_names, constraint_type):
-	num_options = len(options_names)
+def gen_state_dict(num_cand, substate_names, option_names, constraint_type):
+	num_options = len(option_names)
+	num_substates = len(substate_names)
 	state_dict = {}
 
 	if constraint_type == 0:
-		state_dict["states"] = tuple(itertools.product(range(num_options), repeat = num_cand))
+		state_dict["states"] = tuple(itertools.product(range(num_substates), repeat = num_cand))
 	elif constraint_type == 1:
-		state_dict["states"] = tuple(itertools.permutations(range(num_options), num_cand))
+		state_dict["states"] = tuple(itertools.permutations(range(num_substates), num_cand))
 	elif constraint_type == 2:
-		if num_options != 2:
+		if num_substates != 2:
 			raise Exception("Wrong number of option types for constraint type " + str(2))
 
 		states = []
@@ -128,41 +129,43 @@ def gen_state_dict(num_cand, options_names, constraint_type):
 			states.append(tuple(state))
 
 		state_dict["states"] = tuple(states)
-
-		print("State space: ", state_dict["states"])
-
 	else:
 		raise Exception("this constraint type is not currently supported")
 
-	state_dict["options_names"] = options_names
+	state_dict["option_names"] = option_names
+	state_dict["substate_names"] = substate_names
+
+	state_dict["num_substates"] = num_substates
 	state_dict["num_options"] = num_options
+
 	state_dict["num_cand"] = num_cand
+
 	state_dict["num_states"] = len(state_dict["states"])
 
 	return state_dict
 
 def pairwise_divJS(logits): 
-    '''
-    takes a set of logits and calculates the sum of the 
-    jensen-shannon divergences of all pairwise combinations
-    of the distributions 
+	'''
+	takes a set of logits and calculates the sum of the 
+	jensen-shannon divergences of all pairwise combinations
+	of the distributions 
 
-    logits of size batch_size x num_distributions x num_options
-    '''
-    div_js = torch.zeros(logits.size(0)).to(logits.device).float()
+	logits of size batch_size x num_distributions x num_options
+	'''
+	div_js = torch.zeros(logits.size(0)).to(logits.device).float()
 
-    for idx0 in range(logits.size(1) - 1):
-        for idx1 in range(idx0 + 1, logits.size(1)):
-            if idx0 == idx1:
-                continue
+	for idx0 in range(logits.size(1) - 1):
+		for idx1 in range(idx0 + 1, logits.size(1)):
+			if idx0 == idx1:
+				continue
 
-            dis0 = logits[:,idx0]
-            dis1 = logits[:,idx1]
-            djs_distrs = 0.5 * (logits2KL(dis0, dis1) + logits2KL(dis1, dis0))
-            div_js[:] += djs_distrs 
-            div_js[:] += djs_distrs
+			inputs0 = logits2inputs(logits[:,idx0])
+			inputs1 = logits2inputs(logits[:,idx1])
 
-    return div_js
+			djs_distrs = 0.5 * (inputs2KL(inputs0, inputs1) + inputs2KL(inputs1, inputs0))
+			div_js[:] += djs_distrs 
+
+	return div_js
 
 def gen_conf_mat(num_options, num_actions, uncertainty_range):
 	if num_actions == 0:
@@ -183,6 +186,18 @@ def create_confusion(num_options, u_r):
 	confusion_matrix = confusion_matrix / np.tile(np.expand_dims(np.sum(confusion_matrix, axis = 1), axis = 1), (1, num_options))
 
 	return confusion_matrix
+
+def hole_dict(env, hole_names):
+	hole_info = {}
+	for i, hole_name in enumerate(hole_names):
+		top_site = hole_name + "Peg_top_site"
+		top = env._get_sitepos(top_site)
+		top_height = top[2]
+		hole_info[i] = {}
+		hole_info[i]["pos"] = top
+		hole_info[i]["name"] = hole_name
+		hole_info[i]["top_height"] = top_height
+	return hole_info
 '''
 Control Functions
 '''
@@ -211,13 +226,18 @@ def slidepoints(workspace_dim, tol, num_trajectories = 10):
 
 	return np.concatenate(c_point_list, axis = 0)
 
-def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dict = None):
-	glb_ts, kp, tol, step_threshold, display_bool, top_height, obs_keys = fixed_params #noise_parameters,
+def movetogoal(env, top_goal, cfg, points_list, point_idx, obs, obs_dict = None):
+	kp = np.array(cfg['control_params']['kp'])
+	step_threshold = cfg['control_params']['step_threshold']
+	tol = cfg['control_params']['tol']
+	display_bool = cfg['logging_params']['display_bool']
+	dataset_keys = cfg['dataset_keys']
 
 	step_count = 0
 	goal = points_list[point_idx][0]
 	point_type = points_list[point_idx][1]
 	done_bool = False
+	top_height = top_goal[2]
 
 	while env.check_eepos_err(goal, tol) == False and step_count < step_threshold:
 		action = kp * env.eepos_err(goal)
@@ -229,7 +249,7 @@ def movetogoal(env, top_goal, fixed_params, points_list, point_idx, obs, obs_dic
 		obs['action'] = env.controller.transform_action(action)
 
 		if point_type == 1 and obs_dict is not None:
-			save_obs(copy.deepcopy(obs), obs_keys, obs_dict)
+			save_obs(copy.deepcopy(obs), dataset_keys, obs_dict)
 			# curr_pose = env._get_eepos()
 
 		obs, reward, done, info = env.step(action)
