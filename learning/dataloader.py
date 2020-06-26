@@ -204,7 +204,7 @@ class Custom_DataLoader(Dataset):
         dataset.close()
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
-        sample["macro_action"] = np.concatenate([init_proprio, sample['macro_action'][6:], np.array([unpadded])])
+        sample["macro_action"] = np.concatenate([init_proprio[:2], sample['macro_action'][6:]]) #, np.array([unpadded])])
 
         ##########################################################    
         ##### End of Project Specific Code #######################

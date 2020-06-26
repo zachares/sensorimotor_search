@@ -6,8 +6,9 @@ dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_20200517/"
 dataloading_params:
   num_workers: 4
   batch_size: 128
-  idx_dict_path: "/scr-ssd/sens_search_logging/runs/20200530_training_12_fit_wexpanded_action/val_train_split.pkl" # full
-  # "/scr-ssd/sens_search_logging/runs/20200520_training_3_fit_wexpanded_action/val_train_split.pkl" # cross
+  idx_dict_path: "/scr-ssd/sens_search_logging/runs/20200530_training_12_fit_wexpanded_action/val_train_split.pkl" 
+  #"/scr-ssd/sens_search_logging/runs/20200530_training_12_fit_wexpanded_action/val_train_split.pkl" # full
+  # "/scr-ssd/sens_search_logging/runs/20200531_training_21_fit_wexpanded_action/val_train_split.pkl" # cross
 #"/scr-ssd/sens_search_logging/runs/20200530_training_8_fit_wexpanded_action/val_train_split.pkl" # rect
 training_params:
   seed: 4321
@@ -15,7 +16,7 @@ training_params:
   lrn_rate: 0.0001
   beta1: 0.9
   beta2: 0.99
-  max_training_epochs: 3000
+  max_training_epochs: 5000
   val_ratio: 0.1
   dev_num: 20 # number of datapoints in the development set
   use_GPU: True
@@ -28,11 +29,11 @@ logging_params:
 custom_params:
   force_size: [6, 50]
   action_size: 3
-  macro_action_size: 10
+  macro_action_size: 9
   proprio_size: 12
   min_length: 20
   num_trajectories: 500
-  dropout_prob: 0.3
+  dropout_prob: 0.2
   
 dataset_keys: ["force_hi_freq", "action", "macro_action", "proprio", "contact", "peg_type", "hole_type", "fit_type"]
   # rgbd:
@@ -42,14 +43,15 @@ dataset_keys: ["force_hi_freq", "action", "macro_action", "proprio", "contact", 
 
 info_flow:
   Options_Sensor:
-    train: 1
-    model_folder:  "/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-    epoch_num: 3000
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
+    epoch_num: 5000
     inputs:
       proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
       tool_type: "dataset"
+      state_type: "dataset"
       contact_diff: "dataset"
       padding_mask: "dataset"
       epoch: "dataset"
@@ -58,7 +60,7 @@ info_flow:
         inputs:
           fit_label: dataset
         losses: 
-          Multinomial_NLL_Ensemble:
+          Weighted_Multinomial_NLL_Ensemble:
             logging_name: Options_Class
       options_inputs:
         inputs:
@@ -66,12 +68,14 @@ info_flow:
         evals:
           Multinomial_Accuracy_Ensemble:
             logging_name: "classifier_accuracy"
-          Multinomial_Entropy_Ensemble:
-            logging_name: "classifier_entropy"
+          # Multinomial_Entropy_Ensemble:
+          #   logging_name: "classifier_entropy"
+          # Multinomial_Entropy_Spread_Ensemble:
+          #   logging_name: "classifier_entropy_gap"
   Options_ConfNet:
-    train: 1
-    model_folder: ""
-    epoch_num: 0
+    train: 0
+    model_folder: "/scr-ssd/sens_search_logging/models/20200607_training_3_fit_wexpanded_action/"
+    epoch_num: 138
     inputs:
       macro_action: "dataset"
       tool_type: "dataset"
@@ -89,6 +93,7 @@ info_flow:
         #     logging_name: "uncertainty_accuracy"
         #   Multinomial_Entropy:
         #     logging_name: "uncertainty_entropy"
+# "/scr-ssd/sens_search_logging/models/20200601_training_12_fit_wexpanded_action/"
   # Distance_Predictor:
   #   train: 1
   #   model_folder: ""

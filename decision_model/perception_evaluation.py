@@ -133,13 +133,11 @@ if __name__ == '__main__':
 
 	env.viewer.set_camera(camera_id=2)
 
-	hole_info = hole_dict(env, hole_names)
-
-	num_cand = len(list(hole_info.keys()))
+	num_cand = len(list(env.mujoco_objects.keys()))
 	############################################################
 	### Declaring decision model
 	############################################################
-	act_model = Action_PegInsertion(hole_info, workspace_dim, tol, plus_offset, num_samples)
+	act_model = Action_PegInsertion(workspace_dim, tol, plus_offset, num_samples)
 
 	prob_model = Probability_PegInsertion(sensor, confusion, num_tools, num_substates)
 
@@ -155,7 +153,6 @@ if __name__ == '__main__':
 
 	obs = {}
 	tool_idx = -1
-
     ############################################################
     ### Starting tests
     ###########################################################
@@ -169,14 +166,15 @@ if __name__ == '__main__':
 		if not debugging_flag:
 			logging_dict['scalar'] = {}
 
-		# tool_idx += 1
-		# tool_idx = tool_idx % len(tool_names)
-		tool_idx = 0
+		tool_idx += 1
+		tool_idx = tool_idx % len(tool_names)
+		# tool_idx = 0
 		decision_model.tool_idx = tool_idx
 
 		gripper_type = tool_names[tool_idx] + "PegwForce" 
 
-		env.reset(gripper_type)
+		env.gripper_type =  gripper_type
+		env.reset()
 		env.viewer.set_camera(camera_id=2)
 
 		if display_bool:
@@ -191,8 +189,8 @@ if __name__ == '__main__':
 			print(option_types)
 			raise Exception("The code below does not reflect the problem")
 
-		for key in hole_info.keys():
-			name = hole_info[key]["name"]
+		for i in env.hole_sites.keys():
+			name = env.hole_sites[i][0]
 			tool_name = tool_names[tool_idx]
 
 			if name == tool_name:
@@ -209,18 +207,17 @@ if __name__ == '__main__':
 		while True and num_steps < converge_thresh:
 			num_steps += 1
 			points_list = decision_model.choose_action()
-			top_goal = decision_model.act_model.hole_info[decision_model.cand_idx]["pos"]
 
 			point_idx = 0
-			point_idx, done_bool, obs = movetogoal(env, top_goal, cfg, points_list, point_idx, obs)
-			point_idx, done_bool, obs = movetogoal(env, top_goal, cfg, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, decision_model.cand_idx, cfg, points_list, point_idx, obs)
+			point_idx, done_bool, obs = movetogoal(env, decision_model.cand_idx, cfg, points_list, point_idx, obs)
 
 			# print("moved to initial position")
 
 			obs_dict = {}
 
 			while point_idx < len(points_list):
-				point_idx, done_bool, obs, obs_dict = movetogoal(env, top_goal, cfg, points_list, point_idx, obs, obs_dict)
+				point_idx, done_bool, obs, obs_dict = movetogoal(env, decision_model.cand_idx, cfg, points_list, point_idx, obs, obs_dict)
 
 				# if done_bool:
 				# 	point_idx = len(points_list)

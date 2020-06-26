@@ -50,7 +50,7 @@ class Decision_Model(object):
 
 	def reset_probs(self, correct_substates, correct_options):
 		self.state_probs = torch.ones((1,self.state_dict["num_states"])) / self.state_dict["num_states"]
-		self.state_probs = self.state_probs.to(self.device).float()
+		self.state_probs = self.state_probs.float().to(self.device)
 		self.max_entropy = inputs2ent(probs2inputs(self.state_probs)).item()
 		self.curr_state_entropy = inputs2ent(probs2inputs(self.state_probs)).item()
 
@@ -60,102 +60,123 @@ class Decision_Model(object):
 		self._record_correct_state(correct_substates)
 		self._record_correct_options(correct_options)
 
-	def robust_cand(self):
-		max_entropy = 0
-		for i in range(self.state_dict["num_cand"]):
-			probs = self.marginalize(self.state_probs, cand_idx = i)
-			entropy = inputs2ent(probs2inputs(probs)).item()
-			# print(entropy)
-
-			if entropy > max_entropy:
-				idx = i
-				max_entropy = entropy
-
-		return idx
-
-	def robust_action(self, actions):
-		logits = self.prob_model.conf_logits(actions)
-		div_js = pairwise_divJS(logits)
-
-		return div_js.max(0)[1]
-
 	def choose_action(self, pol_idxs = None):
-		if pol_idxs is None:
-			policy_idxs = self.policy_idxs
-		else:
-			policy_idxs = pol_idxs
-
 		self.act_model.generate_actions()
-		print("Current entropy is: " + str(self.curr_state_entropy)[:5])
 
-		cand_pol_idx = policy_idxs[0]
-		action_pol_idx =policy_idxs[1]
+		max_exp_reward_fit, cand_idx_fit = self.max_exp_reward_fit(self.state_probs)
+		cand_idx = cand_idx_fit.item()
 
-		if cand_pol_idx == 0:
-			print("Candidate Chosen Randomly")
-		elif cand_pol_idx == 1:
-			print("Candidate Chosen using Robust Criteria")
-		elif cand_pol_idx == 2:
-			print("Candidate Chosen to Minimize Entropy")
+		# print("Fit Reward: ", max_exp_reward_fit)
+		
+		exp_entropy = self.expected_entropy(self.state_probs, cand_idx, self.act_model.actions)
+
+		act_idx = exp_entropy.min(0)[1]
+
+		current_max_exp_reward = max_exp_reward_fit.clone()
+
+		for i in range(self.state_dict["num_cand"]):
+			max_exp_reward_info, act_idx_info = self.max_exp_reward_info(self.state_probs, i, self.act_model.actions)
+
+			if current_max_exp_reward < max_exp_reward_info:
+				cand_idx = i
+				act_idx = act_idx_info
+				current_max_exp_reward = max_exp_reward_info
+
+		if current_max_exp_reward == max_exp_reward_fit:
+			print("Attempting to Insert")
 		else:
-			raise Exception(str(cand_pol_idx) + " candidate policy number is not a valid number")
-
-		if action_pol_idx == 0:
-			print("Action Chosen Randomly")
-		elif action_pol_idx == 1:
-			print("Action Chosen using Robust Criteria")
-		elif action_pol_idx == 2:
-			print("Action Chosen to Minimize Entropy")
-		else:
-			raise Exception(str(action_pol_idx) + " action policy number is not a valid number")
-
-
-		if cand_pol_idx == 0:
-			cand_idx = np.random.choice(range(self.state_dict["num_cand"]))
-
-		elif cand_pol_idx == 1:
-			cand_idx = self.robust_cand()
-
-		if action_pol_idx == 0:
-			act_idx = np.random.choice(range(self.act_model.num_actions))
-
-		elif action_pol_idx == 1:
-			act_idx = self.robust_action(self.act_model.actions)
-
-
-		if cand_pol_idx == 2 and action_pol_idx != 2:
-			# cand_idx1 = self.robust_cand()
-			min_entropy = copy.deepcopy(self.max_entropy)
-			action = np.expand_dims(self.act_model.actions[act_idx], axis = 0)
-
-			for k in range(self.state_dict["num_cand"]):
-				exp_entropy = self.expected_entropy(k, action)
-
-				if exp_entropy.min(0)[0] < min_entropy:
-					cand_idx = copy.deepcopy(k)
-					min_entropy = exp_entropy.min(0)[0]
-
-		elif cand_pol_idx != 2 and action_pol_idx == 2:
-			exp_entropy = self.expected_entropy(cand_idx, self.act_model.actions)
-			act_idx = exp_entropy.min(0)[1]
-
-		elif cand_pol_idx == 2 and action_pol_idx == 2:
-			min_entropy = copy.deepcopy(self.max_entropy)
-
-			for k in range(self.state_dict["num_cand"]):
-				exp_entropy = self.expected_entropy(k, self.act_model.actions)
-
-				if exp_entropy.min(0)[0] < min_entropy:
-					cand_idx = copy.deepcopy(k)
-					act_idx = exp_entropy.min(0)[1]
-					min_entropy = exp_entropy.min(0)[0]
+			print("Collecting Information")
 
 		self.cand_idx = cand_idx
 		self.act_idx = act_idx
 
 		print("\n#####################\n")
 
-		return self.act_model.transform_action(self.cand_idx, self.act_idx)
+		return self.act_model.transform_action(self.act_idx)
+
+	def max_exp_reward_fit(self, state_probs, success_rate = 0.7, fit_reward = 1.0):
+		
+		prob_fit = self.marginalize(state_probs, substate_idx = self.tool_idx)
+
+		rewards = prob_fit * success_rate * fit_reward
+
+		return rewards.max(1)[0], rewards.max(1)[1]
+
+	def max_exp_reward_info(self, state_probs, cand_idx, actions, success_rate =0.7, fit_reward = 1.0, discount_factor = 0.9):
+		batch_size = actions.shape[0]
+
+		state_prior =state_probs.repeat_interleave(batch_size, dim = 0)
+
+		expected_reward = torch.zeros(batch_size).float().to(self.device)
+
+		for obs_idx in range(self.state_dict["num_options"]):
+			p_o_given_a = torch.zeros(batch_size).float().to(self.device)
+			state_posterior_logprobs = torch.zeros_like(state_prior)
+
+			for j, state in enumerate(self.state_dict["states"]):
+				substate_idx = state[cand_idx]
+				conf_logprobs = self.prob_model.conf_logprob(substate_idx, actions, obs_idx)
+
+				p_o_given_a += torch.where(state_prior[:,j] != 0, torch.exp(torch.log(state_prior[:,j]) + conf_logprobs),\
+				 torch.zeros_like(state_prior[:,j]))
+				
+				state_posterior_logprobs[:,j] = torch.log(state_prior[:,j]) + conf_logprobs 
+
+			next_max_exp_reward_fit, _ = self.max_exp_reward_fit(logits2probs(state_posterior_logprobs), success_rate, fit_reward)
+
+			expected_reward += p_o_given_a * discount_factor * next_max_exp_reward_fit
+
+		# print(expected_reward)
+
+		return expected_reward.max(0)[0], expected_reward.max(0)[1]
+
+	def expected_state_probs(self, state_probs, cand_idx, actions):
+		batch_size = actions.shape[0]
+
+		state_prior =state_probs.repeat_interleave(batch_size, dim = 0)
+
+		# print("Prior", 1000000 * state_prior)
+		# sp = torch.zeros((1,self.state_dict["num_states"])) / self.state_dict["num_states"]
+		# sp[:,self.state_dict["correct_idx"]] = 1.0
+		# state_prior = sp.float().to(self.device).repeat_interleave(batch_size, dim =0)
+
+		expected_state = torch.zeros(batch_size, self.state_dict["num_states"]).float().to(self.device)
+
+
+		for obs_idx in range(self.state_dict["num_options"]):
+			p_o_given_a = torch.zeros(batch_size).float().to(self.device)
+			state_posterior_logprobs = torch.zeros_like(state_prior)
+
+			for j, state in enumerate(self.state_dict["states"]):
+				substate_idx = state[cand_idx]
+				conf_logprobs = self.prob_model.conf_logprob(substate_idx, actions, obs_idx)
+
+				p_o_given_a += 10000 * torch.where(state_prior[:,j] != 0, torch.exp(torch.log(state_prior[:,j]) + conf_logprobs),\
+				 torch.zeros_like(state_prior[:,j]))
+				
+				state_posterior_logprobs[:,j] = torch.log(state_prior[:,j]) + conf_logprobs 
+
+			state_posterior = 10000 * logits2probs(state_posterior_logprobs)
+
+			# print("State:", state_posterior)
+			# print("Obs:", p_o_given_a.unsqueeze(1).repeat_interleave(self.state_dict["num_states"], dim = 1))
+
+			# print(state_probs)
+			# print("prob", p_o_given_a)
+			# print("state_posterior", state_posterior)
+			expected_state += p_o_given_a.unsqueeze(1).repeat_interleave(self.state_dict["num_states"], dim = 1) * state_posterior
+
+			# print("Result", expected_state)
+
+		# print("Last",expected_state)
+
+			# idx = expected_entropy.min(0)[1]
+			# print(state_probs[idx])
+			# print(p_o_given_a[idx])
+			# self.marginalize(state_probs, cand_idx = cand_idx)
+			# self.marginalize(state_probs, substate_idx = self.tool_idx))
+
+		return expected_state
 
 	def marginalize(self, state_probs, cand_idx = None, substate_idx = None):
 		if cand_idx is not None:
@@ -171,16 +192,12 @@ class Decision_Model(object):
 
 		return margin.transpose(0,1)
 
-	def expected_entropy(self, cand_idx, actions):
+	def expected_entropy(self, state_probs, cand_idx, actions):
 		batch_size = actions.shape[0]
 
-		state_prior =self.state_probs.repeat_interleave(batch_size, dim = 0)
-		# sp = torch.zeros((1,self.state_dict["num_states"])) / self.state_dict["num_states"]
-		# sp[:,self.state_dict["correct_idx"]] = 1.0
-		# state_prior = sp.float().to(self.device).repeat_interleave(batch_size, dim =0)
+		state_prior =state_probs.repeat_interleave(batch_size, dim = 0)
 
 		expected_entropy = torch.zeros(batch_size).float().to(self.device)
-
 
 		for obs_idx in range(self.state_dict["num_options"]):
 			p_o_given_a = torch.zeros(batch_size).float().to(self.device)
@@ -190,25 +207,16 @@ class Decision_Model(object):
 				substate_idx = state[cand_idx]
 				conf_logprobs = self.prob_model.conf_logprob(substate_idx, actions, obs_idx)
 
-				p_o_given_a += torch.where(state_prior[:,j] != 0, torch.exp(torch.log(state_prior[:,j]) + conf_logprobs), torch.zeros_like(state_prior[:,j]))
+				p_o_given_a += torch.where(state_prior[:,j] != 0, torch.exp(torch.log(state_prior[:,j]) + conf_logprobs),\
+				 torch.zeros_like(state_prior[:,j]))
 				
-				state_posterior_logprobs[:,j] += torch.log(state_prior[:,j]) + conf_logprobs 
+				state_posterior_logprobs[:,j] = torch.log(state_prior[:,j]) + conf_logprobs 
 
-			state_posterior = logits2probs(state_posterior_logprobs)
-
-			# print(state_probs)
-			# print(p_o_given_a)
-			expected_entropy += p_o_given_a * inputs2ent(probs2inputs(state_posterior))
-
-			# idx = expected_entropy.min(0)[1]
-			# print(state_probs[idx])
-			# print(p_o_given_a[idx])
-			# self.marginalize(state_probs, cand_idx = cand_idx)
-			# self.marginalize(state_probs, substate_idx = self.tool_idx))
+			expected_entropy += p_o_given_a * inputs2ent(logits2inputs(state_posterior_logprobs))
 
 		return expected_entropy
 
-	def update_probs(self, cand_idx, obs_idx, actions):
+	def update_state_probs(self, cand_idx, obs_idx, actions):
 		batch_size = actions.shape[0]
 		state_prior = self.state_probs.repeat_interleave(batch_size, dim = 0)
 		state_posterior_logits = torch.zeros_like(state_prior)
@@ -234,7 +242,7 @@ class Decision_Model(object):
 			# print("Observation Index: ", obs_idx.item())
 			# print("State Distribution: ", self.state_probs)
 
-			self.state_probs = self.update_probs(self.cand_idx, obs_idx, action)
+			self.state_probs = self.update_state_probs(self.cand_idx, obs_idx, action)
 			# print("Updated State Distribution: ", self.state_probs)
 
 
@@ -268,6 +276,25 @@ class Decision_Model(object):
 
 			print_histogram(probs, self.state_dict["substate_names"])
 		print("##############################################\n")	
+
+	def robust_cand(self):
+		max_entropy = 0
+		for i in range(self.state_dict["num_cand"]):
+			probs = self.marginalize(self.state_probs, cand_idx = i)
+			entropy = inputs2ent(probs2inputs(probs)).item()
+			# print(entropy)
+
+			if entropy > max_entropy:
+				idx = i
+				max_entropy = entropy
+
+		return idx
+
+	def robust_action(self, actions):
+		logits = self.prob_model.conf_logits(actions)
+		div_js = pairwise_divJS(logits)
+
+		return div_js.max(0)[1]
 
 def main():
 
@@ -347,3 +374,80 @@ if __name__ == "__main__":
 	# def calc_insert_probs(self, macro_actions):
 	# 	peg_type = self.expand(self.peg_idx, macro_actions.size(0))
 	# 	return torch.sigmoid(self.insert_model.process(macro_actions, peg_type, peg_type))
+
+		# if pol_idxs is None:
+		# 	policy_idxs = self.policy_idxs
+		# else:
+		# 	policy_idxs = pol_idxs
+
+		# self.act_model.generate_actions()
+		# print("Current entropy is: " + str(self.curr_state_entropy)[:5])
+
+		# cand_pol_idx = policy_idxs[0]
+		# action_pol_idx =policy_idxs[1]
+
+		# if cand_pol_idx == 0:
+		# 	print("Candidate Chosen Randomly")
+		# elif cand_pol_idx == 1:
+		# 	print("Candidate Chosen using Robust Criteria")
+		# elif cand_pol_idx == 2:
+		# 	print("Candidate Chosen to Minimize Entropy")
+		# else:
+		# 	raise Exception(str(cand_pol_idx) + " candidate policy number is not a valid number")
+
+		# if action_pol_idx == 0:
+		# 	print("Action Chosen Randomly")
+		# elif action_pol_idx == 1:
+		# 	print("Action Chosen using Robust Criteria")
+		# elif action_pol_idx == 2:
+		# 	print("Action Chosen to Minimize Entropy")
+		# else:
+		# 	raise Exception(str(action_pol_idx) + " action policy number is not a valid number")
+
+
+		# if cand_pol_idx == 0:
+		# 	cand_idx = np.random.choice(range(self.state_dict["num_cand"]))
+
+		# elif cand_pol_idx == 1:
+		# 	cand_idx = self.robust_cand()
+
+		# if action_pol_idx == 0:
+		# 	act_idx = np.random.choice(range(self.act_model.num_actions))
+
+		# elif action_pol_idx == 1:
+		# 	act_idx = self.robust_action(self.act_model.actions)
+
+
+		# if cand_pol_idx == 2 and action_pol_idx != 2:
+		# 	# cand_idx1 = self.robust_cand()
+		# 	min_entropy = copy.deepcopy(self.max_entropy)
+		# 	action = np.expand_dims(self.act_model.actions[act_idx], axis = 0)
+
+		# 	for k in range(self.state_dict["num_cand"]):
+		# 		exp_entropy = self.expected_entropy(k, action)
+
+		# 		if exp_entropy.min(0)[0] < min_entropy:
+		# 			cand_idx = copy.deepcopy(k)
+		# 			min_entropy = exp_entropy.min(0)[0]
+
+		# elif cand_pol_idx != 2 and action_pol_idx == 2:
+		# 	exp_entropy = self.expected_entropy(cand_idx, self.act_model.actions)
+		# 	act_idx = exp_entropy.min(0)[1]
+
+		# elif cand_pol_idx == 2 and action_pol_idx == 2:
+		# 	min_entropy = copy.deepcopy(self.max_entropy)
+
+		# 	for k in range(self.state_dict["num_cand"]):
+		# 		exp_entropy = self.expected_entropy(k, self.act_model.actions)
+
+		# 		if exp_entropy.min(0)[0] < min_entropy:
+		# 			cand_idx = copy.deepcopy(k)
+		# 			act_idx = exp_entropy.min(0)[1]
+		# 			min_entropy = exp_entropy.min(0)[0]
+
+		# self.cand_idx = cand_idx
+		# self.act_idx = act_idx
+
+		# print("\n#####################\n")
+
+		# return self.act_model.transform_action(self.cand_idx, self.act_idx)

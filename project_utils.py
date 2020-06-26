@@ -190,8 +190,9 @@ def create_confusion(num_options, u_r):
 def hole_dict(env, hole_names):
 	hole_info = {}
 	for i, hole_name in enumerate(hole_names):
-		top_site = hole_name + "Peg_top_site"
-		top = env._get_sitepos(top_site)
+		env.update_hole_sites()
+		sites = env.hole_sites[hole_name]
+		top = sites[0]
 		top_height = top[2]
 		hole_info[i] = {}
 		hole_info[i]["pos"] = top
@@ -226,21 +227,39 @@ def slidepoints(workspace_dim, tol, num_trajectories = 10):
 
 	return np.concatenate(c_point_list, axis = 0)
 
-def movetogoal(env, top_goal, cfg, points_list, point_idx, obs, obs_dict = None):
+def initpoints(workspace_dim, num_trajectories = 50000):
+	theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
+	r_init = np.random.uniform(low=0, high =workspace_dim, size = num_trajectories)
+
+	c_point_list = []
+
+	for idx in range(theta_init.size):
+		theta0 = theta_init[idx]
+		x_init = r_init[idx] * np.cos(theta0)
+		y_init = r_init[idx] * np.sin(theta0)
+
+		# print("Initial point: ", x_init, y_init)
+		c_point_list.append(np.expand_dims(np.array([x_init, y_init, 0]), axis = 0))
+
+	return np.concatenate(c_point_list, axis = 0)
+
+def movetogoal(env, cand_idx, cfg, points_list, point_idx, obs, obs_dict = None):
 	kp = np.array(cfg['control_params']['kp'])
 	step_threshold = cfg['control_params']['step_threshold']
 	tol = cfg['control_params']['tol']
 	display_bool = cfg['logging_params']['display_bool']
 	dataset_keys = cfg['dataset_keys']
 
+	top_goal = env.hole_sites[cand_idx][1]
 	step_count = 0
-	goal = points_list[point_idx][0]
+	goal = points_list[point_idx][0] + top_goal
 	point_type = points_list[point_idx][1]
 	done_bool = False
 	top_height = top_goal[2]
+	# glb_ts = 0
 
-	while env.check_eepos_err(goal, tol) == False and step_count < step_threshold:
-		action = kp * env.eepos_err(goal)
+	while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
+		action = kp * env.get_eef_pos_err(goal)
 
 		# noise = np.random.normal(0.0, 0.1, action.size)
 		# noise[2] = -1.0 * abs(noise[2])
@@ -258,19 +277,9 @@ def movetogoal(env, top_goal, cfg, points_list, point_idx, obs, obs_dict = None)
 		if display_bool:
 			env.render()
 
-		# print(obs['proprio'][2])
-
-		if obs['proprio'][2] < - 0.0001 and point_type == 1:
-			# print("Inserted")
-			obs['insertion'] = np.array([1.0])
-			done_bool = True
-			# step_count = step_threshold
-		else:
-			obs['insertion'] = np.array([0.0])
-
 		# if display_bool:
-		# 	# plt.scatter(glb_ts, obs['force'][2])
-		# 	plt.scatter(glb_ts, obs['contact'])
+		# 	plt.scatter(glb_ts, obs['force'][2])
+		# 	# plt.scatter(glb_ts, obs['contact'])
 		# 	plt.pause(0.001)
 		# glb_ts += 1
 
@@ -285,6 +294,42 @@ def movetogoal(env, top_goal, cfg, points_list, point_idx, obs, obs_dict = None)
 		return point_idx, done_bool, obs, obs_dict
 	else:
 		return point_idx, done_bool, obs
+
+def movetogoal_woutobs(env, cand_idx, cfg, goal):
+	kp = np.array(cfg['control_params']['kp'])
+	step_threshold = cfg['control_params']['step_threshold']
+	tol = cfg['control_params']['tol']
+	display_bool = cfg['logging_params']['display_bool']
+	dataset_keys = cfg['dataset_keys']
+
+	top_goal = env.hole_sites[cand_idx][1]
+	step_count = 0
+	goal = points_list[point_idx][0] + top_goal
+	point_type = points_list[point_idx][1]
+	done_bool = False
+	top_height = top_goal[2]
+	# glb_ts = 0
+
+	while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
+		action = kp * env.get_eef_pos_err(goal)
+
+		# noise = np.random.normal(0.0, 0.1, action.size)
+		# noise[2] = -1.0 * abs(noise[2])
+		# action += noise_parameters * noise
+		# curr_pose = env._get_eepos()
+
+		obs, reward, done, info = env.step(action)
+		
+		if display_bool:
+			env.render()
+
+		# if display_bool:
+		# 	plt.scatter(glb_ts, obs['force'][2])
+		# 	# plt.scatter(glb_ts, obs['contact'])
+		# 	plt.pause(0.001)
+		# glb_ts += 1
+
+		step_count += 1
 
 def move_down(env, display_bool):
 	obs, reward, done, info = env.step(np.array([0,0, -0.1]))

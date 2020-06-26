@@ -14,10 +14,9 @@ from multinomial import *
 from project_utils import *
 
 class Action_PegInsertion(object):
-	def __init__(self, hole_info, workspace_dim, tol, plus_offset, num_actions):
+	def __init__(self, workspace_dim, tol, plus_offset, num_actions):
 		self.plus_offset = plus_offset
 		self.workspace_dim = workspace_dim
-		self.hole_info = hole_info
 		self.num_actions = num_actions
 		self.tol = tol
 
@@ -27,13 +26,12 @@ class Action_PegInsertion(object):
 	def get_action(self, act_idx):
 		return self.actions[act_idx]
 
-	def transform_action(self, pos_idx, act_idx):
+	def transform_action(self, act_idx):
 		action = self.actions[act_idx]
-		top_goal = self.hole_info[pos_idx]["pos"]
-		init_point = action[:3] + top_goal
-		final_point = action[6:] + top_goal
+		init_point = action[:3]
+		final_point = action[6:]
 
-		top_plus = top_goal + self.plus_offset
+		top_plus = self.plus_offset
 
 		return [(top_plus, 0, "top_plus"), (init_point, 0, "init_point"), (final_point, 1, "final_point"), (top_plus, 0, "top_plus")]
 
@@ -44,7 +42,7 @@ class Probability_PegInsertion(object):
 		self.num_tools = num_tools
 		self.num_substates = num_substates
 		self.device = self.sensor.device
-		self.step_tensor = self.toTorch(np.array([75])).unsqueeze(0)
+		self.step_tensor = self.toTorch(np.array([74])).unsqueeze(0)
 
 	def toTorch(self, array):
 		return torch.from_numpy(array).to(self.device).float()
@@ -71,8 +69,8 @@ class Probability_PegInsertion(object):
 		action = self.toTorch(actions_np)
 		sample = obs2Torch(obs, self.device)
 
-		sample['peg_type'] = self.expand(self.tool_idx, 1, self.num_tools)
-		# sample['macro_action'] = torch.cat([action, self.step_tensor], axis = 1)
+		sample['tool_type'] = self.expand(self.tool_idx, 1, self.num_tools)
+		sample['macro_action'] = torch.cat([action, self.step_tensor], axis = 1)
 
 		return self.sensor.probs(sample)
 		

@@ -13,6 +13,12 @@ import itertools
 import random
 from multinomial import *
 
+import sys
+
+sys.path.insert(0, "../") 
+
+from project_utils import *
+
 def declare_models(cfg, models_folder, device):
     info_flow = cfg['info_flow']
     model_dict = {}
@@ -61,21 +67,6 @@ def declare_models(cfg, models_folder, device):
 
         model_dict["Options_ConfNet"] = Options_ConfNet(models_folder, "Options_ConfNet", info_flow, macro_action_size, num_tools, num_states, num_options, dropout_prob, device = device).to(device)
 
-    if "Options_ConfMat" in info_flow.keys():
-        model_dict["Options_ConfMat"] = Options_ConfMat(models_folder, "Options_ConfMat", info_flow, num_tools, num_options, device = device).to(device)
-
-    if "Distance_Predictor" in info_flow.keys():
-
-        if info_flow["Distance_Predictor"]["model_folder"] is not "":
-            with open(info_flow["Distance_Predictor"]["model_folder"] + "learning_params.yml", 'r') as ymlfile:
-                cfg2 = yaml.safe_load(ymlfile)
-        else:
-            cfg2 = cfg
-
-        macro_action_size = cfg2['custom_params']['macro_action_size']
-
-        model_dict["Distance_Predictor"] = Distance_Predictor(models_folder, "Distance_Predictor", info_flow, macro_action_size, num_tools, num_options, device = device).to(device)
-    
     print("Finished Initialization")
     return model_dict
 
@@ -101,6 +92,7 @@ class Options_Sensor(Proto_Macromodel):
         self.ensemble_list = []
 
         self.num_tools = num_tools
+        self.num_states = 3
         self.num_options = num_options
 
         self.num_ensembles = 3
@@ -117,20 +109,21 @@ class Options_Sensor(Proto_Macromodel):
         self.num_tl = 4
         self.num_cl = 3
         self.flatten = nn.Flatten()
+        self.uc = True
 
         for i in range(self.num_ensembles):
             self.ensemble_list.append((\
                 CONV1DN(save_folder + "_frc_enc" + str(i), load_folder + "_frc_enc" + str(i),\
                  (self.force_size[0], self.force_size[1]), (self.frc_enc_size, 1),\
-                  nonlinear = False, batchnorm = False, dropout = True, dropout_prob = dropout_prob,\
-                   uc = True, device = self.device).to(self.device),\
+                  nonlinear = False, batchnorm = True, dropout = True, dropout_prob = dropout_prob,\
+                   uc = self.uc, device = self.device).to(self.device),\
 
                 Transformer_Comparer(save_folder + "_state_transdec" + str(i), load_folder + "_state_transdec" + str(i),\
-         self.state_size, self.num_tl, dropout_prob = dropout_prob, uc = True, device = self.device).to(self.device),\
+         self.state_size, self.num_tl, dropout_prob = dropout_prob, uc = self.uc, device = self.device).to(self.device),\
 
                 ResNetFCN(save_folder + "_options_class" + str(i), load_folder + "_options_class" + str(i),\
             self.state_size + self.num_tools, self.num_options, self.num_cl, dropout = True, dropout_prob = dropout_prob, \
-            uc = True, device = self.device).to(self.device)\
+            uc = self.uc, device = self.device).to(self.device)\
             ))
 
         for model_tuple in self.ensemble_list:
@@ -186,8 +179,14 @@ class Options_Sensor(Proto_Macromodel):
         ol_list = []
 
         for i in range(self.num_ensembles):
+
+            if padding_masks is not None:
+                padding_masks_extended = self.get_input_dropout(padding_masks)
+            else:
+                padding_masks_extended = padding_masks
+
             ol = self.get_data(states, forces_reshaped, actions, tool_type,\
-             self.ensemble_list[i], batch_size, sequence_size, padding_masks)
+             self.ensemble_list[i], batch_size, sequence_size, padding_masks_extended)
 
             # options_logits += tool_ol * ol
             # # seq_encs += tool_se * se
@@ -196,24 +195,17 @@ class Options_Sensor(Proto_Macromodel):
 
         return ol_list #, seq_encs ol_list #
 
-    def forward(self, input_dict):
-        proprio_diffs = input_dict["proprio_diff"].to(self.device)
-        actions = input_dict["action"].to(self.device)
-        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
-        contact_diffs = input_dict["contact_diff"].to(self.device)
-        tool_type = input_dict["tool_type"].to(self.device)
-        padding_masks = input_dict["padding_mask"].to(self.device)
+    def get_input_dropout(self, padding_masks):
+        # print("Padding mask\n", padding_masks[0])
+        input_dropout = F.dropout(torch.ones(padding_masks.size()).float().to(self.device), p = (1 - (self.dropout_prob / 1))).bool()
 
-        # self.eval()
+        padding_masks_extended = torch.where(padding_masks == False, input_dropout, padding_masks)
 
-        ol_list = self.get_logits(proprio_diffs, contact_diffs, forces, actions, tool_type, padding_masks)
+        # print("New Padding mask\n", padding_masks_extended[0])
 
-        inputs_list =[]
+        return  padding_masks_extended
 
-        for i in range(self.num_ensembles):
-            inputs_list.append(logits2inputs(ol_list[i]).unsqueeze(0))
-            ol_list[i] = ol_list[i].unsqueeze(0)
-
+    def get_uncertainty_quant(self, proprio_diffs, contact_diffs, forces, actions, tool_type, padding_masks):
         with torch.no_grad():
             uncertainty_list = []
             T = 60
@@ -240,9 +232,39 @@ class Options_Sensor(Proto_Macromodel):
                 i_votes = torch.where(uncertainty_votes == i, torch.ones_like(uncertainty_votes), torch.zeros_like(uncertainty_votes)).sum(0)
                 uncertainty[:, i] = i_votes
 
+            # print(uncertainty)
             uncertainty = uncertainty / uncertainty.sum(1).unsqueeze(1).repeat_interleave(self.num_options, dim = 1)
 
-            # print(uncertainty)
+            return uncertainty
+
+    def forward(self, input_dict):
+        proprio_diffs = input_dict["proprio_diff"].to(self.device)
+        actions = input_dict["action"].to(self.device)
+        forces = input_dict["force_hi_freq"].to(self.device).transpose(2,3)
+        contact_diffs = input_dict["contact_diff"].to(self.device)
+        tool_type = input_dict["tool_type"].to(self.device)
+        padding_masks = input_dict["padding_mask"].to(self.device)
+        state_type = input_dict["state_type"].to(self.device)
+        # self.eval()
+
+        ol_list = self.get_logits(proprio_diffs, contact_diffs, forces, actions, tool_type, padding_masks)
+
+        inputs_list =[]
+
+        for i in range(self.num_ensembles):
+            inputs_list.append(logits2inputs(ol_list[i]).unsqueeze(0))
+            ol_list[i] = ol_list[i].unsqueeze(0)
+
+        uncertainty = self.get_uncertainty_quant(proprio_diffs, contact_diffs, forces, actions, tool_type, padding_masks)
+
+        # uncertainty_list = [probs2inputs(uncertainty).unsqueeze(0)]
+        # for i in range(self.num_tools):
+        #     for j in range(self.num_states):
+        #         tb = tool_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim = 1)
+        #         sb = tool_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim = 1)
+        #         print("Uncertainty:\n", tb * sb * uncertainty)
+        # print("Uncertainty: ",
+        #     uncertainty)
 
         return {
             'options_class': torch.cat(ol_list, dim = 0),
@@ -267,7 +289,12 @@ class Options_Sensor(Proto_Macromodel):
 
             ol_list = self.get_logits(proprio_diffs, contact_diffs, force_clipped, actions, tool_type)
 
-            return np.random.choice(ol_list).max(1)[1]
+            # for i in range(self.num_ensembles):
+            #     print(F.softmax(ol_list[i], dim = 1))
+
+            probs = F.softmax(np.random.choice(ol_list), dim = 1)
+
+            return probs.max(1)[1]
 
 class Options_ConfNet(Proto_Macromodel):
     def __init__(self, model_folder, model_name, info_flow, macro_action_size, num_tools, num_states, num_options, dropout_prob, device = None):
@@ -290,10 +317,10 @@ class Options_ConfNet(Proto_Macromodel):
 
         self.macro_action_size = macro_action_size
         self.z_dim = 32
-        self.nl = 3
+        self.nl = 4
         self.num_ensembles = 1
 
-        self.dropout_prob = dropout_prob
+        self.dropout_prob = 0.1 # dropout_prob
 
         # first number indicates index in peg vector, second number indicates number in ensemble
         # self.model_dict = {}
@@ -301,7 +328,10 @@ class Options_ConfNet(Proto_Macromodel):
         #     for j in range(self.num_states):
         #         self.model_dict[(i,j)] = (\
         #             ResNetFCN(save_folder + "_expand_state" + str(i) + str(j), load_folder + "_expand_state" + str(i) + str(j),\
-        #             self.macro_action_size, self.z_dim, 1, device = self.device).to(self.device),\
+        #             self.macro_action_size, self.z_dim, 1, dropout = True, dropout_prob = dropout_prob,\
+        #              uc = False, device = self.device).to(self.device),\
+        #             # FCN(save_folder + "_expand_state" + str(i) + str(j), load_folder + "_expand_state" + str(i) + str(j),\
+        #             # self.macro_action_size, self.z_dim, 1, device = self.device).to(self.device),\
         #              ResNetFCN(save_folder + "_conf_pred" + str(i) + str(j), load_folder + "_conf_pred" + str(i) + str(j),\
         #             self.z_dim, self.num_options, self.nl, dropout = True, dropout_prob = dropout_prob,\
         #              uc = False, device = self.device).to(self.device)\
@@ -332,31 +362,87 @@ class Options_ConfNet(Proto_Macromodel):
         # assert self.num_tools == peg_type.size(1), "Incorrectly sized tool vector for model"
         assert self.num_states == state_type.size(1), "Incorrectly sized option vector for model"
 
+        cf_list = []
+
+        # print("Start")
+        # print("Start pos\n", macro_action[:,:3])
+        # print("Velo\n", macro_action[:, 3:6])
+        # print("End pos\n",macro_action[:,-4:-1])
+        # print("Num steps\n", macro_action[:, -1])
         # for key in self.model_dict.keys():
         #     expand_state, conf_pred = self.model_dict[key]
         #     i, j = key #peg, option
-        #     # peg_bool = peg_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
+        #     tool_bool = tool_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
         #     state_bool = state_type[:,j].unsqueeze(1).repeat_interleave(self.num_options, dim=1)
 
-        #     conf_logits += state_bool * conf_pred(expand_state(macro_action)) #peg_bool *
+        #     # print(torch.where((tool_bool * state_bool) != 0, F.softmax(conf_pred(expand_state(macro_action)), dim = 1), torch.zeros_like(tool_bool)))
 
-        # return conf_logits
+        #     conf_logits += tool_bool * state_bool * conf_pred(expand_state(macro_action)) #peg_bool *
 
-        cf_list = []
+        #     # print(F.softmax(conf_logits))
+
+        # # print("End")
+        # cf_list.append(conf_logits)        
 
         for i in range(self.num_ensembles):
             expand_state, conf_pred = self.model_dict[i]
 
             cf_list.append(conf_pred(torch.cat([expand_state(macro_action), tool_type, state_type], dim =1)))
 
-        return cf_list           
+        return cf_list
+
+    def transform_action(self, action):
+        p0 = action[:,0:2]
+        p1 = action[:,2:4]
+        pmid = p0 + (p1 - p0) / 2
+
+        slide = p1 - p0
+
+        d0 = p0.norm(p=2, dim =1)
+        d1 = p1.norm(p=2, dim =1)
+        dmid = pmid.norm(p=2, dim=1)
+
+        angle0 = torch.atan2(p0[:,1], p0[:,0])
+        angle1 = torch.atan2(p1[:,1], p1[:,0])
+        anglemid = torch.atan2(pmid[:,1], pmid[:,0])
+
+        tangent_dist = torch.where(d0 == d1, dmid, torch.zeros_like(dmid))
+        init_dist = torch.where(d0 < d1, d0, torch.zeros_like(d0))
+        goal_dist = torch.where(d1 < d0, d1, torch.zeros_like(d1))
+
+        tangent_angle = torch.where(d0 == d1, anglemid, torch.zeros_like(dmid)) 
+        init_angle = torch.where(d0 < d1, angle0, torch.zeros_like(d0))
+        goal_angle = torch.where(d1 < d0, angle1, torch.zeros_like(d1))
+
+        distance2action = tangent_dist + init_dist + goal_dist
+        angle2action = T_angle(tangent_angle + init_angle + goal_angle)
+
+        action_distance = slide.norm(p=2, dim=1)
+        action_angle = T_angle(torch.atan2(slide[:,1], slide[:,0]))
+
+        relative_angle = T_angle(np.pi - angle2action + action_angle)
+
+        return torch.cat([p0, p1, action_distance.unsqueeze(1), action_angle.unsqueeze(1),\
+            distance2action.unsqueeze(1), angle2action.unsqueeze(1), relative_angle.unsqueeze(1)], dim =1)
 
     def forward(self, input_dict):
         macro_action = input_dict["macro_action"].to(self.device)
         tool_type = input_dict["tool_type"].to(self.device)
         state_type = input_dict["state_type"].to(self.device)
 
-        cf_list = self.get_pred(macro_action, tool_type, state_type)
+        macro_action_t = self.transform_action(macro_action)
+
+        # print(macro_action_t[:5,:])
+
+        cf_list = self.get_pred(macro_action_t, tool_type, state_type)
+
+        # print(macro_action[:,:3])
+        conf_logits = cf_list[0]
+        # for i in range(self.num_tools):
+        #     for j in range(self.num_states):
+        #         tb = tool_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim = 1)
+        #         sb = tool_type[:,i].unsqueeze(1).repeat_interleave(self.num_options, dim = 1)
+        #         print("Conf Probs: ", tb*sb*F.softmax(conf_logits, dim = 1))
 
         inputs_list =[]
 
@@ -369,245 +455,56 @@ class Options_ConfNet(Proto_Macromodel):
         }
 
     def logits(self, peg_type, macro_action):
-        with torch.no_grad():
-            self.eval()
-            batch_size = peg_type.size(0)
-            logits_list = []
+        self.eval()
+        batch_size = peg_type.size(0)
+        logits_list = []
+        macro_action_t = self.transform_action(macro_action)
 
-            for i in range(self.num_states):
-                state_type = torch.zeros(self.num_states).float().to(self.device).unsqueeze(0).repeat_interleave(batch_size, dim = 0)
-                state_type[:, i] = 1.0
-                conf_logits = self.get_pred(macro_action, peg_type, state_type)
+        ma = torch.cat([macro_action[:,:2], macro_action[:,-4:-1]], dim = 1)
+        for i in range(self.num_states):
+            state_type = torch.zeros(self.num_states).float().to(self.device).unsqueeze(0).repeat_interleave(batch_size, dim = 0)
+            state_type[:, i] = 1.0
+            conf_logits = self.get_pred(macro_action_t, peg_type, state_type)[0]
 
-                # print(conf_logits.size())
-
-                # print("Peg Type: ", peg_type)
-                # print("Option_type: ", option_type)
-                # print("Conf Probs: ", F.softmax(conf_logits, dim = 1))
-
-                logits_list.append(conf_logits.unsqueeze(1))
-
-            return torch.cat(logits_list, dim = 1)
-
-    def conf_logprobs(self, peg_type, state_type, macro_action, obs_idx):
-        with torch.no_grad():
-            self.eval()
-            conf_logits = self.get_pred(macro_action, peg_type, state_type)
-
-            uninfo_constant = 0.2
-                
-            conf_logprobs = F.log_softmax(torch.log(F.softmax(conf_logits, dim = 1) + uninfo_constant), dim = 1)
-
-            # print(conf_logprobs)
-            # print(obs_idx)
-
-            conf_logprob = conf_logprobs[torch.arange(conf_logprobs.size(0)), obs_idx]
-
-            # print(conf_logprob)
+            # print(conf_logits.size())
 
             # print("Peg Type: ", peg_type)
-            # print("Option_Type: ", option_type)
-            # print("Macro action: ", macro_action)
-            # print("Obs Idx: ", obs_idx)
-            # print("Conf probs: ", F.softmax(conf_logits, dim = 1))
-            # print("Conf probs less: ", torch.exp(conf_logprobs))
-            # print("Conf logprobs: ", conf_logprobs)
-            # print("Conf logprob: ", conf_logprob)
+            # print("Option_type: ", option_type)
+            # print("Conf Probs: ", F.softmax(conf_logits, dim = 1))
 
-            return conf_logprob
+            logits_list.append(conf_logits.unsqueeze(1))
 
-# class Options_ConfMat(Proto_Macromodel):
-#     def __init__(self, model_folder, model_name, info_flow, num_tools, num_options, device = None):
-#         super().__init__()
+        return torch.cat(logits_list, dim = 1)
 
-#         if info_flow[model_name]["model_folder"] != "":
-#             load_folder = info_flow[model_name]["model_folder"] + model_name
-#         else:
-#             load_folder = model_folder + model_name
+    def conf_logprobs(self, peg_type, state_type, macro_action, obs_idx):
+        self.eval()
+        # print(macro_action)
+        batch_size = macro_action.size(0)
 
-#         save_folder = model_folder + model_name 
+        macro_action_t = self.transform_action(macro_action)
 
-#         self.device = device
-#         self.model_list = []
+        conf_logits = self.get_pred(macro_action_t, peg_type, state_type)[0]
 
-#         self.num_tools = num_tools
-#         self.num_options = num_options
+        if batch_size == 1:
+            uninfo_constant = 0.2            
+            conf_logprobs = F.log_softmax(torch.log(F.softmax(conf_logits, dim = 1) + uninfo_constant), dim = 1)
+        else:
+            conf_logprobs = F.log_softmax(conf_logits, dim=1)
 
-#         self.conf_mat = Params(save_folder + "_conf_mat", load_folder + "_conf_mat",\
-#          (self.num_tools, self.num_options, self.num_options), device = self.device)\
-                 
-#         self.conf_mat().data[:] = 0
-#         self.epoch_num = 0
+        # print(conf_logprobs)
+        # print(obs_idx)
 
-#         self.model_list.append(self.conf_mat)
+        conf_logprob = conf_logprobs[torch.arange(conf_logprobs.size(0)), obs_idx]
 
-#         if info_flow[model_name]["model_folder"] != "":
-#             self.load(info_flow[model_name]["epoch_num"])
+        # print(conf_logprob)
 
-#     def forward(self, input_dict):
-#         peg_type = input_dict["peg_type"].to(self.device)
-#         option_type = input_dict["option_type"].to(self.device)
-#         option_est = input_dict["options_est"].to(self.device)
-#         epoch = input_dict["epoch"].to(self.device)
+        # print("Peg Type: ", peg_type)
+        # print("Option_Type: ", option_type)
+        # print("Macro action: ", macro_action)
+        # print("Obs Idx: ", obs_idx)
+        # print("Conf probs: ", F.softmax(conf_logits, dim = 1))
+        # print("Conf probs less: ", torch.exp(conf_logprobs))
+        # print("Conf logprobs: ", conf_logprobs)
+        # print("Conf logprob: ", conf_logprob)
 
-#         assert self.num_tools == peg_type.size(1), "Incorrectly sized tool vector for model"
-#         assert self.num_options == option_type.size(1), "Incorrectl sized option vector for model"
-
-#         rows = peg_type.max(1)[1]
-#         cols = option_type.max(1)[1]
-#         widths = option_est.clone()
-        
-#         for i in range(rows.size(0)):
-#             self.conf_mat().data[rows[i], cols[i], widths[i]] += 1
-
-#         if epoch != self.epoch_num and epoch % 10 == 0:
-#             self.epoch_num = epoch
-#             for i in range(self.num_tools):
-#                 print("Confusion Matrix " + str(i) + ":\n", self.conf_mat().data[i])
-
-#     def logits(self, peg_type, macro_action):
-#         self.eval()
-#         logits_list = []
-
-#         assert self.num_tools == peg_type.size(1), "Incorrectly sized tool vector for model"
-
-#         for j in range(peg_type.size(0)):
-#             row = peg_type[j].max(0)[1]
-#             logits_list.append(self.conf_mat().data[row].unsqueeze(0))
-
-#         return torch.log(torch.cat(logits_list, dim = 0))
-
-#     def conf_logprobs(self, peg_type, option_type, macro_action, obs_idx):
-#         self.eval()
-
-#         assert self.num_tools == peg_type.size(1), "Incorrectly sized tool vector for model"
-#         assert self.num_options == option_type.size(1), "Incorrectl sized option vector for model"
-
-#         logprobs = torch.zeros_like(peg_type)
-
-#         uninfo_constant = 0.2
-
-#         for i in range(peg_type.size(0)):
-#             row = peg_type[i].max(0)[1]
-#             col = option_type[i].max(0)[1]
-
-#             logprobs[i] = F.log_softmax(torch.log((self.conf_mat().data[row, col] / torch.sum(self.conf_mat().data[row, col])) + uninfo_constant), dim = 0)
-
-#         logprob = logprobs[torch.arange(logprobs.size(0)), obs_idx]
-
-#         # print(obs_idx)
-#         # print(torch.exp(logprob))
-
-#         return logprob 
-
-# class Distance_Predictor(Proto_Macromodel):
-#     def __init__(self, model_folder, model_name, info_flow, macro_action_size, num_tools, num_options, device = None):
-#         super().__init__()
-
-#         if info_flow[model_name]["model_folder"] != "":
-#             load_folder = info_flow[model_name]["model_folder"] + model_name
-#         else:
-#             load_folder = model_folder + model_name
-
-#         save_folder = model_folder + model_name 
-
-#         self.device = device
-#         self.model_list = []
-#         self.ensemble_list = []
-
-#         self.num_tools = num_tools
-#         self.num_options = num_options
-#         self.tool_idx = tuple(itertools.combinations_with_replacement(range(self.num_tools), 2))
-#         self.option_idx = tuple(itertools.combinations_with_replacement(range(self.num_options), 2))
-#         self.num_t = len(self.tool_idx)
-#         self.num_o = len(self.option_idx)
-
-#         # print(self.tool_idx)
-#         # print(self.option_idx)
-#         self.macro_action_size = macro_action_size
-#         self.z_dim = 32
-#         self.nl = 4
-
-#         # first number indicates index in peg vector, second number indicates number in ensemble
-#         self.model_dict = {}
-#         for i in range(self.num_t):
-#             for j in range(self.num_o):
-#                 self.model_dict[(i,j)] = (\
-#                     FCN(save_folder + "_expand_state" + str(i) + str(j), load_folder + "_expand_state" + str(i) + str(j),\
-#                     2 * self.macro_action_size, self.z_dim, 1, device = self.device).to(self.device),\
-#                      ResNetFCN(save_folder + "_conf_pred" + str(i) + str(j), load_folder + "_conf_pred" + str(i) + str(j),\
-#                     self.z_dim, 1, self.nl, device = self.device).to(self.device)\
-#                      )
-
-#         for key in self.model_dict.keys():
-#             for model in self.model_dict[key]:
-#                 self.model_list.append(model)
-
-#         if info_flow[model_name]["model_folder"] != "":
-#             self.load(info_flow[model_name]["epoch_num"])
-
-#     def get_pred(self, macro_action0, macro_action1, tool0, tool1, option0, option1):
-#         distances = torch.zeros(macro_action0.size(0)).float().to(self.device).unsqueeze(1)
-
-#         assert self.num_tools == tool1.size(1), "Incorrectly sized tool vector for model"
-#         assert self.num_options == option1.size(1), "Incorrectly sized option vector for model"
-
-#         for key in self.model_dict.keys():
-#             expand_state, distance_pred = self.model_dict[key]
-#             i, j = key #peg_idx_idx, option_idx_idx
-#             t0, t1 = self.tool_idx[i]
-#             o0, o1 = self.option_idx[j]
-
-#             if t0 == t1:
-#                 tb0 = tool0[:,t0].unsqueeze(1)
-#                 tb1 = tool1[:,t1].unsqueeze(1)
-#             else:
-#                 tb0 = tool0[:,t0].unsqueeze(1) + tool0[:,t1].unsqueeze(1)
-#                 tb1 = tool1[:,t1].unsqueeze(1) + tool1[:,t0].unsqueeze(1)
-
-#             if o0 == o1:
-#                 ob0 = option0[:,o0].unsqueeze(1)
-#                 ob1 = option1[:,o1].unsqueeze(1)
-#             else:
-#                 ob0 = option0[:,o0].unsqueeze(1) + option0[:,o1].unsqueeze(1)
-#                 ob1 = option1[:,o1].unsqueeze(1) + option1[:,o0].unsqueeze(1)
-
-#             distances += tb0 * tb1 * ob0 * ob1 * torch.abs(distance_pred(expand_state(torch.cat([macro_action0, macro_action1], dim =1))))
-
-#         return distances.squeeze()
-
-#     def forward(self, input_dict):
-#         macro_action0 = input_dict["macro_action"].to(self.device)
-#         tool_type0 = input_dict["tool_type"].to(self.device)
-#         option_type0 = input_dict["option_type"].to(self.device)
-#         permutation = input_dict["permutation"]
-
-#         macro_action1 = macro_action0[permutation]
-#         tool_type1 = tool_type0[permutation]
-#         option_type1 = option_type0[permutation]
-
-#         distances = self.get_pred(macro_action0, macro_action1, tool_type0, tool_type1, option_type0, option_type1)
-
-#         return {
-#             'distances': distances,
-#         }
-
-#     def distances(self, tool_type, macro_action):
-#         self.eval()
-#         batch_size = tool_type.size(0)
-#         distances = torch.zeros(batch_size).float().to(device)
-
-#         for i in range(self.num_options - 1):
-#             for j in range(i + 1, self.num_options):
-#                 if i == j:
-#                     continue
-
-#                 option_i = torch.zeros((batch_size, self.num_options)).float().to(self.device)
-#                 option_j = torch.zeros((batch_size, self.num_options)).float().to(self.device)
-
-#                 option_i[:, i] = 1.0
-#                 option_j[:,j] = 1.0
-
-#                 distances += self.get_pred(macro_action, macro_action, tool_type, tool_type, option_i, option_j)
-
-#         return distances
+        return conf_logprob
