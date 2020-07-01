@@ -28,10 +28,10 @@ class Custom_DataLoader(Dataset):
         ###############################################
         #### Create Filename list of Datasets #####
         ###############################################
-        # filename_list = []
-        # for file in os.listdir(dataset_path):
-        #     if file.endswith(".h5"): # and len(filename_list) < 20:
-        #         filename_list.append(dataset_path + file)
+        filename_list = []
+        for file in os.listdir(dataset_path):
+            if file.endswith(".h5"): # and len(filename_list) < 20:
+                filename_list.append(dataset_path + file)
 
         self.device = device
         self.transform = transform
@@ -59,66 +59,80 @@ class Custom_DataLoader(Dataset):
             ###########################################################            
             self.max_length = 0
 
-            with open(self.dataset_path + "datacollection_params.yml", 'r') as ymlfile:
-                cfg1 = yaml.safe_load(ymlfile)
+            # with open(self.dataset_path + "datacollection_params.yml", 'r') as ymlfile:
+            #     cfg1 = yaml.safe_load(ymlfile)
 
-            tool_types = cfg1['peg_names']
-            hole_types = cfg1['hole_names']
-            option_types = cfg1['fit_names']
+            # tool_vectors = cfg1['peg_names']
+            # hole_types = cfg1['hole_names']
+            # option_types = cfg1['fit_names']
 
             num_trajectories = cfg['custom_params']['num_trajectories']
             min_length = cfg['custom_params']['min_length']
 
             self.num_trajectories = num_trajectories
             self.min_length = min_length
-            self.option_types = option_types
-            self.tool_types = tool_types
-            self.hole_types = hole_types
+            # self.option_types = option_types
+            # self.tool_types = tool_types
+            # self.hole_types = hole_types
 
             self.dev_ratio = dev_num / (9 * num_trajectories)
 
             self.idx_dict["min_length"] = self.min_length
-            self.idx_dict["option_types"] = self.option_types
-            self.idx_dict["tool_types"] = self.tool_types
-            self.idx_dict["hole_types"] = self.hole_types
+            # self.idx_dict["option_types"] = self.option_types
+            # self.idx_dict["tool_types"] = self.tool_types
+            # self.idx_dict["hole_types"] = self.hole_types
+            self.idx_dict["epochs"] = []
 
-            for idx in range(num_trajectories):
-                for peg in tool_types:
+            # for idx in range(num_trajectories):
+            #     for peg in tool_types:
                     
-                    train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
-                    dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
+            #         train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
+            #         dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
 
-                    for hole in hole_types:
+            #         for hole in hole_types:
 
-                        filename = self.dataset_path + peg + "_" + hole + "_" + str(idx + 1).zfill(4) + ".h5" 
+            #             filename = self.dataset_path + peg + "_" + hole + "_" + str(idx + 1).zfill(4) + ".h5" 
 
-                        dataset = read_h5(filename)
+            #             dataset = read_h5(filename)
 
-                        if "proprio" not in dataset.keys():
-                            continue
+            #             if "proprio" not in dataset.keys():
+            #                 continue
 
-                        proprios = np.array(dataset['proprio'])
-                        length = proprios.shape[0]
-                        dataset.close()
+            #             proprios = np.array(dataset['proprio'])
+            #             length = proprios.shape[0]
+            #             dataset.close()
+            for filename in filename_list:
+                train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
+                dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
+                dataset = read_h5(filename)
+                epoch = dataset["epoch"][0] - 1
+                # epoch = 3 * (int(filename[-7:-4]) // 3)
+                proprios = np.array(dataset['proprio'])
+                length = proprios.shape[0] 
+                dataset.close()               
 
-                        if length < self.min_length:
-                            continue
+                if epoch not in self.idx_dict["epochs"]:
+                    self.idx_dict["epochs"].append(epoch)
 
-                        if self.max_length < length:
-                            self.max_length = int(length)
+                if length < self.min_length:
+                    continue
 
-                        if train_val_bool == 1:
-                            self.idx_dict['train'][self.train_length] = filename
-                            self.train_length += 1
-                        else:
-                            self.idx_dict['val'][self.val_length] = filename
-                            self.val_length += 1
+                if self.max_length < length:
+                    self.max_length = int(length)
 
-                        if dev_bool == 0:
-                            self.idx_dict['dev'][self.dev_length] = filename
-                            self.dev_length += 1
+                if train_val_bool == 1:
+                    self.idx_dict['train'][self.train_length] = (filename, self.idx_dict["epochs"].index(epoch))
+                    self.train_length += 1
+                else:
+                    self.idx_dict['val'][self.val_length] = (filename, self.idx_dict["epochs"].index(epoch))
+                    self.val_length += 1
+
+                if dev_bool == 0:
+                    self.idx_dict['dev'][self.dev_length] = (filename, self.idx_dict["epochs"].index(epoch))
+                    self.dev_length += 1
 
             self.idx_dict["max_length"] = self.max_length
+
             ##########################################################    
             ##### End of Project Specific Code #######################
             ##########################################################
@@ -129,6 +143,8 @@ class Custom_DataLoader(Dataset):
             self.train_length = len(list(self.idx_dict['train'].keys()))
             self.val_length = len(list(self.idx_dict['val'].keys()))
             self.dev_length = len(list(self.idx_dict['dev'].keys()))
+
+        cfg['num_policies'] = len(self.idx_dict["epochs"])
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
@@ -154,7 +170,7 @@ class Custom_DataLoader(Dataset):
         ###########################################################
         ##### Project Specific Code Here ##########################
         ###########################################################
-        dataset = read_h5(self.idx_dict[key_set][idx])
+        dataset = read_h5(self.idx_dict[key_set][idx][0])
         max_traj_length = np.array(dataset['proprio']).shape[0]
 
         max_length = self.idx_dict["max_length"]
@@ -174,37 +190,46 @@ class Custom_DataLoader(Dataset):
         for key in self.dataset_keys:
             if key == 'action':
                 sample[key] = np.array(dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
-                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)             
+                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
+            elif key == 'hole_sites':
+                sample[key] = np.array(dataset[key])
+            elif key == 'rgbd':
+                sample[key + "_last"] = np.array(dataset[key][idx1-1])
+                sample[key + "_first"] = np.array(dataset[key][idx0])
             elif key == 'force_hi_freq':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
-            elif key == 'proprio':   
+            elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
                 init_proprio = sample[key][0,:6]
                 sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
+                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"],\
+                 np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
             elif key == 'contact':
                 sample[key] = np.array(dataset[key][idx0:idx1])
                 sample[key + "_diff"] = sample[key][1:].astype(np.int16) - sample[key][:-1].astype(np.int16) 
-                sample[key] = np.concatenate([sample[key], np.zeros((padded))], axis = 0)
-                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"], np.zeros((padded))], axis = 0)  
-            elif key == 'peg_type' or key == 'hole_type' or key == 'macro_action' or key == 'fit_type':
+                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
+                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"],\
+                 np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0) 
+            elif key == 'peg_vector' or key == 'hole_vector' or key == 'macro_action' or key == 'fit_vector':
                 sample[key] = np.array(dataset[key])
 
-                if key == "fit_type":
-                    sample["option_type"] = sample[key]
+                if key == "fit_vector":
+                    sample["option_vector"] = sample[key]
                     sample["fit_label"] = sample[key].argmax(0)
-                elif key == "peg_type":
-                    sample["tool_type"] = sample[key]
-                elif key == "hole_type":
-                    sample["state_type"] = sample[key]
-                   
-
+                elif key == "peg_vector":
+                    sample["tool_vector"] = sample[key]
+                    sample["tool_idx"] = np.array(sample[key].argmax(0))
+                elif key == "hole_vector":
+                    sample["state_vector"] = sample[key]
+                    sample["state_idx"] = np.array(sample[key].argmax(0))                   
+                    sample["cand_idx"] = np.array(sample[key].argmax(0))
         dataset.close()
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
-        sample["macro_action"] = np.concatenate([init_proprio[:2], sample['macro_action'][6:]]) #, np.array([unpadded])])
+        sample["macro_action"] = init_proprio[:2]
+        sample["pol_idx"] = np.array(self.idx_dict[key_set][idx][1])
 
         ##########################################################    
         ##### End of Project Specific Code #######################

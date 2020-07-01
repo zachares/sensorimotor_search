@@ -14,6 +14,7 @@ import torch.nn.functional as F
 sys.path.insert(0, "../supervised_learning/") 
 
 from multinomial import *
+from collections import OrderedDict
 
 '''
 Data Collection and Recording Functions
@@ -25,15 +26,17 @@ def plot_image(image):
     
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
+		if key not in obs_dict.keys() and key != "rgbd":
+			raise Exception(key, " measurement missing from dictionary")
+
 		if key == "rgbd":
-			continue
+			# plot_image(obs_dict['image'])
+			# a = input(" ")
 			obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.uint8)
-			obs0 = resize(obs0, (128, 128))
 			obs0 = np.transpose(obs0, (2, 1, 0))
 			obs0 = np.expand_dims(obs0, axis = 0)
 
 			obs1 = np.rot90(obs_dict['depth'], k = 2).astype(np.uint8)
-			obs1 = resize(obs1, (128, 128))
 			obs1 = np.expand_dims(np.expand_dims(obs1, axis = 0), axis = 0)
 
 			obs = np.concatenate([obs0, obs1], axis = 1)
@@ -47,10 +50,27 @@ def save_obs(obs_dict, keys, array_dict):
 			array_dict[key] = [obs]
 
 def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
-	tensor_dict = {}
-	for key in numpy_dict.keys():
-		tensor_dict[key] = torch.from_numpy(np.concatenate(numpy_dict[key], axis = 0)).float().unsqueeze(0).to(device)
+	tensor_dict = OrderedDict()
+	for key, value in numpy_dict.items():
+		if type(value) == list:
+			tensor_dict[key] = torch.from_numpy(np.concatenate(value, axis = 0)).float().unsqueeze(0).to(device)
+		else:
+			tensor_dict[key] = torch.from_numpy(value).float().to(device)
+
 	return tensor_dict
+
+def copy_dict(o_dict):
+	n_dict = OrderedDict()
+	for k, v in o_dict.items():
+		n_dict[k] = v[:]
+		# if type(v) == list or (type(v) == np.ndarray and len(v.shape) > 0):
+		# 	print("LIST ARRAY\n", k, "\n", v)
+		# 	n_dict[k] = v[:]
+		# else:
+		# 	print("scalar\n", k, "\n", v)
+		# 	n_dict[k] = v
+
+	return n_dict
 
 def print_histogram(probs, labels):
 	block_length = 10 # magic number
@@ -101,6 +121,8 @@ def print_histogram(probs, labels):
 	print(string)
 	print("\n")
 
+def toTorch(array, device):
+    return torch.from_numpy(array).to(device).float()
 '''
 Decision Functions
 '''
@@ -109,9 +131,9 @@ def gen_state_dict(num_cand, substate_names, option_names, constraint_type):
 	num_substates = len(substate_names)
 	state_dict = {}
 
-	if constraint_type == 0:
+	if constraint_type == 0: # no restrictions
 		state_dict["states"] = tuple(itertools.product(range(num_substates), repeat = num_cand))
-	elif constraint_type == 1:
+	elif constraint_type == 1: # no copies
 		state_dict["states"] = tuple(itertools.permutations(range(num_substates), num_cand))
 	elif constraint_type == 2:
 		if num_substates != 2:
@@ -143,62 +165,6 @@ def gen_state_dict(num_cand, substate_names, option_names, constraint_type):
 	state_dict["num_states"] = len(state_dict["states"])
 
 	return state_dict
-
-def pairwise_divJS(logits): 
-	'''
-	takes a set of logits and calculates the sum of the 
-	jensen-shannon divergences of all pairwise combinations
-	of the distributions 
-
-	logits of size batch_size x num_distributions x num_options
-	'''
-	div_js = torch.zeros(logits.size(0)).to(logits.device).float()
-
-	for idx0 in range(logits.size(1) - 1):
-		for idx1 in range(idx0 + 1, logits.size(1)):
-			if idx0 == idx1:
-				continue
-
-			inputs0 = logits2inputs(logits[:,idx0])
-			inputs1 = logits2inputs(logits[:,idx1])
-
-			djs_distrs = 0.5 * (inputs2KL(inputs0, inputs1) + inputs2KL(inputs1, inputs0))
-			div_js[:] += djs_distrs 
-
-	return div_js
-
-def gen_conf_mat(num_options, num_actions, uncertainty_range):
-	if num_actions == 0:
-		return np.expand_dims(create_confusion(num_options, uncertainty_range), axis = 0)
-	else:
-		conf_mat = []
-		for i in range(num_actions):
-			conf_mat.append(np.expand_dims(create_confusion(num_options, uncertainty_range), axis = 0))
-
-		return np.concatenate(conf_mat, axis = 0)
-
-def create_confusion(num_options, u_r):
-	uncertainty = u_r[0] + (u_r[1] - u_r[0]) * np.random.random_sample()
-	confusion_matrix = uncertainty * np.random.random_sample((num_options, num_options))
-
-	confusion_matrix[range(num_options), range(num_options)] = 1.0
-
-	confusion_matrix = confusion_matrix / np.tile(np.expand_dims(np.sum(confusion_matrix, axis = 1), axis = 1), (1, num_options))
-
-	return confusion_matrix
-
-def hole_dict(env, hole_names):
-	hole_info = {}
-	for i, hole_name in enumerate(hole_names):
-		env.update_hole_sites()
-		sites = env.hole_sites[hole_name]
-		top = sites[0]
-		top_height = top[2]
-		hole_info[i] = {}
-		hole_info[i]["pos"] = top
-		hole_info[i]["name"] = hole_name
-		hole_info[i]["top_height"] = top_height
-	return hole_info
 '''
 Control Functions
 '''
@@ -227,109 +193,55 @@ def slidepoints(workspace_dim, tol, num_trajectories = 10):
 
 	return np.concatenate(c_point_list, axis = 0)
 
-def initpoints(workspace_dim, num_trajectories = 50000):
-	theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_trajectories)
-	r_init = np.random.uniform(low=0, high =workspace_dim, size = num_trajectories)
+def initpoints(workspace_dim, num_samples = 50000):
+    theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_samples)
+    r_init = np.random.uniform(low=0, high =workspace_dim, size = num_samples)
 
-	c_point_list = []
+    c_point_list = []
 
-	for idx in range(theta_init.size):
-		theta0 = theta_init[idx]
-		x_init = r_init[idx] * np.cos(theta0)
-		y_init = r_init[idx] * np.sin(theta0)
+    for idx in range(theta_init.size):
+        theta0 = theta_init[idx]
+        x_init = r_init[idx] * np.cos(theta0)
+        y_init = r_init[idx] * np.sin(theta0)
 
-		# print("Initial point: ", x_init, y_init)
-		c_point_list.append(np.expand_dims(np.array([x_init, y_init, 0]), axis = 0))
+        # print("Initial point: ", x_init, y_init)
+        c_point_list.append(np.array([x_init, y_init, 0]))
 
-	return np.concatenate(c_point_list, axis = 0)
+    return c_point_list
 
-def movetogoal(env, cand_idx, cfg, points_list, point_idx, obs, obs_dict = None):
-	kp = np.array(cfg['control_params']['kp'])
-	step_threshold = cfg['control_params']['step_threshold']
-	tol = cfg['control_params']['tol']
-	display_bool = cfg['logging_params']['display_bool']
-	dataset_keys = cfg['dataset_keys']
+def movetogoal_woutobs(env, cfg, goal):
+    kp = np.array(cfg['control_params']['kp'])
+    step_threshold = cfg['control_params']['step_threshold']
+    tol = cfg['control_params']['tol']
+    display_bool = cfg['logging_params']['display_bool']
 
-	top_goal = env.hole_sites[cand_idx][1]
-	step_count = 0
-	goal = points_list[point_idx][0] + top_goal
-	point_type = points_list[point_idx][1]
-	done_bool = False
-	top_height = top_goal[2]
-	# glb_ts = 0
+    top_goal = env.hole_sites[env.cand_idx][1]
+    step_count = 0
+    # glb_ts = 0
 
-	while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
-		action = kp * env.get_eef_pos_err(goal)
+    while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
+        action = kp * env.get_eef_pos_err(goal + top_goal)
 
-		# noise = np.random.normal(0.0, 0.1, action.size)
-		# noise[2] = -1.0 * abs(noise[2])
-		# action += noise_parameters * noise
+        # noise = np.random.normal(0.0, 0.1, action.size)
+        # noise[2] = -1.0 * abs(noise[2])
+        # action += noise_parameters * noise
+        # curr_pose = env._get_eepos()
 
-		obs['action'] = env.controller.transform_action(action)
+        obs, reward, done, info = env.step(action, ignore=True)
+        obs["action"] = action
+        
+        if display_bool:
+            env.render()
 
-		if point_type == 1 and obs_dict is not None:
-			save_obs(copy.deepcopy(obs), dataset_keys, obs_dict)
-			# curr_pose = env._get_eepos()
+        # if display_bool:
+        #   plt.scatter(glb_ts, obs['force'][2])
+        #   # plt.scatter(glb_ts, obs['contact'])
+        #   plt.pause(0.001)
+        # glb_ts += 1
 
-		obs, reward, done, info = env.step(action)
-		obs['proprio'][:3] = obs['proprio'][:3] - top_goal
-		
-		if display_bool:
-			env.render()
+        step_count += 1
 
-		# if display_bool:
-		# 	plt.scatter(glb_ts, obs['force'][2])
-		# 	# plt.scatter(glb_ts, obs['contact'])
-		# 	plt.pause(0.001)
-		# glb_ts += 1
-
-		step_count += 1
-
-	if point_type == -1:
-		print("Step count: ", step_count)
-
-	point_idx += 1
-
-	if obs_dict is not None:
-		return point_idx, done_bool, obs, obs_dict
-	else:
-		return point_idx, done_bool, obs
-
-def movetogoal_woutobs(env, cand_idx, cfg, goal):
-	kp = np.array(cfg['control_params']['kp'])
-	step_threshold = cfg['control_params']['step_threshold']
-	tol = cfg['control_params']['tol']
-	display_bool = cfg['logging_params']['display_bool']
-	dataset_keys = cfg['dataset_keys']
-
-	top_goal = env.hole_sites[cand_idx][1]
-	step_count = 0
-	goal = points_list[point_idx][0] + top_goal
-	point_type = points_list[point_idx][1]
-	done_bool = False
-	top_height = top_goal[2]
-	# glb_ts = 0
-
-	while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
-		action = kp * env.get_eef_pos_err(goal)
-
-		# noise = np.random.normal(0.0, 0.1, action.size)
-		# noise[2] = -1.0 * abs(noise[2])
-		# action += noise_parameters * noise
-		# curr_pose = env._get_eepos()
-
-		obs, reward, done, info = env.step(action)
-		
-		if display_bool:
-			env.render()
-
-		# if display_bool:
-		# 	plt.scatter(glb_ts, obs['force'][2])
-		# 	# plt.scatter(glb_ts, obs['contact'])
-		# 	plt.pause(0.001)
-		# glb_ts += 1
-
-		step_count += 1
+    return obs
 
 def move_down(env, display_bool):
 	obs, reward, done, info = env.step(np.array([0,0, -0.1]))
@@ -391,3 +303,101 @@ def T_angle(angle):
     case4 = torch.where(angle < TWO_PI, ones, zeros) * torch.where(angle > 0, angle, zeros)
 
     return case1 + case2 + case3 + case4
+
+'''
+Old Functions
+'''
+def pairwise_divJS(logits): 
+	'''
+	takes a set of logits and calculates the sum of the 
+	jensen-shannon divergences of all pairwise combinations
+	of the distributions 
+
+	logits of size batch_size x num_distributions x num_options
+	'''
+	div_js = torch.zeros(logits.size(0)).to(logits.device).float()
+
+	for idx0 in range(logits.size(1) - 1):
+		for idx1 in range(idx0 + 1, logits.size(1)):
+			if idx0 == idx1:
+				continue
+
+			inputs0 = logits2inputs(logits[:,idx0])
+			inputs1 = logits2inputs(logits[:,idx1])
+
+			djs_distrs = 0.5 * (inputs2KL(inputs0, inputs1) + inputs2KL(inputs1, inputs0))
+			div_js[:] += djs_distrs 
+
+	return div_js
+
+def gen_conf_mat(num_options, num_actions, uncertainty_range):
+	if num_actions == 0:
+		return np.expand_dims(create_confusion(num_options, uncertainty_range), axis = 0)
+	else:
+		conf_mat = []
+		for i in range(num_actions):
+			conf_mat.append(np.expand_dims(create_confusion(num_options, uncertainty_range), axis = 0))
+
+		return np.concatenate(conf_mat, axis = 0)
+
+def create_confusion(num_options, u_r):
+	uncertainty = u_r[0] + (u_r[1] - u_r[0]) * np.random.random_sample()
+	confusion_matrix = uncertainty * np.random.random_sample((num_options, num_options))
+
+	confusion_matrix[range(num_options), range(num_options)] = 1.0
+
+	confusion_matrix = confusion_matrix / np.tile(np.expand_dims(np.sum(confusion_matrix, axis = 1), axis = 1), (1, num_options))
+
+	return confusion_matri
+
+def movetogoal(env, cand_idx, cfg, points_list, point_idx, obs, obs_dict = None):
+	kp = np.array(cfg['control_params']['kp'])
+	step_threshold = cfg['control_params']['step_threshold']
+	tol = cfg['control_params']['tol']
+	display_bool = cfg['logging_params']['display_bool']
+	dataset_keys = cfg['dataset_keys']
+
+	top_goal = env.hole_sites[cand_idx][1]
+	step_count = 0
+	goal = points_list[point_idx][0] + top_goal
+	point_type = points_list[point_idx][1]
+	done_bool = False
+	top_height = top_goal[2]
+	# glb_ts = 0
+
+	while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
+		action = kp * env.get_eef_pos_err(goal)
+
+		# noise = np.random.normal(0.0, 0.1, action.size)
+		# noise[2] = -1.0 * abs(noise[2])
+		# action += noise_parameters * noise
+
+		obs['action'] = env.controller.transform_action(action)
+
+		if point_type == 1 and obs_dict is not None:
+			save_obs(copy.deepcopy(obs), dataset_keys, obs_dict)
+			# curr_pose = env._get_eepos()
+
+		obs, reward, done, info = env.step(action)
+		obs['proprio'][:3] = obs['proprio'][:3] - top_goal
+		
+		if display_bool:
+			env.render()
+
+		# if display_bool:
+		# 	plt.scatter(glb_ts, obs['force'][2])
+		# 	# plt.scatter(glb_ts, obs['contact'])
+		# 	plt.pause(0.001)
+		# glb_ts += 1
+
+		step_count += 1
+
+	if point_type == -1:
+		print("Step count: ", step_count)
+
+	point_idx += 1
+
+	if obs_dict is not None:
+		return point_idx, done_bool, obs, obs_dict
+	else:
+		return point_idx, done_bool, obs

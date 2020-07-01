@@ -1,10 +1,14 @@
 # want to use the same control parameters, peg list, options list and fit list
 # as those used to collect the dataset which was used to train the networks
-dataset_path: "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
+dataset_path: "/scr2/muj_senssearch_dataset10HZ_SAC_20200625/"
+policy_path: "/scr2/muj_senssearch_dataset10HZ_SAC_20200625/rl/06-25-sac-robosuite/06-25-sac-robosuite_2020_06_25_14_40_31_0000--s-88765/"
+idx_dict_path: "/scr-ssd/sens_search_logging/runs/20200627_training_25_rl_policy/val_train_split.pkl"
+min_length: 20
+  # "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
 
 decision_params:
   converge_thresh: 10
-  num_samples: 10000
+  num_samples: 500
   policy_idxs: [0,0]
   constraint_type: 1
 
@@ -12,31 +16,25 @@ logging_params:
   display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
   run_mode: 1 #Options include: 0 -> development, 1 -> evaluation
-  num_trials: 10000
+  num_trials: 10
   run_notes: "_spring_testing"
-  step_by_step: 0.0
 
 model_params:
   use_GPU: True
-  model_path: "/scr-ssd/sens_search_logging/models/202005172248_training_6_fit_wexpanded_action/"
-
-dataset_keys: ["force_hi_freq", "action", "proprio", "contact"]
-  # rgbd:
-  # joint_pos:
-  # joint_vel:
-  # macro_action:
-  # peg_type:
-  # hole_type:
-  # fit_type:
-  # insertion:
 
 info_flow:
   Options_Sensor:
-    model_folder: "/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
-    epoch_num: 5000
+    model_folder: "/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/"  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
+    epoch_num: 3150
   Options_ConfNet:
-    model_folder: "/scr-ssd/sens_search_logging/models/20200607_training_3_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
-    epoch_num: 138
+    model_folder: "/scr-ssd/sens_search_logging/models/20200627_training_33_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
+    epoch_num: 66
+  # Options_Sensor:
+  #   model_folder: "/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
+  #   epoch_num: 5000
+  # Options_ConfNet:
+  #   model_folder: "/scr-ssd/sens_search_logging/models/20200607_training_3_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
+  #   epoch_num: 138
     # model_folder: "/scr-ssd/sens_search_logging/models/20200605_training_3_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
     # epoch_num: 39
     # model_folder: "/scr-ssd/sens_search_logging/models/20200603_training_17_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
