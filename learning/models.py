@@ -31,7 +31,7 @@ def declare_models(cfg, models_folder, device):
     num_tools = 3
     num_states = 3
     num_options = 2
-    num_policies = cfg['num_policies']
+
 
     if "Options_Sensor" in info_flow.keys():
         if info_flow["Options_Sensor"]["model_folder"] is not "":
@@ -45,6 +45,7 @@ def declare_models(cfg, models_folder, device):
         action_size =cfg2['custom_params']['action_size']
         dropout_prob =cfg2['custom_params']['dropout_prob']
         image_size = cfg2['custom_params']['image_size']
+        num_policies = cfg2['num_policies']
 
         model_dict["Options_Sensor"] = Options_Sensor(models_folder, "Options_Sensor", info_flow, image_size,\
          force_size, proprio_size, action_size, num_tools, num_options, num_policies, dropout_prob, device = device).to(device)
@@ -122,18 +123,18 @@ class Options_Sensor(Proto_Macromodel):
         
         self.model_list.append(self.policy_embed)
 
-        self.img_enc = CONV2DN(save_folder + "_image_enc", load_folder + "_image_enc",\
+        self.vision_list = []
+
+        for i in range(self.num_states):
+            self.vision_list.append((\
+                CONV2DN(save_folder + "_pos_enc" + str(i), load_folder + "_pos_enc" + str(i),\
                  (self.image_size[0], self.image_size[1], self.image_size[2]), (self.img_enc_size, 1, 1),\
                   nonlinear = False, batchnorm = True, dropout = True, dropout_prob = dropout_prob,\
-                   uc = self.uc, device = self.device).to(self.device)
-
-        self.model_list.append(self.img_enc)
-
-        self.img_pos_est = ResNetFCN(save_folder + "_image_pos_est", load_folder + "_image_pos_est",\
-            2 * self.img_enc_size, 9, 2, dropout = True, dropout_prob = dropout_prob, \
-            uc = self.uc, device = self.device).to(self.device)
-
-        self.model_list.append(self.img_pos_est)
+                   uc = False, device = self.device).to(self.device),\
+            
+                ResNetFCN(save_folder + "_pos_est" + str(i), load_folder + "_pos_est" + str(i),\
+                2 * self.img_enc_size, 2, self.num_cl, dropout = True, dropout_prob = dropout_prob, \
+                uc = False, device = self.device).to(self.device)))
 
         for i in range(self.num_ensembles):
             self.ensemble_list.append((\
@@ -146,15 +147,15 @@ class Options_Sensor(Proto_Macromodel):
          self.state_size, self.num_tl, dropout_prob = dropout_prob, uc = self.uc, device = self.device).to(self.device),\
 
                 ResNetFCN(save_folder + "_options_class" + str(i), load_folder + "_options_class" + str(i),\
-            self.state_size + self.tool_dim + self.policy_dim + 3, self.num_options, self.num_cl, dropout = True, dropout_prob = dropout_prob, \
+            self.state_size + self.tool_dim + self.policy_dim, self.num_options, self.num_cl, dropout = True, dropout_prob = dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
-
-                ResNetFCN(save_folder + "_pos_corr" + str(i), load_folder + "_pos_corr" + str(i),\
-            self.state_size + self.tool_dim + self.policy_dim + 3, 3, self.num_cl, dropout = True, dropout_prob = dropout_prob, \
-            uc = self.uc, device = self.device).to(self.device)\
             ))
 
         for model_tuple in self.ensemble_list:
+            for model in model_tuple:
+                self.model_list.append(model)
+
+        for model_tuple in self.vision_list:
             for model in model_tuple:
                 self.model_list.append(model)
 
@@ -162,7 +163,7 @@ class Options_Sensor(Proto_Macromodel):
             self.load(info_flow[model_name]["epoch_num"])
 
     def get_logits(self, input_dict, model_tuple):
-        frc_enc, state_transdec, options_class, pos_corr = model_tuple #origin_cov = model_tuple # 
+        frc_enc, state_transdec, options_class = model_tuple #origin_cov = model_tuple # 
 
         ##### Calculating Series Encoding
         # Step 1. frc encoding
@@ -185,31 +186,25 @@ class Options_Sensor(Proto_Macromodel):
 
         #### Calculating Options Logits
         # print(seq_encs.size(), tool_embeds.size(), policy_embeds.size(), input_dict["tool_idx"].size())
-        full_enc = torch.cat([seq_encs, input_dict['img_site_est'], input_dict["tool_embed"], input_dict["pol_embed"]], dim = 1)
+        full_enc = torch.cat([seq_encs, input_dict["tool_embed"], input_dict["pol_embed"]], dim = 1)
 
         options_logits = options_class(full_enc)
 
-        pos_ests = input_dict['img_sites_est'][:]
-
-        pos_ests[torch.arange(input_dict['batch_size']), input_dict['cand_idx'].long()] +=  pos_corr(full_enc)
-
-        return options_logits, pos_ests
+        return options_logits
 
     def getall_logits(self, input_dict):
 
         ol_list = []
-        pe_list = []
 
         for i in range(self.num_ensembles):
             if "padding_mask" in input_dict.keys():
                 input_dict["padding_mask_extended"] = self.get_input_dropout(input_dict["padding_mask"])
 
-            ol, pe = self.get_logits(input_dict, self.ensemble_list[i])
+            ol = self.get_logits(input_dict, self.ensemble_list[i])
 
             ol_list.append(ol)
-            pe_list.append(pe)
 
-        return ol_list, pe_list #, seq_encs ol_list #
+        return ol_list #, seq_encs ol_list #
 
     def get_input_dropout(self, padding_masks):
         # print("Padding mask\n", padding_masks[0])
@@ -223,18 +218,18 @@ class Options_Sensor(Proto_Macromodel):
 
     def get_uncertainty_quant(self, input_dict):
         with torch.no_grad():
-            uncertainty_list = []
+            ol_uncertainty_list = []
             T = 60
 
             for i in range(T):
-                ol_list_sample, pe_list_sample = self.getall_logits(input_dict)
+                ol_list_sample = self.getall_logits(input_dict)
 
                 for i in range(self.num_ensembles):
                     ol_list_sample[i] = ol_list_sample[i].unsqueeze(0)
 
-                uncertainty_list += ol_list_sample
+                ol_uncertainty_list += ol_list_sample
 
-            uncertainty_logits = torch.cat(uncertainty_list, dim = 0)
+            uncertainty_logits = torch.cat(ol_uncertainty_list, dim = 0)
             # print(uncertainty_logits.size())
 
             # for i in range(uncertainty_logits.size(0)):
@@ -253,38 +248,30 @@ class Options_Sensor(Proto_Macromodel):
 
             return uncertainty
 
+    def est_poses(self, input_dict):
+        pos_est = []
+
+        for i in range(len(self.vision_list)):
+            img_enc, pos_estimator = self.vision_list[i]
+
+            pos_est.append((pos_estimator(torch.cat([self.flatten(img_enc(input_dict['rgbd_first'])),\
+             self.flatten(img_enc(input_dict['rgbd_last']))], dim = 1))).unsqueeze(1))
+
+        return torch.cat(pos_est, dim = 1)
     def forward(self, input_dict):
-        input_dict["force"] = input_dict["force_hi_freq"].transpose(2,3)
-        
-        input_dict["force_reshaped"] = torch.reshape(input_dict["force"],\
-         (input_dict["force"].size(0) * input_dict["force"].size(1), \
-         input_dict["force"].size(2), input_dict["force"].size(3)))
+        self.process_inputs(input_dict)
 
-        input_dict["states"] = torch.cat([input_dict["rel_proprio_diff"], input_dict["contact_diff"]], dim = 2)
-        
-        input_dict["batch_size"] = input_dict["rel_proprio_diff"].size(0)
-        input_dict["sequence_size"] = input_dict["rel_proprio_diff"].size(1)
+        pos_est = self.est_poses(input_dict) / 10
 
-        input_dict['state_embed'] = self.shape_embed(input_dict["state_idx"].long())
-        input_dict['tool_embed'] = self.shape_embed(input_dict["tool_idx"].long()) 
-        input_dict['pol_embed'] = self.policy_embed(input_dict["pol_idx"].long())
-
-        input_dict['img_sites_est'] = torch.reshape(self.img_pos_est(torch.cat([\
-            self.flatten(self.img_enc(input_dict['rgbd_first'])),\
-             self.flatten(self.img_enc(input_dict['rgbd_last']))], dim = 1)), (input_dict["batch_size"], 3, 3))
-
-        input_dict['img_site_est'] = input_dict['img_sites_est'][torch.arange(input_dict["batch_size"]), input_dict['cand_idx'].long()]
-        
-        ol_list, pe_list = self.getall_logits(input_dict)
+        ol_list = self.getall_logits(input_dict)
 
         inputs_list =[]
 
         for i in range(self.num_ensembles):
             inputs_list.append(logits2inputs(ol_list[i]).unsqueeze(0))
             ol_list[i] = ol_list[i].unsqueeze(0)
-            pe_list[i] = pe_list[i].unsqueeze(0)
 
-        uncertainty = self.get_uncertainty_quant(input_dict)
+        # uncertainty = self.get_uncertainty_quant(input_dict)
 
         # uncertainty_list = [probs2inputs(uncertainty).unsqueeze(0)]
         # for i in range(self.num_tools):
@@ -296,38 +283,81 @@ class Options_Sensor(Proto_Macromodel):
 
         return {
             'options_class': torch.cat(ol_list, dim = 0),
-            'pos_est': torch.cat(pe_list, dim = 0),
+            'pos_est': pos_est,
             'options_inputs': torch.cat(inputs_list, dim = 0),
-            'uncertainty_inputs': probs2inputs(uncertainty),
+            # 'uncertainty_inputs': probs2inputs(uncertainty),
             'state_embed': input_dict['state_embed'],
             'tool_embed': input_dict['tool_embed'],
             'policy_embed': input_dict['pol_embed'],
         }
+
+    def process_inputs(self, input_dict):
+        input_dict["force"] = input_dict["force_hi_freq"].transpose(2,3)
+        
+        input_dict["force_reshaped"] = torch.reshape(input_dict["force"],\
+         (input_dict["force"].size(0) * input_dict["force"].size(1), \
+         input_dict["force"].size(2), input_dict["force"].size(3)))
+
+        input_dict["states"] = torch.cat([input_dict["rel_proprio_diff"], input_dict["contact_diff"]], dim = 2)
+        
+        input_dict["batch_size"] = input_dict["rel_proprio_diff"].size(0)
+        input_dict["sequence_size"] = input_dict["rel_proprio_diff"].size(1)
+
+        if 'state_idx' in input_dict.keys():
+            input_dict['state_embed'] = self.shape_embed(input_dict["state_idx"].long())
+
+        input_dict['tool_embed'] = self.shape_embed(input_dict["tool_idx"].long()) 
+        input_dict['pol_embed'] = self.policy_embed(input_dict["pol_idx"].long())
+
+    def img_pos_estimate(self, rgbd):
+        return torch.reshape(self.img_pos_est(torch.cat([\
+            self.flatten(self.img_enc(rgbd.unsqueeze(0))),\
+             self.flatten(self.img_enc(rgbd.unsqueeze(0)))], dim = 1)), (1, 3, 3)).squeeze()
 
     def embeds(self, input_dict):
         with torch.no_grad():
             self.eval()
             batch_size = input_dict["macro_action"].size(0)
 
-            frc_enc, state_transdec, tool_embed, policy_embed, options_class =  self.ensemble_list[0] #origin_cov = model_tuple #
-
-            input_dict["state_embed"] = tool_embed(input_dict["state_idx"].long()).repeat_interleave(batch_size, dim = 0)
-            input_dict["tool_embed"] = tool_embed(input_dict["tool_idx"].long()).repeat_interleave(batch_size, dim = 0) 
-            input_dict["policy_embed"] = policy_embed(input_dict["pol_idx"].long())
+            input_dict["state_embed"] = self.shape_embed(input_dict["state_idx"].long()).repeat_interleave(batch_size, dim = 0)
+            input_dict["tool_embed"] = self.shape_embed(input_dict["tool_idx"].long()).repeat_interleave(batch_size, dim = 0) 
+            input_dict["policy_embed"] = self.policy_embed(input_dict["pol_idx"].long())
 
             # print(input_dict["state_embed"].size())
             # print(input_dict["tool_embed"].size())
             # print(input_dict["policy_embed"].size())
+
+    def pos_est(self, input_dict): 
+        with torch.no_grad():
+            self.eval()
+            input_dict["rel_proprio_diff"] = input_dict["rel_proprio"][:,1:] - input_dict["rel_proprio"][:, :-1]
+            input_dict["contact_diff"] = input_dict["contact"][:,1:] - input_dict["contact"][:, :-1]
+            input_dict["force_hi_freq"] = input_dict["force_hi_freq"][:,1:]
+            input_dict["action"] = input_dict["action"][:, :-1]
+            input_dict["rgbd_first"] = input_dict["rgbd"][:, 0]
+            input_dict["rgbd_last"] = input_dict["rgbd"][:,-1]
+
+            self.process_inputs(input_dict)
+
+            uncertainty, pe_mean = self.get_uncertainty_quant(input_dict)
+
+            print(pe_mean)
+
+            return pe_mean[input_dict['cand_idx'].long()]
 
     def probs(self, input_dict): 
         with torch.no_grad():
             self.eval()
             input_dict["rel_proprio_diff"] = input_dict["rel_proprio"][:,1:] - input_dict["rel_proprio"][:, :-1]
             input_dict["contact_diff"] = input_dict["contact"][:,1:] - input_dict["contact"][:, :-1]
-            input_dict["forces"] = input_dict["force_hi_freq"].transpose(2,3)[:,1:]
+            input_dict["force_hi_freq"] = input_dict["force_hi_freq"][:,1:]
             input_dict["action"] = input_dict["action"][:, :-1]
+            input_dict["rgbd_first"] = input_dict["rgbd"][:, 0]
+            input_dict["rgbd_last"] = input_dict["rgbd"][:,-1]
 
-            ol_list = self.getall_logits(input_dict)
+            self.process_inputs(input_dict)
+
+            ol_list, pe_list = self.getall_logits(input_dict)
 
             # for i in range(self.num_ensembles):
             #     print(F.softmax(ol_list[i], dim = 1))

@@ -16,20 +16,23 @@ from multinomial import *
 from project_utils import *
 
 class Decision_Model(object):
-	def __init__(self, state_dict, env):
+	def __init__(self, state_dict, env, lrn_rate = 0.5):
 		self.env = env
 		self.state_dict = state_dict
 		self.device = self.env.sensor.device
+		self.lrn_rate = lrn_rate
 
 	def reset(self):
 		self.env.reset()
 
 		correct_states = []
 		correct_options = []
+		self.cand_count = []
 
 		for k, v in self.env.robo_env.hole_sites.items():
 			correct_states.append(v[0])
-			correct_options.append(v[3])
+			correct_options.append(v[1])
+			self.cand_count.append(0)
 
 		self._reset_probs(correct_states, correct_options)
 
@@ -64,9 +67,13 @@ class Decision_Model(object):
 			print("Attempting to Insert")
 			max_exp_reward_info, fit_action_partial = self.max_exp_reward_info(self.state_probs, cand_idx_fit, info_actions_partial)
 			action = (cand_idx_fit, fit_action_partial)
+
+			print(cand_idx_fit)
 		else:
 			print("Collecting Information")
 			action = (cand_idx_info, info_action_max)
+
+			print(cand_idx_info)
 
 		print("\n#####################\n")
 
@@ -135,9 +142,15 @@ class Decision_Model(object):
 
 			state_posterior_logits[:,j] = torch.log(state_prior[:,j]) + conf_logprobs
 
-		state_posterior = logits2probs(state_posterior_logits)
+		self.state_probs = logits2probs(state_posterior_logits)
 
-		return state_posterior
+	def update_sites_est(self, site_est, cand_idx):
+		if self.cand_count[cand_idx] == 0:
+			self.env.robo_env.hole_sites[cand_idx][-2] = site_est
+		else:
+			self.env.robo_env.hole_sites[cand_idx][-2] = (1 - self.lrn_rate) * self.env.hole_sites[cand_idx][-2] + self.lrn_rate * site_est
+
+		self.cand_count[cand_idx] += 1
 
 	def new_obs(self, action, obs):
 		if obs != None:
@@ -145,11 +158,12 @@ class Decision_Model(object):
 
 			# print("Action", action)
 			# print("Partial Action", action_partial)
-
-			obs_idx = self.env.sensor_obs(obs)
+			obs_idx = self.env.sensor_obs(obs, cand_idx, action_partial[0])
+			site_est = self.env.sensor_site_est(obs, cand_idx, action_partial[0])
+			self.update_sites_est(site_est,cand_idx)
 
 			# print(self.state_probs)
-			self.state_probs = self.update_state_probs(cand_idx, obs_idx, np.expand_dims(action_partial, axis = 0))
+			self.update_state_probs(cand_idx, obs_idx, np.expand_dims(action_partial, axis = 0))
 			# print(self.state_probs)
 
 			corr_idx = self.state_dict['correct_options'][cand_idx]

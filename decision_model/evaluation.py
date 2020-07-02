@@ -107,18 +107,20 @@ if __name__ == '__main__':
 	### Setting up the test environment and extracting the goal locations
 	######################################################### 
 	print("Robot operating with control frequency: ", ctrl_freq)
-	robo_env = robosuite.make("PandaPegInsertion",\
-	 has_renderer=True,\
-	  ignore_done=True,\
-	   use_camera_obs= not display_bool,\
-	    gripper_visualization=False,\
-	     control_freq=ctrl_freq,\
-	      gripper_type ="CrossPegwForce",\
-	       controller='position',\
-	        camera_depth=True,\
-	        camera_width=128,\
-	        camera_height=128,\
-	         horizon = cfg['control_params']['horizon'])
+    robo_env = robosuite.make(
+        "PandaPegInsertion",
+         has_renderer=display_bool,
+          ignore_done=True,
+     use_camera_obs= not display_bool,
+     has_offscreen_renderer = not display_bool,
+      gripper_visualization=False,
+       control_freq=ctrl_freq,
+      gripper_type ="CrossPegwForce",
+       controller='position',
+        camera_depth=True,
+        camera_width=128,
+        camera_height=128,
+         horizon = horizon)
 
 	robo_env.viewer.set_camera(camera_id=2)
 

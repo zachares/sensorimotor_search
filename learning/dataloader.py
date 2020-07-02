@@ -9,6 +9,7 @@ import yaml
 from torch.utils.data import Dataset
 from utils import read_h5
 from sklearn.linear_model import LinearRegression
+from project_utils import *
 
 ## ADD data normalization
 class Custom_DataLoader(Dataset):
@@ -81,7 +82,7 @@ class Custom_DataLoader(Dataset):
             # self.idx_dict["option_types"] = self.option_types
             # self.idx_dict["tool_types"] = self.tool_types
             # self.idx_dict["hole_types"] = self.hole_types
-            self.idx_dict["epochs"] = []
+            self.idx_dict["policies"] = []
 
             # for idx in range(num_trajectories):
             #     for peg in tool_types:
@@ -105,14 +106,18 @@ class Custom_DataLoader(Dataset):
                 train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
                 dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
                 dataset = read_h5(filename)
-                epoch = dataset["epoch"][0] - 1
-                # epoch = 3 * (int(filename[-7:-4]) // 3)
+                policy = dataset["policy"][0]
+
+                # plot_image(np.transpose(np.array(dataset['reference_rgbd'])[:-1], (2,1,0)))
+                # plot_image(np.transpose(np.array(dataset['rgbd'])[0,:-1], (2,1,0)))
+
+                # policie = 3 * (int(filename[-7:-4]) // 3)
                 proprios = np.array(dataset['proprio'])
                 length = proprios.shape[0] 
                 dataset.close()               
 
-                if epoch not in self.idx_dict["epochs"]:
-                    self.idx_dict["epochs"].append(epoch)
+                if policy not in self.idx_dict["policies"]:
+                    self.idx_dict["policies"].append(policy)
 
                 if length < self.min_length:
                     continue
@@ -121,14 +126,14 @@ class Custom_DataLoader(Dataset):
                     self.max_length = int(length)
 
                 if train_val_bool == 1:
-                    self.idx_dict['train'][self.train_length] = (filename, self.idx_dict["epochs"].index(epoch))
+                    self.idx_dict['train'][self.train_length] = filename
                     self.train_length += 1
                 else:
-                    self.idx_dict['val'][self.val_length] = (filename, self.idx_dict["epochs"].index(epoch))
+                    self.idx_dict['val'][self.val_length] = filename
                     self.val_length += 1
 
                 if dev_bool == 0:
-                    self.idx_dict['dev'][self.dev_length] = (filename, self.idx_dict["epochs"].index(epoch))
+                    self.idx_dict['dev'][self.dev_length] = filename
                     self.dev_length += 1
 
             self.idx_dict["max_length"] = self.max_length
@@ -144,7 +149,7 @@ class Custom_DataLoader(Dataset):
             self.val_length = len(list(self.idx_dict['val'].keys()))
             self.dev_length = len(list(self.idx_dict['dev'].keys()))
 
-        cfg['num_policies'] = len(self.idx_dict["epochs"])
+        cfg['num_policies'] = len(self.idx_dict["policies"])
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
@@ -192,7 +197,8 @@ class Custom_DataLoader(Dataset):
                 sample[key] = np.array(dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
             elif key == 'hole_sites':
-                sample[key] = np.array(dataset[key])
+                sample[key] = np.array(dataset[key])[:,:2] - np.array([[0.5, 0.0],[0.5, 0.0],[0.5, 0.0]])
+                print(sample[key])
             elif key == 'rgbd':
                 sample[key + "_last"] = np.array(dataset[key][idx1-1])
                 sample[key + "_first"] = np.array(dataset[key][idx0])
@@ -225,11 +231,15 @@ class Custom_DataLoader(Dataset):
                     sample["state_vector"] = sample[key]
                     sample["state_idx"] = np.array(sample[key].argmax(0))                   
                     sample["cand_idx"] = np.array(sample[key].argmax(0))
+
+        plot_image(np.rot90(np.transpose(sample["rgbd_last"][:-1], (1,2,0)), k = 1))
+        a = input("")
+
         dataset.close()
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
         sample["macro_action"] = init_proprio[:2]
-        sample["pol_idx"] = np.array(self.idx_dict[key_set][idx][1])
+        sample["pol_idx"] = np.array(dataset['policies'][0,0])
 
         ##########################################################    
         ##### End of Project Specific Code #######################
@@ -252,11 +262,8 @@ class ToTensor(object):
         ###########################################################
         ##### Project Specific Code Here ##########################
         ###########################################################
-
             if k == "padding_mask":
                 new_dict[k] = torch.from_numpy(v).bool()
-            elif k[-5:] == "label":
-                new_dict[k] = v
             else:
                 new_dict[k] = torch.from_numpy(v).float()
             '''

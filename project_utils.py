@@ -15,6 +15,7 @@ sys.path.insert(0, "../supervised_learning/")
 
 from multinomial import *
 from collections import OrderedDict
+import time
 
 '''
 Data Collection and Recording Functions
@@ -22,7 +23,9 @@ Data Collection and Recording Functions
 def plot_image(image):
 	image = np.rot90(image, k =2)
 	imgplot = plt.imshow(image)
-	plt.show()
+	plt.show(block=False)
+	plt.pause(1)
+	plt.close('all')
     
 def save_obs(obs_dict, keys, array_dict):
 	for key in keys:
@@ -31,7 +34,6 @@ def save_obs(obs_dict, keys, array_dict):
 
 		if key == "rgbd":
 			# plot_image(obs_dict['image'])
-			# a = input(" ")
 			obs0 = np.rot90(obs_dict['image'], k = 2).astype(np.uint8)
 			obs0 = np.transpose(obs0, (2, 1, 0))
 			obs0 = np.expand_dims(obs0, axis = 0)
@@ -40,7 +42,6 @@ def save_obs(obs_dict, keys, array_dict):
 			obs1 = np.expand_dims(np.expand_dims(obs1, axis = 0), axis = 0)
 
 			obs = np.concatenate([obs0, obs1], axis = 1)
-
 		else:
 			obs = np.expand_dims(obs_dict[key], axis = 0)
 
@@ -48,6 +49,10 @@ def save_obs(obs_dict, keys, array_dict):
 			array_dict[key].append(obs)
 		else:
 			array_dict[key] = [obs]
+
+	# print(obs_dict['rel_proprio'], "\n")
+	# print(np.sum(obs_dict['image']))
+
 
 def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 	tensor_dict = OrderedDict()
@@ -215,7 +220,7 @@ def movetogoal_woutobs(env, cfg, goal):
     tol = cfg['control_params']['tol']
     display_bool = cfg['logging_params']['display_bool']
 
-    top_goal = env.hole_sites[env.cand_idx][1]
+    top_goal = env.hole_sites[env.cand_idx][-2]
     step_count = 0
     # glb_ts = 0
 
