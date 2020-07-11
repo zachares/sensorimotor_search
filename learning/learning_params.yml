@@ -1,5 +1,11 @@
 relative_path: "../../supervised_learning/"
-dataset_path: "/scr2/muj_senssearch_dataset10HZ_SAC_20200701/" 
+dataset_path: /scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/
+  #/scr2/muj_senssearch_dataset10HZ_SAC_20200706_relpos_nonoise/
+#/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/
+#
+  #/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/
+  #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
+  # "/scr2/muj_senssearch_dataset10HZ_SAC_20200704/" 
 #"/scr2/muj_senssearch_dataset10HZ_SAC_20200625/" #"/scr2/muj_senssearch_dataset10HZ_slide_20200517/" 
   #
  # "/scr2/muj_senssearch_dataset10HZ_slide_20200517_cross/"
@@ -7,7 +13,13 @@ dataset_path: "/scr2/muj_senssearch_dataset10HZ_SAC_20200701/"
 dataloading_params:
   num_workers: 4
   batch_size: 128
-  idx_dict_path: "" 
+  idx_dict_path: /scr-ssd/sens_search_logging/models/20200710_training_10_rl_policy/val_train_split.pkl
+    #/scr-ssd/sens_search_logging/runs/20200707_training_24_rl_policy/val_train_split.pkl
+  #/scr-ssd/sens_search_logging/models/20200707_training_15_rl_policy/val_train_split.pkl
+    #
+    #
+
+    #"/scr-ssd/sens_search_logging/runs/20200704_training_1_rl_policy/val_train_split.pkl" 
     #"/scr-ssd/sens_search_logging/runs/20200630_training_23_rl_policy/val_train_split.pkl"
   #"/scr-ssd/sens_search_logging/runs/20200627_training_25_rl_policy/val_train_split.pkl" # SAC 0625
   #"/scr-ssd/sens_search_logging/runs/20200530_training_12_fit_wexpanded_action/val_train_split.pkl" 
@@ -31,59 +43,124 @@ logging_params:
   run_notes: "_rl_policy"
 
 custom_params:
-  image_size: [4, 128, 128]
+  image_size: [3, 128, 128]
   force_size: [6, 50]
   action_size: 3
   macro_action_size: 4
   proprio_size: 12
   min_length: 20
-  num_trajectories: 500
+  max_length: 100
   dropout_prob: 0.2
   
-dataset_keys: ["force_hi_freq", "action", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "rgbd", "hole_sites"]
+dataset_keys: ["force_hi_freq", "action", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "hole_sites"] #, "reference_image", "reference_point_cloud", "reference_depth",
   # rgbd:
   # joint_pos:
   # joint_vel:
   # insertion:
 
 info_flow:
-  Options_Sensor:
+  # Options_Sensor:
+  #   train: 0
+  #   model_folder: "/scr-ssd/sens_search_logging/models/20200710_training_10_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200707_training_24_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
+  #   epoch: 1020
+  #   init_args:
+  #     num_tools: 3
+  #     num_states: 3
+  #     num_options: 2
+  #     action_dim: 3
+  #     proprio_size: 12
+  #     force_size: [6, 50]
+  #     dropout_prob: 0.2
+  #     policy_dim: 32
+  #     tool_dim: 6
+  #   inputs:
+  #     rel_proprio_diff: "dataset"
+  #     force_hi_freq: "dataset"
+  #     action: "dataset"
+  #     contact_diff: "dataset"
+  #     padding_mask: "dataset"
+  #     tool_idx: "dataset"
+  #     epoch: "dataset"
+  #   outputs:
+  #     options_class:
+  #       inputs:
+  #         fit_idx: dataset
+  #       losses: 
+  #         Multinomial_NLL_Ensemble:
+  #           logging_name: Options_Class
+  #     options_inputs:
+  #       inputs:
+  #         fit_idx: dataset
+  #       evals:
+  #         Multinomial_Accuracy_Ensemble:
+  #           logging_name: "classifier_accuracy"
+  #         # Multinomial_Entropy_Ensemble:
+  #         #   logging_name: "classifier_entropy"
+  #         # Multinomial_Entropy_Spread_Ensemble:
+  #         #   logging_name: "classifier_entropy_gap"
+  # Options_LikelihoodNet:
+  #   train: 1
+  #   model_folder: "" #"/scr-ssd/sens_search_logging/models/20200627_training_33_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200607_training_3_fit_wexpanded_action/"
+  #   epoch_num: 0
+  #   init_args:
+  #     tool_dim: 6
+  #     policy_dim: 32
+  #     num_tools: 3
+  #     num_states: 3
+  #     num_options: 2
+  #   inputs:
+  #     pol_idx: dataset
+  #     tool_idx: dataset
+  #     state_idx: dataset
+  #     epoch: "dataset"
+  #   outputs:
+  #     likelihood_inputs:
+  #       inputs:
+  #         uncertainty_inputs: "Options_Sensor"
+  #       losses:
+  #         Multinomial_KL: 
+  #           logging_name: "Confusion_Class"
+  History_Encoder:
     train: 1
     model_folder: "" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-    epoch_num: 0
+    epoch: 0
+    init_args:
+      num_tools: 3
+      num_states: 3
+      num_options: 2
+      action_dim: 3
+      proprio_size: 12
+      force_size: [6, 50]
+      dropout_prob: 0.2
     inputs:
       rel_proprio_diff: "dataset"
       force_hi_freq: "dataset"
       action: "dataset"
-      rgbd_first: dataset
-      rgbd_last: dataset
       contact_diff: "dataset"
       padding_mask: "dataset"
-      pol_idx: "dataset"
       tool_idx: "dataset"
       state_idx: "dataset"
-      cand_idx: "dataset"
       epoch: "dataset"
     outputs:
       options_class:
         inputs:
-          fit_label: dataset
+          state_idx: dataset
         losses: 
           Multinomial_NLL_Ensemble:
-            logging_name: Options_Class
-      pos_est:
+            logging_name: States_Class
+      rel_pos_est:
         inputs:
-          hole_sites: dataset
+          rel_pos_init: dataset
         losses:
-          L1:
+          L1_Ensemble:
             weight: 500
-            logging_name: Cand_Pos_Est
+            logging_name: Pos_Est_Force
         evals:
-          Continuous_Error:
-            logging_name: Position Error Metrics
+          Continuous_Error_Ensemble:
+            logging_name:  Pos_Err_Force
       options_inputs:
         inputs:
-          fit_label: dataset
+          state_idx: dataset
         evals:
           Multinomial_Accuracy_Ensemble:
             logging_name: "classifier_accuracy"
@@ -91,55 +168,3 @@ info_flow:
           #   logging_name: "classifier_entropy"
           # Multinomial_Entropy_Spread_Ensemble:
           #   logging_name: "classifier_entropy_gap"
-  # Options_ConfNet:
-  #   train: 1
-  #   model_folder: "" #"/scr-ssd/sens_search_logging/models/20200627_training_33_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200607_training_3_fit_wexpanded_action/"
-  #   epoch_num: 0
-  #   inputs:
-  #     macro_action: "dataset"
-  #     policy_embed: "Options_Sensor"
-  #     tool_embed: "Options_Sensor"
-  #     state_embed: "Options_Sensor"
-  #     epoch: "dataset"
-  #   outputs:
-  #     confusion_inputs:
-  #       inputs:
-  #         uncertainty_inputs: "Options_Sensor"
-  #       losses:
-  #         Multinomial_KL_Ensemble: 
-  #           logging_name: "Confusion_Class"
-        # evals: 
-        #   Multinomial_Accuracy:
-        #     logging_name: "uncertainty_accuracy"
-        #   Multinomial_Entropy:
-        #     logging_name: "uncertainty_entropy"
-# "/scr-ssd/sens_search_logging/models/20200601_training_12_fit_wexpanded_action/"
-  # Distance_Predictor:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
-  #   inputs:
-  #     macro_action: "dataset"
-  #     tool_type: "dataset"
-  #     option_type: "dataset"
-  #     permutation: "Options_Sensor"
-  #     epoch: "dataset"
-  #   outputs:
-  #     distances:
-  #       loss: "MSE"
-  #       loss_name: "Distance_Prediction"
-  #       weight: 1
-  #       inputs:
-  #         distances: "Options_Sensor"
-  #       evals: ["Continuous_Error"]
-  # Options_ConfMat:
-  #   train: 1
-  #   model_folder: ""
-  #   epoch_num: 0
-  #   inputs:
-  #     peg_type: "dataset"
-  #     option_type: "dataset"
-  #     options_est: "Options_Sensor"
-  #     epoch: "dataset"
-
-

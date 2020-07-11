@@ -59,73 +59,48 @@ class Custom_DataLoader(Dataset):
             ##### Project Specific Code Here ##########################
             ###########################################################            
             self.max_length = 0
-
-            # with open(self.dataset_path + "datacollection_params.yml", 'r') as ymlfile:
-            #     cfg1 = yaml.safe_load(ymlfile)
-
-            # tool_vectors = cfg1['peg_names']
-            # hole_types = cfg1['hole_names']
-            # option_types = cfg1['fit_names']
-
-            num_trajectories = cfg['custom_params']['num_trajectories']
             min_length = cfg['custom_params']['min_length']
+            max_length = cfg['custom_params']['max_length']
 
-            self.num_trajectories = num_trajectories
             self.min_length = min_length
-            # self.option_types = option_types
-            # self.tool_types = tool_types
-            # self.hole_types = hole_types
+            self.max_length = max_length
 
-            self.dev_ratio = dev_num / (9 * num_trajectories)
+            self.dev_ratio = dev_num / len(filename_list)
 
             self.idx_dict["min_length"] = self.min_length
-            # self.idx_dict["option_types"] = self.option_types
-            # self.idx_dict["tool_types"] = self.tool_types
-            # self.idx_dict["hole_types"] = self.hole_types
+            self.idx_dict['max_length'] = self.max_length
+
             self.idx_dict["policies"] = []
 
-            # for idx in range(num_trajectories):
-            #     for peg in tool_types:
-                    
-            #         train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
-            #         dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
+            self.idx_dict['force_mean'] = np.zeros(6)
+            self.idx_dict['force_std'] = np.zeros(6)
+            self.count = 0
 
-            #         for hole in hole_types:
-
-            #             filename = self.dataset_path + peg + "_" + hole + "_" + str(idx + 1).zfill(4) + ".h5" 
-
-            #             dataset = read_h5(filename)
-
-            #             if "proprio" not in dataset.keys():
-            #                 continue
-
-            #             proprios = np.array(dataset['proprio'])
-            #             length = proprios.shape[0]
-            #             dataset.close()
             for filename in filename_list:
+                # print(filename)
                 train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
                 dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
                 dataset = read_h5(filename)
-                policy = dataset["policy"][0]
+                policy = dataset["policy"][-1,0]
 
-                # plot_image(np.transpose(np.array(dataset['reference_rgbd'])[:-1], (2,1,0)))
-                # plot_image(np.transpose(np.array(dataset['rgbd'])[0,:-1], (2,1,0)))
-
-                # policie = 3 * (int(filename[-7:-4]) // 3)
-                proprios = np.array(dataset['proprio'])
-                length = proprios.shape[0] 
+                forces = np.array(dataset['force_hi_freq'])
+                # length = forces.shape[0] 
                 dataset.close()               
 
                 if policy not in self.idx_dict["policies"]:
                     self.idx_dict["policies"].append(policy)
 
-                if length < self.min_length:
-                    continue
+                # if length < self.min_length:
+                #     continue
 
-                if self.max_length < length:
-                    self.max_length = int(length)
+                # if self.max_length < length:
+                #     self.max_length = int(length)
 
                 if train_val_bool == 1:
+                    self.idx_dict['force_mean'] += np.sum(np.sum(forces, axis = 0), axis = 0)
+                    self.idx_dict['force_std'] += np.sum(np.sum(np.square(forces), axis=0), axis=0)
+                    self.count += forces.shape[0] * forces.shape[1]
+
                     self.idx_dict['train'][self.train_length] = filename
                     self.train_length += 1
                 else:
@@ -138,6 +113,13 @@ class Custom_DataLoader(Dataset):
 
             self.idx_dict["max_length"] = self.max_length
 
+            self.idx_dict['force_std'] = np.sqrt((self.idx_dict['force_std'] -\
+             np.square(self.idx_dict['force_mean']) / self.count ) / self.count)
+
+            self.idx_dict['force_mean'] = self.idx_dict['force_mean'] / self.count
+
+            # print("Mean ", self.idx_dict['force_std'])
+            # print("std ", self.idx_dict['force_mean'])
             ##########################################################    
             ##### End of Project Specific Code #######################
             ##########################################################
@@ -149,7 +131,10 @@ class Custom_DataLoader(Dataset):
             self.val_length = len(list(self.idx_dict['val'].keys()))
             self.dev_length = len(list(self.idx_dict['dev'].keys()))
 
-        cfg['num_policies'] = len(self.idx_dict["policies"])
+        for key in cfg['info_flow'].keys():
+            cfg['info_flow'][key]['init_args']['num_policies'] = len(self.idx_dict["policies"])
+            cfg['info_flow'][key]['init_args']['force_mean'] = self.idx_dict['force_mean'].tolist()
+            cfg['info_flow'][key]['init_args']['force_std'] = self.idx_dict['force_std'].tolist()
 
         print("Total data points: ", self.train_length + self.val_length)
         print("Total training points: ", self.train_length)
@@ -175,7 +160,8 @@ class Custom_DataLoader(Dataset):
         ###########################################################
         ##### Project Specific Code Here ##########################
         ###########################################################
-        dataset = read_h5(self.idx_dict[key_set][idx][0])
+        # prev_time = time.time()
+        dataset = read_h5(self.idx_dict[key_set][idx])
         max_traj_length = np.array(dataset['proprio']).shape[0]
 
         max_length = self.idx_dict["max_length"]
@@ -186,65 +172,74 @@ class Custom_DataLoader(Dataset):
             idx1 = max_traj_length
         else:
             idx0 = np.random.choice(max_traj_length - min_length) # beginning idx
-            idx1 = np.random.choice(range(idx0 + min_length, max_traj_length)) # end idx
+            idx1 = np.random.choice(range(idx0 + min_length, min(idx0 + max_length, max_traj_length))) # end idx
 
         padded = max_length - idx1 + idx0 + 1
         unpadded = idx1 - idx0 - 1
         sample = {}
 
+        pixel_shift = np.random.choice(range(-10,11), 2)
+
         for key in self.dataset_keys:
             if key == 'action':
                 sample[key] = np.array(dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-            elif key == 'hole_sites':
-                sample[key] = np.array(dataset[key])[:,:2] - np.array([[0.5, 0.0],[0.5, 0.0],[0.5, 0.0]])
-                print(sample[key])
-            elif key == 'rgbd':
-                sample[key + "_last"] = np.array(dataset[key][idx1-1])
-                sample[key + "_first"] = np.array(dataset[key][idx0])
+
             elif key == 'force_hi_freq':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
+
             elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
+                xy_poses = sample[key][:,:2]
+
+                xy_2diff = np.concatenate([ np.zeros((1,2)) ,xy_poses[2:] - xy_poses[:-2]], axis = 0)
+                xy_4diff = np.concatenate([ np.zeros((3,2)) ,xy_poses[4:] - xy_poses[:-4]], axis = 0)
+                xy_8diff = np.concatenate([ np.zeros((7,2)) ,xy_poses[8:] - xy_poses[:-8]], axis = 0)
+                xy_16diff = np.concatenate([ np.zeros((15,2)) ,xy_poses[16:] - xy_poses[:-16]], axis = 0)
+
                 init_proprio = sample[key][0,:6]
-                sample[key + "_diff"] = sample[key][1:] - sample[key][:-1]
+                sample[key + "_diff"] = np.concatenate([sample[key][1:] - sample[key][:-1], xy_2diff, xy_4diff,\
+                    xy_8diff, xy_16diff], axis = 1)
+
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
+                
                 sample[key + "_diff"] = np.concatenate([sample[key + "_diff"],\
                  np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
+
+                sample['rel_pos_init'] = sample[key][0,:2]
+
             elif key == 'contact':
                 sample[key] = np.array(dataset[key][idx0:idx1])
                 sample[key + "_diff"] = sample[key][1:].astype(np.int16) - sample[key][:-1].astype(np.int16) 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
                 sample[key + "_diff"] = np.concatenate([sample[key + "_diff"],\
-                 np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0) 
+                 np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
+
             elif key == 'peg_vector' or key == 'hole_vector' or key == 'macro_action' or key == 'fit_vector':
                 sample[key] = np.array(dataset[key])
 
                 if key == "fit_vector":
                     sample["option_vector"] = sample[key]
-                    sample["fit_label"] = sample[key].argmax(0)
+                    sample["fit_idx"] = np.array(sample[key].argmax(0))
                 elif key == "peg_vector":
                     sample["tool_vector"] = sample[key]
                     sample["tool_idx"] = np.array(sample[key].argmax(0))
                 elif key == "hole_vector":
                     sample["state_vector"] = sample[key]
                     sample["state_idx"] = np.array(sample[key].argmax(0))                   
-                    sample["cand_idx"] = np.array(sample[key].argmax(0))
-
-        plot_image(np.rot90(np.transpose(sample["rgbd_last"][:-1], (1,2,0)), k = 1))
-        a = input("")
-
-        dataset.close()
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
         sample["macro_action"] = init_proprio[:2]
-        sample["pol_idx"] = np.array(dataset['policies'][0,0])
+        sample["pol_idx"] = np.array(dataset['policy'][-1,0])
 
+        dataset.close()
+
+        # a = input(" ")
         ##########################################################    
         ##### End of Project Specific Code #######################
         ##########################################################
-
+        # print(time.time() - prev_time)
         return self.transform(sample)
 
 class ToTensor(object):
@@ -258,12 +253,13 @@ class ToTensor(object):
         # convert numpy arrays to pytorch tensors
         new_dict = dict()
         for k, v in sample.items():
-
         ###########################################################
         ##### Project Specific Code Here ##########################
         ###########################################################
             if k == "padding_mask":
                 new_dict[k] = torch.from_numpy(v).bool()
+            elif k[-3:] == "idx":
+                new_dict[k] = torch.from_numpy(v).long()                
             else:
                 new_dict[k] = torch.from_numpy(v).float()
             '''
@@ -275,3 +271,80 @@ class ToTensor(object):
         ##########################################################
 
         return new_dict
+
+
+
+            # elif key == 'hole_info':
+            #     sample['hole_sites'] = np.array(dataset[key])[:,:2] - np.array([[0.5, 0.0],[0.5, 0.0],[0.5, 0.0]])
+
+            #     pixels = np.array(dataset[key])[:,-2:]
+
+            #     sample['pixels'] = pixels + pixel_shift
+
+            #     sample['heat_map_idx'] = np.zeros((3,128,128))
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1])] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1])] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1])] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) + 1, int(pixels[0,1] + pixel_shift[1]) + 1] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) + 1, int(pixels[1,1] + pixel_shift[1]) + 1] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) + 1, int(pixels[2,1] + pixel_shift[1]) + 1] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) - 1, int(pixels[0,1] + pixel_shift[1]) + 1] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) - 1, int(pixels[1,1] + pixel_shift[1]) + 1] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) - 1, int(pixels[2,1] + pixel_shift[1]) + 1] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) + 1, int(pixels[0,1] + pixel_shift[1]) - 1] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) + 1, int(pixels[1,1] + pixel_shift[1]) - 1] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) + 1, int(pixels[2,1] + pixel_shift[1]) - 1] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) - 1, int(pixels[0,1] + pixel_shift[1]) - 1] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) - 1, int(pixels[1,1] + pixel_shift[1]) - 1] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) - 1, int(pixels[2,1] + pixel_shift[1]) - 1] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1]) + 1] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1]) + 1] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1]) + 1] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) + 1, int(pixels[0,1] + pixel_shift[1])] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) + 1, int(pixels[1,1] + pixel_shift[1])] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) + 1, int(pixels[2,1] + pixel_shift[1])] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1]) - 1] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1]) - 1] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1]) - 1] = 1.0
+
+            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) - 1, int(pixels[0,1] + pixel_shift[1])] = 1.0
+            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) - 1, int(pixels[1,1] + pixel_shift[1])] = 1.0
+            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) - 1, int(pixels[2,1] + pixel_shift[1])] = 1.0
+
+            #     # print(np.array(dataset[key])[:,:3])
+
+            # elif key == 'reference_image':
+            #     image = np.array(dataset[key]) / 255.0
+            #     sample[key] = add_noise_and_shift(image, noise = 0.03, shift_x = pixel_shift[0] , shift_y = pixel_shift[1])
+
+            # elif key == 'reference_point_cloud':
+            #     sample[key] = add_noise_and_shift(np.array(dataset[key]), noise = 0.005, shift_x = pixel_shift[0] , shift_y = pixel_shift[1])
+
+            # elif key == 'reference_depth':
+            #     sample[key] = add_noise_and_shift(np.array(dataset[key]), noise = 0.03, shift_x = pixel_shift[0] , shift_y = pixel_shift[1])
+        # sample["correct_site"] = sample['hole_sites'][sample['state_idx']]
+        # sample['point_cloud_point_est'] = sample['reference_point_cloud']\
+        # [int(pixels[sample['state_idx'],0] + pixel_shift[0]), int(pixels[sample['state_idx'],1] + pixel_shift[1]), :2]
+
+        # sample['point_cloud_point_ests'] = np.concatenate([\
+        #     np.expand_dims(sample['reference_point_cloud'][int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1]), :2], axis = 0),\
+        #     np.expand_dims(sample['reference_point_cloud'][int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1]), :2], axis = 0),\
+        #     np.expand_dims(sample['reference_point_cloud'][int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1]), :2], axis = 0)\
+        #     ], axis = 0)
+        # print("point cloud est 0", sample['reference_point_cloud'][int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1])])
+        # print("point cloud est 1", sample['reference_point_cloud'][int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1])])
+        # print("point cloud est 2", sample['reference_point_cloud'][int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1])])
+
+        # print("point cloud est 0", np.array(dataset['reference_point_cloud'])[int(pixels[0,0]), int(pixels[0,1])])
+        # print("point cloud est 1", np.array(dataset['reference_point_cloud'])[int(pixels[1,0]), int(pixels[1,1])])
+        # print("point cloud est 2", np.array(dataset['reference_point_cloud'])[int(pixels[2,0]), int(pixels[2,1])])
+
+        # plot_image(np.rot90(np.transpose(sample["rgbd_last"][:-1], (1,2,0)), k = 1))
+        # a = input("")

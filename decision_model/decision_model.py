@@ -27,12 +27,10 @@ class Decision_Model(object):
 
 		correct_states = []
 		correct_options = []
-		self.cand_count = []
 
 		for k, v in self.env.robo_env.hole_sites.items():
 			correct_states.append(v[0])
 			correct_options.append(v[1])
-			self.cand_count.append(0)
 
 		self._reset_probs(correct_states, correct_options)
 
@@ -42,6 +40,8 @@ class Decision_Model(object):
 		
 		self.max_entropy = inputs2ent(probs2inputs(self.state_probs)).item()
 		self.curr_state_entropy = inputs2ent(probs2inputs(self.state_probs)).item()
+
+		self.reward_ests = torch.ones(self.state_dict['num_cand']).float().unsqueeze(0).to(self.device)
 
 		self.step_count = 0
 
@@ -68,22 +68,27 @@ class Decision_Model(object):
 			max_exp_reward_info, fit_action_partial = self.max_exp_reward_info(self.state_probs, cand_idx_fit, info_actions_partial)
 			action = (cand_idx_fit, fit_action_partial)
 
-			print(cand_idx_fit)
+			self.insert_choice = True
+
+			print("Index of hole choice: ", cand_idx_fit)
 		else:
 			print("Collecting Information")
 			action = (cand_idx_info, info_action_max)
 
-			print(cand_idx_info)
+			self.insert_choice = False
+
+			print("Index of hole choice: ", cand_idx_info)
 
 		print("\n#####################\n")
 
 		return action
 
-	def max_exp_reward_fit(self, state_probs, success_rate = 1.0, fit_reward = 1.0):
-		
+	def max_exp_reward_fit(self, state_probs, success_rate = 1.0):
+		batch_size = state_probs.size(0)
+
 		prob_fit = self.marginalize(state_probs, substate_idx = self.env.robo_env.tool_idx)
 
-		rewards = prob_fit * success_rate * fit_reward
+		rewards = prob_fit * success_rate * self.reward_ests.repeat_interleave(batch_size, dim = 0)
 
 		return rewards.max(1)[0], rewards.max(1)[1][0].item()
 
@@ -144,23 +149,16 @@ class Decision_Model(object):
 
 		self.state_probs = logits2probs(state_posterior_logits)
 
-	def update_sites_est(self, site_est, cand_idx):
-		if self.cand_count[cand_idx] == 0:
-			self.env.robo_env.hole_sites[cand_idx][-2] = site_est
-		else:
-			self.env.robo_env.hole_sites[cand_idx][-2] = (1 - self.lrn_rate) * self.env.hole_sites[cand_idx][-2] + self.lrn_rate * site_est
-
-		self.cand_count[cand_idx] += 1
-
 	def new_obs(self, action, obs):
 		if obs != None:
 			cand_idx, action_partial = action
 
+			if self.insert_choice:
+				self.reward_ests[0,cand_idx] *= 0.5
+
 			# print("Action", action)
 			# print("Partial Action", action_partial)
-			obs_idx = self.env.sensor_obs(obs, cand_idx, action_partial[0])
-			site_est = self.env.sensor_site_est(obs, cand_idx, action_partial[0])
-			self.update_sites_est(site_est,cand_idx)
+			obs_idx = self.env.sensor_obs(obs, action_partial)
 
 			# print(self.state_probs)
 			self.update_state_probs(cand_idx, obs_idx, np.expand_dims(action_partial, axis = 0))

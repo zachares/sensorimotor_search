@@ -1,33 +1,53 @@
 # want to use the same control parameters, peg list, options list and fit list
 # as those used to collect the dataset which was used to train the networks
-dataset_path: /scr2/muj_senssearch_dataset10HZ_SAC_20200629/
-policy_path:  /scr2/muj_senssearch_dataset10HZ_SAC_20200629/06-29-sac-robosuite/06-29-sac-robosuite_2020_06_29_13_32_19_0000--s-59100/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200625/rl/06-25-sac-robosuite/06-25-sac-robosuite_2020_06_25_14_40_31_0000--s-88765/"
-idx_dict_path: /scr-ssd/sens_search_logging/runs/20200630_training_23_rl_policy/val_train_split.pkl
+policy_path:  /scr2/muj_senssearch_dataset10HZ_SAC_20200706_relpos_nonoise/07-06-sac-robosuite/07-06-sac-robosuite_2020_07_06_18_39_45_0000--s-14979/ 
+#/scr2/muj_senssearch_dataset10HZ_SAC_20200629/06-29-sac-robosuite/06-29-sac-robosuite_2020_06_29_13_32_19_0000--s-59100/ 
+#"/scr2/muj_senssearch_dataset10HZ_SAC_20200625/rl/06-25-sac-robosuite/06-25-sac-robosuite_2020_06_25_14_40_31_0000--s-88765/"
   # "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
 
 decision_params:
   converge_thresh: 10
-  num_samples: 100
-  policy_idxs: [0,0]
   constraint_type: 1
 
+control_params:
+  workspace_dim: 0.02
+  kp: [6, 6, 6]
+  control_freq: 10
+  step_threshold: 75
+  tol: 0.002
+  seed: 4321
+  horizon: 100
+  min_length: 20
+  shift_bool: 0.0
+  # noise_parameters: [0.4, 0.4, 0.4]
+
 logging_params:
-  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
   run_mode: 1 #Options include: 0 -> development, 1 -> evaluation
   num_trials: 10
-  run_notes: "_spring_testing"
+  run_notes: "_summer_testing"
+  collect_vision_bool: 0.0
+  plus_offset: [ 0, 0, 0.02]
+  logging_data_bool: 0.0
 
 model_params:
   use_GPU: True
 
+policy_keys: ['rel_pos', 'contact', 'peg_type'] # ["encoding"] # 
+traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
+
+#### these lists are important and should be saved with the dataset
+action_dim: 3
+state_dim: 7
+
 info_flow:
   Options_Sensor:
-    model_folder: "/scr-ssd/sens_search_logging/models/20200630_training_45_rl_policy/"  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
-    epoch_num: 2300
-  Options_ConfNet:
-    model_folder: "/scr-ssd/sens_search_logging/models/20200701_training_3_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
-    epoch_num: 22
+    model_folder: /scr-ssd/sens_search_logging/models/20200708_training_12_rl_policy/  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
+    epoch: 46
+  Options_LikelihoodNet:
+    model_folder: /scr-ssd/sens_search_logging/models/20200708_training_12_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
+    epoch: 46
 
   # Options_Sensor:
   #   model_folder: "/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/"  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
