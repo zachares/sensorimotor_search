@@ -21,44 +21,12 @@ from robosuite.wrappers import IKWrapper
 
 if __name__ == '__main__':
 
-	peg_types = ["Square"]
-
-	obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel", 'image', 'depth']
-	peg_dict = {}
-
-	with open("datacollection_params.yml", 'r') as ymlfile:
-		cfg = yaml.safe_load(ymlfile)
-
-	logging_folder = cfg['datacollection_params']['logging_folder']
-	logging_data_bool = cfg['datacollection_params']['logging_data_bool']
-	display_bool = cfg['datacollection_params']['display_bool']
-	num_trajectories = cfg['datacollection_params']['num_trajectories']
-	kp = np.array(cfg['datacollection_params']['kp'])
-	noise_parameters = np.array(cfg['datacollection_params']['noise_parameters'])
-	ctrl_freq = np.array(cfg['datacollection_params']['control_freq'])
-
-	step_threshold = cfg['datacollection_params']['step_threshold']
-
-	workspace_dim = cfg['datacollection_params']['workspace_dim']
-	seed = cfg['datacollection_params']['seed']
-
-	random.seed(seed)
-	np.random.seed(seed)
-
-	if display_bool:
-		obs_keys = [ "force_hi_freq", "proprio", "action", "contact", "joint_pos", "joint_vel"]
-
-
-	if os.path.isdir(logging_folder) == False and logging_data_bool == 1:
-		os.mkdir(logging_folder )
-
-	print("Robot operating with control frequency: ", ctrl_freq)
 	env = robosuite.make("PandaPegInsertion", 
-	has_renderer= not display_bool, ignore_done=True,\
-	use_camera_obs= not display_bool, 
-	has_offscreen_renderer=not display_bool, 
+	has_renderer= True, ignore_done=True,\
+	use_camera_obs= False, 
+	has_offscreen_renderer=False, 
 	gripper_visualization=True, 
-	control_freq=ctrl_freq,\
+	control_freq=10,\
 	gripper_type ="SquarePegwForce", 
 	controller='position', 
 	camera_depth=True,
@@ -99,10 +67,10 @@ if __name__ == '__main__':
 	def append_x(l, item, times):
 		for i in range(times):
 			l.append(item)
-	append_x(noise_list, 0.4, 5)
-	append_x(noise_list, 0.5, 5)
-	append_x(noise_list, 0, 5)
-	append_x(noise_list, 0.05, 5)
+	# append_x(noise_list, 0.4, 5)
+	# append_x(noise_list, 0.5, 5)
+	append_x(noise_list, 0, 2)
+	# append_x(noise_list, 0.05, 25)
 	# append_x(noise_list, 0.1, 25)
 	# append_x(noise_list, 0.2, 20)
 	# append_x(noise_list, 0.3, 10)
