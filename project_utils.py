@@ -11,9 +11,7 @@ import itertools
 import torch
 import torch.nn.functional as F
 
-sys.path.insert(0, "../supervised_learning/") 
-
-from multinomial import *
+# from multinomial import *
 from collections import OrderedDict
 import time
 
@@ -33,7 +31,9 @@ def save_obs(obs_dict, keys, array_dict):
 
 		if key == "image":
 			# plot_image(obs_dict['image'])
-			obs = np.expand_dims(obs_dict[key][:].astype(np.uint8), axis =0)
+			obs = np.expand_dims(obs_dict[key][::-1,...].astype(np.uint8), axis =0)
+		elif key == "depth":
+			obs = np.expand_dims(obs_dict[key][::-1,...], axis = 0)
 		else:
 			obs = np.expand_dims(obs_dict[key][:], axis = 0)
 
@@ -42,11 +42,7 @@ def save_obs(obs_dict, keys, array_dict):
 		else:
 			array_dict[key] = [obs]
 
-	# print(obs_dict['rel_proprio'], "\n")
-	# print(np.sum(obs_dict['image']))
-def add_noise_and_shift(image, noise, shift_x, shift_y):
-	noisy_image = image + np.random.normal(loc=0.0, scale=noise, size = image.shape)
-	return np.roll(np.roll(noisy_image, shift_x, axis = 0), shift_y, axis = 1)
+
 
 def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 	tensor_dict = OrderedDict()
@@ -61,19 +57,6 @@ def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 			tensor_dict[key] = torch.from_numpy(value).float().to(device)
 
 	return tensor_dict
-
-# def copy_dict(o_dict):
-# 	n_dict = OrderedDict()
-# 	for k, v in o_dict.items():
-# 		n_dict[k] = v[:]
-# 		# if type(v) == list or (type(v) == np.ndarray and len(v.shape) > 0):
-# 		# 	print("LIST ARRAY\n", k, "\n", v)
-# 		# 	n_dict[k] = v[:]
-# 		# else:
-# 		# 	print("scalar\n", k, "\n", v)
-# 		# 	n_dict[k] = v
-
-# 	return n_dict
 
 def print_histogram(probs, labels):
 	block_length = 10 # magic number
@@ -188,48 +171,111 @@ def initpoints(workspace_dim, num_samples = 50000):
 
     return c_point_list
 
-def movetogoal_woutobs(env, cfg, goal, recording_dict = None, recording_keys = None):
-    kp = np.array(cfg['control_params']['kp'])
-    step_threshold = cfg['control_params']['step_threshold']
-    tol = cfg['control_params']['tol']
-    display_bool = cfg['logging_params']['display_bool']
+def circ_mp2D(step, cfg): # 2D circular motion primitive
+	radius_travelled = 0.02
+	horizon = cfg['control_params']['horizon']
+	radius_scale = radius_travelled / horizon
+	num_rotations = 3
 
-    top_goal = env.hole_sites[env.cand_idx][-2]
-    step_count = 0
-    # glb_ts = 0
-    # print(goal)
+	frequency = 2 * np.pi * num_rotations / horizon
+	radius = radius_scale * step
+	time = frequency * step
 
-    while env.check_eef_pos_err(goal, tol) == False and step_count < step_threshold:
-        action = kp * env.get_eef_pos_err(goal + top_goal)
+	return np.array([radius * np.sin(time), radius * np.cos(time), -0.004])
 
-        obs, reward, done, info = env.step(action, ignore_obs=True)
-        
-        if display_bool:
-            env.render()
+def movetogoal(env, cfg, goal, recording_dict = None, recording_keys = None,\
+ noise_bool = False, tolerance_bool = True, horizon_bool = False):
+	######### control parameters
+	kp = np.array(cfg['control_params']['kp'])
+	tol = cfg['control_params']['tol']
+	noise_std = cfg['control_params']['noise_std']
+	horizon = cfg['control_params']['movement_horizon']
+	display_bool = cfg['logging_params']['display_bool']
+	step = 0
 
+	######### determining initial goal
+	if callable(goal): # motion primitive
+		goal_pos = goal(step, cfg)
+		tol_bool = False
+		hor_bool = True
+	elif type(goal) == list: # list of waypoints
+		for g in goal:
+			movetogoal(env, cfg, g, recording_dict = recording_dict, recording_keys = recording_keys,\
+				noise_bool = noise_bool, tolerance_bool = tolerance_bool, horizon_bool = horizon_bool)
+
+		tol_bool = False
+		hor_bool = False
+
+	elif type(goal)==np.ndarray: # single waypoint
+		goal_pos = goal[:]
+		tol_bool = tolerance_bool
+		hor_bool = horizon_bool
+	else:
+		raise Exception(type(goal), ' is an unsupported goal type at this time')
+
+	if tol_bool and hor_bool:
+		continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+		and (hor_bool and step < horizon)
+	else:
+		continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+		or (hor_bool and step < horizon)
+		
+	######## checking whether to continue movement
+	while continue_bool:
+	 	############# calculating error based on position error
+		# print("Goal: ", goal)
+		# print("Reference Point: ", env.reference_point)
+		# print("Goal: ", goal + env.reference_point)
+		# print("Error: ", env.get_eef_pos_err(goal + env.reference_point)[3])
+		# print("Proportional Error: ", kp * env.get_eef_pos_err(goal + env.reference_point))
+		action = kp * env.get_eef_pos_err(goal_pos + env.reference_point)
+
+		########## adding noise
+		if all(noise_std) >= 0:
+			assert len(noise_std) == 1 or len(noise_std) == action.size
+			noise = np.random.normal(0.0, noise_std, action.size)
+			action += noise[:]
+		elif any(noise_std) < 0:
+			raise Exception('Noise standard deviation can only be a positive value')
+
+		######### recording observations
+		if recording_keys is not None:
+			obs, reward, done, info = env.step(action)
+			obs["action"] = action[:]
+			save_obs(obs, recording_keys, recording_dict)
+		else:
+			obs, reward, done, info = env.step(action, ignore_obs = True)            
+
+		######## rendering
+		if display_bool:
+			env.render()
+
+		######## plotting code for debugging
         # if display_bool:
-        #   plt.scatter(glb_ts, obs['force'][2])
-        #   # plt.scatter(glb_ts, obs['contact'])
+        #   plt.scatter(step, obs['force'][2])
+        #   # plt.scatter(step, obs['contact'])
         #   plt.pause(0.001)
-        # glb_ts += 1
 
-        step_count += 1
+        ######## recording number of steps and updating goal
+		step += 1
 
-    obs, reward, done, info = env.step(action)
-    obs['action'] = action
-    obs['policy'] = np.array([-1])
+		if callable(goal):
+			goal_pos = goal(step, cfg)
 
-    if recording_dict is not None:
-    	save_obs(obs, recording_keys, recording_dict)
+		if tol_bool and hor_bool:
+			continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+			and (hor_bool and step < horizon)
+		else:
+			continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+			or (hor_bool and step < horizon)
 
-    obs, reward, done, info = env.step(action)
-    obs['action'] = action
-    obs['policy'] = np.array([-1])
+	##### closing plot from debugging code
+	# plt.close('all')
 
-    if recording_dict is not None:
-    	save_obs(obs, recording_keys, recording_dict)
 
-    return obs
+
+
+
 
 # def move_down(env, display_bool):
 # 	obs, reward, done, info = env.step(np.array([0,0, -0.1]))

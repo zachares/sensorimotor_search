@@ -12,6 +12,9 @@ from sklearn.linear_model import LinearRegression
 from project_utils import *
 
 ## ADD data normalization
+def read_h5(path):
+    return h5py.File(path, 'r', swmr=True, libver = 'latest')
+    
 class Custom_DataLoader(Dataset):
     def __init__(self, cfg, idx_dict = None, device = None, transform=None):
         dataset_path = cfg['dataset_path']
@@ -68,6 +71,9 @@ class Custom_DataLoader(Dataset):
             self.dev_ratio = dev_num / len(filename_list)
 
             self.idx_dict["min_length"] = self.min_length
+
+            print("Min Length: ", min_length)
+
             self.idx_dict['max_length'] = self.max_length
 
             self.idx_dict["policies"] = []
@@ -81,14 +87,22 @@ class Custom_DataLoader(Dataset):
                 train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
                 dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
                 dataset = read_h5(filename)
-                policy = dataset["policy"][-1,0]
+                # policy = dataset["policy"][-1,0]
 
-                forces = np.array(dataset['force_hi_freq'])
-                # length = forces.shape[0] 
+                forces = np.array(dataset['force_hi_freq'][:,:,:6])
+
+                rel_proprio = np.array(dataset['rel_proprio'])
+
+                # tolerance = 0.025
+
+                # if np.linalg.norm(rel_proprio[0,:2]) > tolerance:
+                #     print(filename)
+                #     continue
+ 
                 dataset.close()               
 
-                if policy not in self.idx_dict["policies"]:
-                    self.idx_dict["policies"].append(policy)
+                # if policy not in self.idx_dict["policies"]:
+                #     self.idx_dict["policies"].append(policy)
 
                 # if length < self.min_length:
                 #     continue
@@ -132,7 +146,7 @@ class Custom_DataLoader(Dataset):
             self.dev_length = len(list(self.idx_dict['dev'].keys()))
 
         for key in cfg['info_flow'].keys():
-            cfg['info_flow'][key]['init_args']['num_policies'] = len(self.idx_dict["policies"])
+            # cfg['info_flow'][key]['init_args']['num_policies'] = len(self.idx_dict["policies"])
             cfg['info_flow'][key]['init_args']['force_mean'] = self.idx_dict['force_mean'].tolist()
             cfg['info_flow'][key]['init_args']['force_std'] = self.idx_dict['force_std'].tolist()
 
@@ -167,18 +181,14 @@ class Custom_DataLoader(Dataset):
         max_length = self.idx_dict["max_length"]
         min_length = self.idx_dict["min_length"]
 
-        if max_traj_length <= min_length:
-            idx0 = 0
-            idx1 = max_traj_length
-        else:
-            idx0 = np.random.choice(max_traj_length - min_length) # beginning idx
-            idx1 = np.random.choice(range(idx0 + min_length, min(idx0 + max_length, max_traj_length))) # end idx
+        idx0 = np.random.choice(max_traj_length - min_length) # beginning idx
+        idx1 = np.random.choice(range(idx0 + min_length, min(idx0 + max_length, max_traj_length))) # end idx
 
         padded = max_length - idx1 + idx0 + 1
         unpadded = idx1 - idx0 - 1
         sample = {}
 
-        pixel_shift = np.random.choice(range(-10,11), 2)
+        # pixel_shift = np.random.choice(range(-10,11), 2)
 
         for key in self.dataset_keys:
             if key == 'action':
@@ -186,35 +196,22 @@ class Custom_DataLoader(Dataset):
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'force_hi_freq':
-                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
+                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])[:,:,:6]
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
 
             elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
-                xy_poses = sample[key][:,:2]
 
-                xy_2diff = np.concatenate([ np.zeros((1,2)) ,xy_poses[2:] - xy_poses[:-2]], axis = 0)
-                xy_4diff = np.concatenate([ np.zeros((3,2)) ,xy_poses[4:] - xy_poses[:-4]], axis = 0)
-                xy_8diff = np.concatenate([ np.zeros((7,2)) ,xy_poses[8:] - xy_poses[:-8]], axis = 0)
-                xy_16diff = np.concatenate([ np.zeros((15,2)) ,xy_poses[16:] - xy_poses[:-16]], axis = 0)
-
-                init_proprio = sample[key][0,:6]
-                sample[key + "_diff"] = np.concatenate([sample[key][1:] - sample[key][:-1], xy_2diff, xy_4diff,\
-                    xy_8diff, xy_16diff], axis = 1)
+                sample['rel_pos_final'] = sample[key][-1,:2]
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-                
-                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"],\
-                 np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
-
-                sample['rel_pos_init'] = sample[key][0,:2]
+            # elif key == 'virtual_force':
+            #     sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
+            #     sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'contact':
-                sample[key] = np.array(dataset[key][idx0:idx1])
-                sample[key + "_diff"] = sample[key][1:].astype(np.int16) - sample[key][:-1].astype(np.int16) 
+                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-                sample[key + "_diff"] = np.concatenate([sample[key + "_diff"],\
-                 np.zeros((padded, sample[key + "_diff"].shape[1]))], axis = 0)
 
             elif key == 'peg_vector' or key == 'hole_vector' or key == 'macro_action' or key == 'fit_vector':
                 sample[key] = np.array(dataset[key])
@@ -230,8 +227,7 @@ class Custom_DataLoader(Dataset):
                     sample["state_idx"] = np.array(sample[key].argmax(0))                   
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
-        sample["macro_action"] = init_proprio[:2]
-        sample["pol_idx"] = np.array(dataset['policy'][-1,0])
+        # sample["pol_idx"] = np.array(dataset['policy'][-1,0])
 
         dataset.close()
 
@@ -271,7 +267,6 @@ class ToTensor(object):
         ##########################################################
 
         return new_dict
-
 
 
             # elif key == 'hole_info':

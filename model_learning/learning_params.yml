@@ -1,5 +1,10 @@
 relative_path: "../../supervised_learning/"
-dataset_path: /scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/
+dataset_path: /scr2/muj_motion_primitive_20200722/
+  #/scr2/muj_senssearch_dataset10HZ_SAC_20200716_relpos_noisy_final/
+# /scr1/muj_senssearch_dataset10HZ_SAC_20200715_relpos_noisy_multitorque_wrist_camera/
+  # /scr2/muj_senssearch_dataset10HZ_SAC_20200713_relpos_noisy/ 
+#/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/
+# 
   #/scr2/muj_senssearch_dataset10HZ_SAC_20200706_relpos_nonoise/
 #/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/
 #
@@ -13,7 +18,9 @@ dataset_path: /scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/
 dataloading_params:
   num_workers: 4
   batch_size: 128
-  idx_dict_path: /scr-ssd/sens_search_logging/models/20200710_training_10_rl_policy/val_train_split.pkl
+  idx_dict_path: /scr-ssd/sens_search_logging/runs/20200723_training_5_rl_policy/val_train_split.pkl
+    #/scr-ssd/sens_search_logging/runs/20200714_training_11_rl_policy/val_train_split.pkl
+ #/scr-ssd/sens_search_logging/models/20200710_training_10_rl_policy/val_train_split.pkl
     #/scr-ssd/sens_search_logging/runs/20200707_training_24_rl_policy/val_train_split.pkl
   #/scr-ssd/sens_search_logging/models/20200707_training_15_rl_policy/val_train_split.pkl
     #
@@ -48,7 +55,7 @@ custom_params:
   action_size: 3
   macro_action_size: 4
   proprio_size: 12
-  min_length: 20
+  min_length: 50
   max_length: 100
   dropout_prob: 0.2
   
@@ -120,7 +127,45 @@ info_flow:
   #       losses:
   #         Multinomial_KL: 
   #           logging_name: "Confusion_Class"
-  History_Encoder:
+  # History_Encoder_CNN:
+  #   train: 1
+  #   model_folder: "" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
+  #   epoch: 0
+  #   init_args:
+  #     num_tools: 3
+  #     num_states: 3
+  #     num_options: 2
+  #     action_size: 3
+  #     distance_size: 4
+  #     force_size: [6, 50]
+  #     dropout_prob: 0.2
+  #   inputs:
+  #     rel_proprio: dataset
+  #     action: dataset
+  #     force_hi_freq: dataset
+  #     tool_vector: dataset
+  #     contact: dataset
+  #     epoch: dataset
+  #   outputs:
+  #     pos_est:
+  #       inputs:
+  #         rel_pos_init: dataset
+  #       evals:
+  #         Continuous_Error:
+  #           logging_name:  Position_Estimate
+  #     state_logits:
+  #       inputs:
+  #         state_idx: dataset
+  #       losses: 
+  #         Multinomial_NLL:
+  #           logging_name: Hole_Shape_Class
+  #     state_inputs:
+  #       inputs:
+  #         state_idx: dataset
+  #       evals:
+  #         Multinomial_Accuracy:
+  #           logging_name: "classifier_accuracy"
+  History_Encoder_Transformer:
     train: 1
     model_folder: "" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
     epoch: 0
@@ -128,43 +173,38 @@ info_flow:
       num_tools: 3
       num_states: 3
       num_options: 2
-      action_dim: 3
+      action_size: 3
       proprio_size: 12
       force_size: [6, 50]
       dropout_prob: 0.2
     inputs:
-      rel_proprio_diff: "dataset"
-      force_hi_freq: "dataset"
-      action: "dataset"
-      contact_diff: "dataset"
-      padding_mask: "dataset"
-      tool_idx: "dataset"
-      state_idx: "dataset"
-      epoch: "dataset"
+      rel_proprio: dataset
+      action: dataset
+      force_hi_freq: dataset
+      contact: dataset
+      tool_idx: dataset
+      padding_mask: dataset
+      epoch: dataset
     outputs:
-      options_class:
+      pos_est:
+        inputs:
+          rel_pos_final: dataset
+        losses:
+          L1:
+            weight: 500
+            logging_name: Position_Estimate
+        evals:
+          Continuous_Error:
+            logging_name:  Pos_Err_Force
+      state_logits:
         inputs:
           state_idx: dataset
         losses: 
-          Multinomial_NLL_Ensemble:
-            logging_name: States_Class
-      rel_pos_est:
-        inputs:
-          rel_pos_init: dataset
-        losses:
-          L1_Ensemble:
-            weight: 500
-            logging_name: Pos_Est_Force
-        evals:
-          Continuous_Error_Ensemble:
-            logging_name:  Pos_Err_Force
-      options_inputs:
+          Multinomial_NLL:
+            logging_name: Hole_Shape_Class
+      state_inputs:
         inputs:
           state_idx: dataset
         evals:
-          Multinomial_Accuracy_Ensemble:
+          Multinomial_Accuracy:
             logging_name: "classifier_accuracy"
-          # Multinomial_Entropy_Ensemble:
-          #   logging_name: "classifier_entropy"
-          # Multinomial_Entropy_Spread_Ensemble:
-          #   logging_name: "classifier_entropy_gap"
