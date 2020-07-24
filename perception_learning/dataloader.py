@@ -5,11 +5,7 @@ import copy
 import time
 import os
 import yaml
-
 from torch.utils.data import Dataset
-from utils import read_h5
-from sklearn.linear_model import LinearRegression
-from project_utils import *
 
 ## ADD data normalization
 def read_h5(path):

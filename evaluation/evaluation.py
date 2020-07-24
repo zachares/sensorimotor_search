@@ -11,16 +11,11 @@ import itertools
 import torch
 import torch.nn.functional as F
 
-sys.path.insert(0, "../../robosuite/") 
-sys.path.insert(0, "../learning/") 
-sys.path.insert(0, "../../supervised_learning/")
-sys.path.insert(0, "../")
-
 from models import *
 from logger import Logger
 from decision_model import *
 from project_utils import *
-from supervised_learning_utils import *
+from utils_sl import *
 
 import robosuite
 import robosuite.utils.transform_utils as T
@@ -32,7 +27,7 @@ if __name__ == '__main__':
 	###################################################
 	### Loading run parameters from yaml file
 	#####################################################
-	with open("perception_params.yml", 'r') as ymlfile:
+	with open("testing_params.yml", 'r') as ymlfile:
 		cfg = yaml.safe_load(ymlfile)
 
 	display_bool = cfg['logging_params']['display_bool']

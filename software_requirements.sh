@@ -2,8 +2,8 @@
 
 # first navigate to the folder where you have anaconda installed -- assuming you have installed Anaconda 3
 
-conda create -n sens_search python=3.7
-conda activate sens_search
+conda create -n sens_search1 python=3.7
+conda activate sens_search1
 
 ### Setting environmental variables for running mujoco and activating renderer
 cd $CONDA_PREFIX
@@ -32,7 +32,14 @@ echo "alias offscreen_render_muj='unset LD_PRELOAD'" >> ~/.bash_aliases
 # installing pytorch make sure you have the right cudatoolkit for your computer
 conda install pytorch torchvision cudatoolkit=9.2 -c pytorch
 
-# installing miscillaneous packages
+conda install -c conda-forge tensorboardx
+
+conda install -c intel scikit-learn
+echo 'export USE_DAAL4PY_SKLEARN=YES' >> ./etc/conda/activate.d/env_vars.sh
+echo 'unset USE_DAAL4PY_SKLEARN' >> ./etc/conda/deactivate.d/env_vars.sh
+
+conda install -c conda-forge gym
+
 conda install h5py
 
 # create project directory
@@ -48,9 +55,14 @@ pip install pyquaternion
 sudo apt install libosmesa6-dev libgl1-mesa-glx libglfw3
 
 pip install mujoco-py
+
+pip install pybullet==1.9.5
+
 cd robosuite
 pip install -e .
 cd ..
+
+pip install gtimer
 
 git clone -b sens_search https://github.com/amichlee/rlkit.git
 cd rlkit
@@ -66,5 +78,8 @@ git clone -b sens_search  https://github.com/zachares/supervised_learning.git
 cd supervised_learning
 pip install -e .
 cd ..
+
+pip install pyyaml
+
 
 
