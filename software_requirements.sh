@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # first navigate to the folder where you have anaconda installed -- assuming you have installed Anaconda 3
-
 conda create -n sens_search1 python=3.7
 conda activate sens_search1
 
@@ -35,8 +34,8 @@ conda install pytorch torchvision cudatoolkit=9.2 -c pytorch
 conda install -c conda-forge tensorboardx
 
 conda install -c intel scikit-learn
-echo 'export USE_DAAL4PY_SKLEARN=YES' >> ./etc/conda/activate.d/env_vars.sh
-echo 'unset USE_DAAL4PY_SKLEARN' >> ./etc/conda/deactivate.d/env_vars.sh
+# echo 'export USE_DAAL4PY_SKLEARN=YES' >> ./etc/conda/activate.d/env_vars.sh
+# echo 'unset USE_DAAL4PY_SKLEARN' >> ./etc/conda/deactivate.d/env_vars.sh
 
 conda install -c conda-forge gym
 
