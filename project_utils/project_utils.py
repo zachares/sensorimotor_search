@@ -14,6 +14,7 @@ import torch.nn.functional as F
 # from multinomial import *
 from collections import OrderedDict
 import time
+import copy
 
 '''
 Data Collection and Recording Functions
@@ -38,11 +39,9 @@ def save_obs(obs_dict, keys, array_dict):
 			obs = np.expand_dims(obs_dict[key][:], axis = 0)
 
 		if key in array_dict.keys():
-			array_dict[key].append(obs)
+			array_dict[key].append(copy.deepcopy(obs))
 		else:
-			array_dict[key] = [obs]
-
-
+			array_dict[key] = [copy.deepcopy(obs)]
 
 def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 	tensor_dict = OrderedDict()
@@ -110,171 +109,209 @@ def print_histogram(probs, labels):
 def toTorch(array, device):
     return torch.from_numpy(array).to(device).float()
 '''
-Decision Functions
+Outer Loop Functions
 '''
-def gen_state_dict(num_cand, substate_names, option_names, constraint_type):
-	num_options = len(option_names)
+def gen_task_dict(num_actions, substate_names, observation_names, likelihood_model = None, constraint_type = 1):
 	num_substates = len(substate_names)
-	state_dict = {}
+	task_dict = {}
 
-	if constraint_type == 0: # no restrictions
-		state_dict["states"] = tuple(itertools.product(range(num_substates), repeat = num_cand))
-	elif constraint_type == 1: # no copies
-		state_dict["states"] = tuple(itertools.permutations(range(num_substates), num_cand))
-	elif constraint_type == 2:
+	if constraint_type == 0: # all possible states
+		task_dict["states"] = tuple(itertools.product(range(num_substates), repeat = num_actions))
+	elif constraint_type == 1: # states only without copies of the same substate
+		assert num_actions <= num_substates
+		task_dict["states"] = list(itertools.permutations(range(num_substates), num_actions))
+	elif constraint_type == 2: # only for states comprised of fit, not fit and a task where only one object fits
 		if num_substates != 2:
-			raise Exception("Wrong number of option types for constraint type " + str(2))
+			raise Exception("Wrong number of substate types for constraint 2")
 
 		states = []
 
-		for i in range(num_cand):
+		for i in range(num_actions):
 			state = []
-			for j in range(num_cand):
+			for j in range(num_actions):
 				state.append(1)
 
 			state[i] = 0
 
 			states.append(tuple(state))
 
-		state_dict["states"] = tuple(states)
+		task_dict["states"] = tuple(states)
 	else:
 		raise Exception("this constraint type is not currently supported")
 
-	state_dict["option_names"] = option_names
-	state_dict["substate_names"] = substate_names
+	task_dict["substate_names"] = substate_names
+	task_dict["num_substates"] = num_substates
 
-	state_dict["num_substates"] = num_substates
-	state_dict["num_options"] = num_options
+	task_dict["num_actions"] = num_actions
 
-	state_dict["num_cand"] = num_cand
+	task_dict["num_states"] = len(task_dict["states"])
 
-	state_dict["num_states"] = len(state_dict["states"])
+	### multiple observations each step
+	if type(observation_names[0]) == list:
+		task_dict['observations'] = tuple(itertools.product(*[ range(len(obs_names)) for obs_names in observation_names]))
+	### single observation at each step
+	else:
+		task_dict['observations'] = [ (i) for i in range(task_dict['obs_num']) ]
 
-	return state_dict
+	task_dict['obs_names'] = observation_names
+	task_dict['num_obs'] = len(task_dict['observations'])
+	### to avoid search during online execution
+	task_dict['obs2idx'] = {} 
+	for i, obs in enumerate(task_dict['observations']):
+		task_dict['obs2idx'][obs] = i
+
+	task_dict['alpha_vectors'] = np.zeros((num_substates, num_actions, task_dict['num_states'])) # reward vector
+
+	for act_idx in range(num_actions):
+		for tool_idx in range(num_substates):
+			for state_idx, state in enumerate(task_dict['states']):
+				substate_idx = state[act_idx]
+				if substate_idx == tool_idx:
+					task_dict['alpha_vectors'][tool_idx, act_idx, state_idx] = 1.0
+
+	task_dict['beta_vectors'] =  np.zeros((num_actions, num_substates, task_dict['num_states'])) # marginalizing vector
+
+	for act_idx in range(num_actions):
+		for state_idx, state in enumerate(task_dict['states']):
+			substate_idx = state[act_idx]
+			task_dict['beta_vectors'][act_idx, substate_idx, state_idx] = 1.0
+
+	if likelihood_model is not None:
+		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_obs'], num_actions, task_dict['num_states']))
+
+		for obs_idx, obs_idxs in enumerate(task_dict['observations']):
+			for act_idx in range(num_actions):
+				for state_idx, state in enumerate(task_dict['states']):
+					substate_idx = state[act_idx]
+					probs = likelihood_model[substate_idx]
+					task_dict['loglikelihood_matrix'][obs_idx, act_idx, state_idx] = np.log(probs[obs_idxs])
+
+	return task_dict
 '''
 Control Functions
 '''
 
-def initpoints(workspace_dim, num_samples = 50000):
-    theta_init = np.random.uniform(low=0, high=2*np.pi, size = num_samples)
-    r_init = np.random.uniform(low=0, high =workspace_dim, size = num_samples)
+class Spiral2D_Motion_Primitive(object):
+	def __init__(self, radius_travelled = 0.02, number_rotations = 3, pressure = 0.004):
+		self.rt = radius_travelled # 0.02
+		self.nr = number_rotations # 3
+		self.pressure = pressure
 
-    c_point_list = []
+	def trajectory(self, step, env, cfg): # 2D circular motion primitive
+		horizon = cfg['control_params']['movement_horizon']
+		kp = cfg['control_params']['kp'][2]
 
-    for idx in range(theta_init.size):
-        theta0 = theta_init[idx]
-        x_init = r_init[idx] * np.cos(theta0)
-        y_init = r_init[idx] * np.sin(theta0)
+		radius_scale = self.rt / horizon
 
-        # print("Initial point: ", x_init, y_init)
-        c_point_list.append(np.array([x_init, y_init, 0]))
+		reference_point = env.hole_sites[env.cand_idx][-1]
+		err = env.get_eef_pos_err(reference_point)
 
-    return c_point_list
+		frequency = 2 * np.pi * self.nr / horizon
+		radius = radius_scale * step
+		time = frequency * step
+		fraction = step / horizon 
 
-def circ_mp2D(step, cfg): # 2D circular motion primitive
-	radius_travelled = 0.02
-	horizon = cfg['control_params']['horizon']
-	radius_scale = radius_travelled / horizon
-	num_rotations = 3
+		return np.array([radius * np.sin(time), radius * np.cos(time), -self.pressure - kp * max(err[2], 0)]) + reference_point
 
-	frequency = 2 * np.pi * num_rotations / horizon
-	radius = radius_scale * step
-	time = frequency * step
+# def movetogoal(env, cfg, goal, recording_dict = None, recording_keys = None):
+# 	######### control parameters
+# 	kp = np.array(cfg['control_params']['kp'])
+# 	tol = cfg['control_params']['tol']
+# 	noise_std = cfg['control_params']['noise_std']
+# 	horizon = cfg['control_params']['movement_horizon']
+# 	display_bool = cfg['logging_params']['display_bool']
+# 	horizon_bool = cfg['control_params']['horizon_bool']
+# 	tolerance_bool = cfg['control_params']['tolerance_bool']
+# 	step = 0
 
-	return np.array([radius * np.sin(time), radius * np.cos(time), -0.004])
+# 	######### determining initial goal
+# 	if callable(goal): # motion primitive
+# 		goal_pos = goal(step, env.get_eef_pos_err(env.reference_point), cfg)
+# 		tol_bool = False
+# 		hor_bool = True
+# 	elif type(goal) == list: # list of waypoints
+# 		for g in goal:
+# 			movetogoal(env, cfg, g, recording_dict = recording_dict, recording_keys = recording_keys)
 
-def movetogoal(env, cfg, goal, recording_dict = None, recording_keys = None,\
- noise_bool = False, tolerance_bool = True, horizon_bool = False):
-	######### control parameters
-	kp = np.array(cfg['control_params']['kp'])
-	tol = cfg['control_params']['tol']
-	noise_std = cfg['control_params']['noise_std']
-	horizon = cfg['control_params']['movement_horizon']
-	display_bool = cfg['logging_params']['display_bool']
-	step = 0
+# 			if cfg['control_params']['done_bool'] and not ignore_done:
+# 				return 0
 
-	######### determining initial goal
-	if callable(goal): # motion primitive
-		goal_pos = goal(step, cfg)
-		tol_bool = False
-		hor_bool = True
-	elif type(goal) == list: # list of waypoints
-		for g in goal:
-			movetogoal(env, cfg, g, recording_dict = recording_dict, recording_keys = recording_keys,\
-				noise_bool = noise_bool, tolerance_bool = tolerance_bool, horizon_bool = horizon_bool)
+# 		tol_bool = False
+# 		hor_bool = False
 
-		tol_bool = False
-		hor_bool = False
+# 	elif type(goal)==np.ndarray: # single waypoint
+# 		goal_pos = goal[:]
+# 		tol_bool = tolerance_bool
+# 		hor_bool = horizon_bool
+# 	else:
+# 		raise Exception(type(goal), ' is an unsupported goal type at this time')
 
-	elif type(goal)==np.ndarray: # single waypoint
-		goal_pos = goal[:]
-		tol_bool = tolerance_bool
-		hor_bool = horizon_bool
-	else:
-		raise Exception(type(goal), ' is an unsupported goal type at this time')
-
-	if tol_bool and hor_bool:
-		continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
-		and (hor_bool and step < horizon)
-	else:
-		continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
-		or (hor_bool and step < horizon)
+# 	if tol_bool and hor_bool:
+# 		continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+# 		and (hor_bool and step < horizon)
+# 	else:
+# 		continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+# 		or (hor_bool and step < horizon)
 		
-	######## checking whether to continue movement
-	while continue_bool:
-	 	############# calculating error based on position error
-		# print("Goal: ", goal)
-		# print("Reference Point: ", env.reference_point)
-		# print("Goal: ", goal + env.reference_point)
-		# print("Error: ", env.get_eef_pos_err(goal + env.reference_point)[3])
-		# print("Proportional Error: ", kp * env.get_eef_pos_err(goal + env.reference_point))
-		action = kp * env.get_eef_pos_err(goal_pos + env.reference_point)
+# 	######## checking whether to continue movement
+# 	while continue_bool:
+# 	 	############# calculating error based on position error
+# 		# print("Goal: ", goal_pos)
+# 		# print("Reference Point: ", env.reference_point)
+# 		# print("Goal: ", goal_pos + env.reference_point)
+# 		# print("Error: ", env.get_eef_pos_err(goal_pos + env.reference_point))
+# 		# print("Reference Error: ", env.get_eef_pos_err(env.reference_point))
+# 		# print("Proportional Error: ", kp * env.get_eef_pos_err(goal + env.reference_point))
+# 		action = kp * env.get_eef_pos_err(goal_pos + env.reference_point)
+# 		# print(step)
+# 		########## adding noise
+# 		if all(noise_std) >= 0:
+# 			assert len(noise_std) == 1 or len(noise_std) == action.size
+# 			noise = np.random.normal(0.0, noise_std, action.size)
+# 			action += noise[:]
+# 		elif any(noise_std) < 0:
+# 			raise Exception('Noise standard deviation can only be a positive value')
 
-		########## adding noise
-		if all(noise_std) >= 0:
-			assert len(noise_std) == 1 or len(noise_std) == action.size
-			noise = np.random.normal(0.0, noise_std, action.size)
-			action += noise[:]
-		elif any(noise_std) < 0:
-			raise Exception('Noise standard deviation can only be a positive value')
+# 		######### recording observations
+# 		if recording_keys is not None:
+# 			obs, reward, done, info = env.step(action)
+# 			obs["action"] = action[:]
+# 			save_obs(obs, recording_keys, recording_dict)
+# 		else:
+# 			obs, reward, done, info = env.step(action, ignore_obs = True)            
 
-		######### recording observations
-		if recording_keys is not None:
-			obs, reward, done, info = env.step(action)
-			obs["action"] = action[:]
-			save_obs(obs, recording_keys, recording_dict)
-		else:
-			obs, reward, done, info = env.step(action, ignore_obs = True)            
+# 		######## rendering
+# 		if display_bool:
+# 			env.render()
 
-		######## rendering
-		if display_bool:
-			env.render()
+# 		if info['done'] == 1.0 and not cfg['control_params']['done_bool'] and not cfg['control_params']['ignore_done']:
+# 			# print("Done")
+# 			cfg['control_params']['done_bool'] = True
+# 			cfg['control_params']['steps'] += step
+# 			return 0
+			
+# 		######## plotting code for debugging
+#         # if display_bool:
+#         #   plt.scatter(step, obs['force'][2])
+#         #   # plt.scatter(step, obs['contact'])
+#         #   plt.pause(0.001)
 
-		######## plotting code for debugging
-        # if display_bool:
-        #   plt.scatter(step, obs['force'][2])
-        #   # plt.scatter(step, obs['contact'])
-        #   plt.pause(0.001)
+#         ######## recording number of steps and updating goal
+# 		step += 1
 
-        ######## recording number of steps and updating goal
-		step += 1
+# 		if callable(goal):
+# 			goal_pos = goal(step, env.get_eef_pos_err(env.reference_point), cfg)
 
-		if callable(goal):
-			goal_pos = goal(step, cfg)
+# 		if tol_bool and hor_bool:
+# 			continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+# 			and (hor_bool and step < horizon)
+# 		else:
+# 			continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
+# 			or (hor_bool and step < horizon)
 
-		if tol_bool and hor_bool:
-			continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
-			and (hor_bool and step < horizon)
-		else:
-			continue_bool = (tol_bool and not env.check_eef_pos_err(goal_pos + env.reference_point, tol))\
-			or (hor_bool and step < horizon)
-
-	##### closing plot from debugging code
-	# plt.close('all')
-
-
-
-
+# 	cfg['control_params']['steps'] += step
+# 	##### closing plot from debugging code
+# 	# plt.close('all')
 
 
 # def move_down(env, display_bool):

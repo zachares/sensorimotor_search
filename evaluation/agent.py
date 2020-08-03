@@ -8,206 +8,406 @@ import itertools
 
 import torch
 import torch.nn.functional as F
+from torch.distributions.uniform import Uniform
+from collections import OrderedDict
 
-sys.path.insert(0, "../") 
-sys.path.insert(0, "../supervised_learning/") 
+import multinomial as multinomial
+import project_utils as pu
 
-from multinomial import *
-from project_utils import *
+class Outer_Loop(object):
+	def __init__(self, env, task_dict, mode = 0, success_rate = None, k = 0, device = None):
 
-class Decision_Model(object):
-	def __init__(self, state_dict, env, lrn_rate = 0.5):
 		self.env = env
-		self.state_dict = state_dict
-		self.device = self.env.sensor.device
-		self.lrn_rate = lrn_rate
+		self.task_dict = task_dict
+
+		self.success_rate = success_rate
+
+		self.device = device
+		self.k = k
+		self.mode = mode
+		self.sample = True
+		
+		self.print_info = False
+		self.reset()
 
 	def reset(self):
 		self.env.reset()
+		self.gt_dict = self.env.get_gt_dict()
+		self.reset_probs()
+		self.step_count = 1
+		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
 
-		correct_states = []
-		correct_options = []
-
-		for k, v in self.env.robo_env.hole_sites.items():
-			correct_states.append(v[0])
-			correct_options.append(v[1])
-
-		self._reset_probs(correct_states, correct_options)
-
-	def _reset_probs(self, correct_substates, correct_options):
-		self.state_probs = torch.ones((1,self.state_dict["num_states"])) / self.state_dict["num_states"]
-		self.state_probs = self.state_probs.float().to(self.device)
+		if self.print_info and self.use_state_est:
+			self.print_hypothesis()
 		
-		self.max_entropy = inputs2ent(probs2inputs(self.state_probs)).item()
-		self.curr_state_entropy = inputs2ent(probs2inputs(self.state_probs)).item()
+	def reset_probs(self):
+		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
+		self.state_probs = self.state_probs.float().to(self.device)
 
-		self.reward_ests = torch.ones(self.state_dict['num_cand']).float().unsqueeze(0).to(self.device)
-
-		self.step_count = 0
-
-		self._record_correct_state(correct_substates)
-		self._record_correct_options(correct_options)
-
+		# self.max_action_entropy = multinomial.inputs2ent(multinomial.probs2inputs(torch.ones((self.task_dict["num_actions"])) / self.task_dict["num_substates"]))
+		# self.max_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()		
+		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
+		
 	def choose_action(self):
-		info_actions_partial = self.env.candidate_actions()
+		if self.mode == 0: # random
+			action_idx = random.choice(range(self.task_dict['num_actions']))
 
-		max_exp_reward_fit, cand_idx_fit = self.max_exp_reward_fit(self.state_probs)
-		# print("Fit Reward: ", max_exp_reward_fit)
-		current_max_exp_reward = 0
+		elif self.mode == 1: # iterator
+			value_estimate = torch.sqrt(np.log(self.step_count) / self.action_counts)
 
-		for i in range(self.state_dict["num_cand"]):
-			max_exp_reward_info, info_action_partial = self.max_exp_reward_info(self.state_probs, i, info_actions_partial)
+			weights = (value_estimate / value_estimate.sum()).cpu().numpy()
 
-			if current_max_exp_reward < max_exp_reward_info:
-				cand_idx_info = i
-				info_action_max = info_action_partial
-				current_max_exp_reward = max_exp_reward_info
+			action_idx = np.argmax(weights)
 
-		if current_max_exp_reward < max_exp_reward_fit:
-			print("Attempting to Insert")
-			max_exp_reward_info, fit_action_partial = self.max_exp_reward_info(self.state_probs, cand_idx_fit, info_actions_partial)
-			action = (cand_idx_fit, fit_action_partial)
+			# if sum(weights[:-1]) > 1.0:
+			# 	action_idx = np.argmax(weights)
+			# else:
+			# 	action_idx = np.argmax(np.random.multinomial(1, weights, size = 1))
 
-			self.insert_choice = True
+		elif self.mode == 2: # greedy
+			value_estimate = self.pomdp_value_iteration(self.state_probs, k = self.k)
 
-			print("Index of hole choice: ", cand_idx_fit)
+			weights = (value_estimate / value_estimate.sum()).cpu().numpy()
+
+			action_idx = np.argmax(weights)
+
+			# if sum(weights[:-1]) > 1.0:
+			# 	action_idx = np.argmax(weights)
+			# else:
+			# 	action_idx = np.argmax(np.random.multinomial(1, weights, size = 1))
+
 		else:
-			print("Collecting Information")
-			action = (cand_idx_info, info_action_max)
+			raise Exception('Mode ', self.mode, ' current unsupported')
 
-			self.insert_choice = False
+		if self.print_info:
+			print("Index of hole choice: ", action_idx)
 
-			print("Index of hole choice: ", cand_idx_info)
+		return action_idx  
 
-		print("\n#####################\n")
+	def pomdp_value_iteration(self, state_probs, k = 0): # depth of value iteration, calculating expected value
+		alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+		state_prior = state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
 
-		return action
+		expected_reward = (alpha_vectors * state_prior).sum(1)
 
-	def max_exp_reward_fit(self, state_probs, success_rate = 1.0):
-		batch_size = state_probs.size(0)
-
-		prob_fit = self.marginalize(state_probs, substate_idx = self.env.robo_env.tool_idx)
-
-		rewards = prob_fit * success_rate * self.reward_ests.repeat_interleave(batch_size, dim = 0)
-
-		return rewards.max(1)[0], rewards.max(1)[1][0].item()
-
-	def max_exp_reward_info(self, state_probs, cand_idx, actions, discount_factor = 0.8):
-		batch_size = actions.shape[0]
-
-		state_prior =state_probs.repeat_interleave(batch_size, dim = 0)
-
-		expected_reward = torch.zeros(batch_size).float().to(self.device)
-
-		for obs_idx in range(self.state_dict["num_options"]):
-			p_o_given_a = torch.zeros(batch_size).float().to(self.device)
-			state_posterior_logprobs = torch.zeros_like(state_prior)
-
-			for j, state in enumerate(self.state_dict["states"]):
-				substate_idx = state[cand_idx]
-
-				conf_logprobs = self.env.likelihood_logprobs(self.env.robo_env.tool_idx, substate_idx, obs_idx, actions)
-
-				p_o_given_a += torch.where(state_prior[:,j] != 0, torch.exp(torch.log(state_prior[:,j]) + conf_logprobs),\
-				 torch.zeros_like(state_prior[:,j]))
-				
-				state_posterior_logprobs[:,j] = torch.log(state_prior[:,j]) + conf_logprobs 
-
-			next_max_exp_reward_fit, _ = self.max_exp_reward_fit(logits2probs(state_posterior_logprobs))
-
-			expected_reward += p_o_given_a * discount_factor * next_max_exp_reward_fit
-
-		# print(expected_reward)
-
-		return expected_reward.max(0)[0], actions[expected_reward.max(0)[1]]
-
-	def marginalize(self, state_probs, cand_idx = None, substate_idx = None):
-		if cand_idx is not None:
-			margin = torch.zeros((self.state_dict["num_substates"], state_probs.size(0))).to(self.device)
-			for i, state in enumerate(self.state_dict["states"]):
-				margin[state[cand_idx]] += state_probs.transpose(0,1)[i]
+		if k == 0:
+			return expected_reward * self.success_rate
 		else:
-			margin = torch.zeros((self.state_dict["num_cand"], state_probs.size(0))).to(self.device)
-			for i, state in enumerate(self.state_dict["states"]):
-				if substate_idx in state:
-					idx = state.index(substate_idx)
-					margin[idx] += state_probs.transpose(0,1)[i]
+			state_prior =state_prior.unsqueeze(0).repeat_interleave(self.task_dict['num_obs'], 0)
+			
+			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'], self.device)
 
-		return margin.transpose(0,1)
+			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix, dim = 2)
+		
+			p_o_given_a = torch.where(state_prior != 0,\
+			 torch.exp(torch.log(state_prior) + loglikelihood_matrix), torch.zeros_like(state_prior)).sum(-1)
 
-	def update_state_probs(self, cand_idx, obs_idx, actions):
-		batch_size = actions.shape[0]
-		state_prior = self.state_probs.repeat_interleave(batch_size, dim = 0)
-		state_posterior_logits = torch.zeros_like(state_prior)
+			lookahead_value = torch.zeros_like(p_o_given_a)
 
-		for j, state in enumerate(self.state_dict["states"]):
-			substate_idx = state[cand_idx]
+			for obs_idx in range(self.task_dict['num_obs']):
+				for act_idx in range(self.task_dict['num_actions']):
+					lookahead_value[obs_idx, act_idx] = self.pomdp_value_iteration(state_posterior[obs_idx, act_idx], k = k-1).max(0)[0]
 
-			conf_logprobs =self.env.likelihood_logprobs(self.env.robo_env.tool_idx, substate_idx, obs_idx, actions, with_margin = True)
+			expected_lookahead_value = (p_o_given_a * lookahead_value).sum(0)
 
-			state_posterior_logits[:,j] = torch.log(state_prior[:,j]) + conf_logprobs
+			return self.success_rate * expected_reward + (1 - self.success_rate) * expected_lookahead_value
 
-		self.state_probs = logits2probs(state_posterior_logits)
+	def update_state_probs(self, action_idx, obs_idxs):
+		state_prior = self.state_probs.clone()
+		obs_idx = self.task_dict['obs2idx'][obs_idxs]
+		ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][obs_idx,action_idx], self.device)
+		# print(ll_logprobs)
+		state_posterior_logits = torch.log(state_prior) + ll_logprobs
+		# print(F.softmax(state_posterior_logits, dim = 0))
+		self.state_probs = multinomial.logits2probs(state_posterior_logits)
+		self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
+		# print(self.state_probs)
+		# a = input("Continue?")
 
-	def new_obs(self, action, obs):
-		if obs != None:
-			cand_idx, action_partial = action
-
-			if self.insert_choice:
-				self.reward_ests[0,cand_idx] *= 0.5
-
-			# print("Action", action)
-			# print("Partial Action", action_partial)
-			obs_idx = self.env.sensor_obs(obs, action_partial)
-
-			# print(self.state_probs)
-			self.update_state_probs(cand_idx, obs_idx, np.expand_dims(action_partial, axis = 0))
-			# print(self.state_probs)
-
-			corr_idx = self.state_dict['correct_options'][cand_idx]
-
-			print("Obs idx: ", obs_idx.item(), " Corr idx: ", corr_idx)
-		else:
-			print("Bad Observation")
-
+	def new_obs(self, action_idx, obs_idxs):
+		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
+		self.action_counts[action_idx] += 1
 		self.step_count += 1
 
-	def print_hypothesis(self):
-		for i in range(self.state_dict["num_cand"]):
-			probs = self.marginalize(self.state_probs, cand_idx = i)
+		if obs_idxs != None:
+			# print(self.state_probs)
+			self.update_state_probs(action_idx, obs_idxs)
+			# print(self.state_probs)
 
-			print("Model Hypthesis:", self.state_dict["substate_names"][probs.max(1)[1]] ,\
-			 " , Ground Truth:", self.state_dict["substate_names"][self.state_dict["correct_state"][i]])
+			### ignoring observation of insertion or not insertion
+			if self.print_info:
+				for i, obs_idx in enumerate(obs_idxs):
+					obs = self.task_dict['obs_names'][i][obs_idx]
+
+					print("Observation_" + str(i) + " " + obs)
+
+				gt_props = "Ground Truth Properties"
+				for info in self.gt_dict[action_idx]:
+					if type(info) == str:
+						gt_props += " - " + info 
+
+				print(gt_props)
+				self.print_hypothesis()
+		else:
+			if self.print_info:
+				print("Bad Observation")
+
+	def print_hypothesis(self):
+		state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+		.repeat_interleave(self.task_dict['num_substates'], 1)
+
+		beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+		substate_probs = (beta_vectors * state_probs).sum(-1)
+
+		for act_idx in range(self.task_dict["num_actions"]):
+			probs = substate_probs[act_idx]
+
+			print("Model Hypthesis:", self.task_dict["substate_names"][probs.max(0)[1]] ,\
+			 " , Ground Truth:", self.gt_dict[act_idx][0])
 
 			print("Probabilities", probs.detach().cpu().numpy())
 
-			print_histogram(probs, self.state_dict["substate_names"])
+			pu.print_histogram(probs, self.task_dict["substate_names"])
 		print("##############################################\n")	
 
-	def _record_correct_state(self, correct_substates):
-		for k, state in enumerate(self.state_dict["states"]):
-			correct = True
-			for i, j in enumerate(state):
-				if correct_substates[i] != self.state_dict["substate_names"][j]:
-					correct = False
+	# def marginalize(self, state_probs, action_idx = None, substate_idx = None):
+	# 	#### marginalize out other actions / hole choices
+	# 	if action_idx is not None:
+	# 		margin = torch.zeros((self.task_dict["num_substates"])).to(self.device)
+	# 		for i, state in enumerate(self.task_dict["states"]):
+	# 			margin[state[action_idx]] += state_probs[i]
 
-			if correct:
-				self.state_dict["correct_state"] = state
-				self.state_dict["correct_idx"] = k
+	# 	#### marginalize out other state types
+	# 	else:
+	# 		margin = torch.zeros((self.task_dict["num_actions"])).to(self.device)
+	# 		for i, state in enumerate(self.task_dict["states"]):
+	# 			if substate_idx in state:
+	# 				idx = state.index(substate_idx)
+	# 				margin[idx] += state_probs[i]
 
-		print("Correct State: ", [self.state_dict["substate_names"][i] for i in self.state_dict["correct_state"]])
+	# 	return margin
 
-	def _record_correct_options(self, correct_options):
-		correct_idxs = []
-		for option in correct_options:
-			correct_idxs.append(self.state_dict["option_names"].index(option))
+def main():
+	## success rate if correct fruit is chosen
+	device = torch.device("cuda")
+	# Toy problem
+	fruit_properties = [
+	['apple', 'sweet', 'citric_acid'],
+	['orange', 'sour', 'citric_acid'],
+	['lemon', 'sweet', 'citric_acid'],
+	['banana', 'sweet', 'potassium']
+	]
 
-		self.state_dict["correct_options"] = correct_idxs
+	substate_names = []
 
-		print("Correct Options: ", [self.state_dict["option_names"][i] for i in self.state_dict["correct_options"]])
+	for fp in fruit_properties:
+		substate_names.append(fp[0])
+
+	observation_names = [['sweet', 'sour'], ['potassium', 'citric_acid']]
+
+	goal = 'orange'
+	goal_idx = substate_names.index(goal)
+
+	### uncertainty addition to observation model
+	uncertainty = 0.1
+
+	num_each_fruit = [1,1,1,1]
+	corr_idxs = []
+
+	cand_fruits = OrderedDict()
+	cand_num = 0
+
+	for i, num_fruit in enumerate(num_each_fruit):
+		fp =  fruit_properties[i]
+		for j in range(num_fruit):
+			cand_fruits[cand_num] = fp
+
+			if goal in fp:
+				corr_idxs.append(cand_num)
+
+			cand_num += 1
+
+	num_fruits = len(cand_fruits.keys())
+
+	### generating observation model
+	likelihood_model = torch.zeros((len(substate_names)))
+
+	for obs_names in observation_names:
+		likelihood_model = likelihood_model.unsqueeze(-1).repeat_interleave(len(obs_names), -1)
+
+	for i, fp in enumerate(fruit_properties):
+		obs_idxs = []
+
+		for obs_names in observation_names:
+			for j, obs in enumerate(obs_names):
+				if obs in fp:
+					obs_idxs.append(j)
+
+		obs_idxs = tuple([i] + obs_idxs)
+		likelihood_model[obs_idxs] = 1.0
+
+	### adding uncertainty and normalizing
+	noise = Uniform(0, uncertainty)
+	likelihood_model += noise.rsample(sample_shape=likelihood_model.size())
+	likelihood_model = likelihood_model / likelihood_model.sum()
+
+	# print("Success Rate: ", success_rate)
+
+	class Fruit_Env(object):
+		def __init__(self, goal_idx, cand_fruits, likelihood_model):
+			self.goal_idx = goal_idx
+			self.cand_fruits = cand_fruits
+			self.likelihood_model = likelihood_model
+
+		def reset(self):
+			pass
+
+		def get_goal(self):
+			return self.goal_idx
+
+		def get_gt_dict(self):
+			return self.cand_fruits
+
+		def get_obs(self, action_idx):
+			substate_idx = substate_names.index(self.cand_fruits[action_idx][0])
+
+			logits = self.likelihood_model[substate_idx]
+			probs = logits / logits.sum()
+			probs_shape = probs.size()
+
+			probs_flattened = torch.flatten(probs)
+
+			obs_idx_flat = np.argmax(np.random.multinomial(1, probs_flattened.numpy(), size = 1))
+
+			sample_flattened = torch.zeros((probs_flattened.size()))
+			sample_flattened[obs_idx_flat] = 1.0
+
+			obs_idx = np.unravel_index(np.argmax(sample_flattened.numpy()), probs_shape)
+
+			# print(self.cand_fruits[action_idx])
+			# print("Logits: ", logits)
+			# print("Probs: ", probs)
+			# print("Probs Flattened: ", probs_flattened)
+			# print("Obs_idx_flat: ", obs_idx_flat)
+			# print("Sample Flattened: ", sample_flattened)
+			# print("Obs idx: ", obs_idx)
+			# a = input("Continue?")
+			return obs_idx
+
+	fruit_env = Fruit_Env(goal_idx, cand_fruits, likelihood_model)
+
+	success_rate =  0.7
+
+	task_dict = pu.gen_task_dict(num_fruits, substate_names, observation_names,\
+	 likelihood_model = likelihood_model.cpu().numpy(), constraint_type = 1)
+
+	k = 1
+
+	print("Num steps: ", k)
+	decision_model = Outer_Loop(fruit_env, task_dict, success_rate = success_rate, k=k, device = device)
+
+	'''
+	Questions
+	1. How can you automatically choose the discount factor
+	2. How can you automattically choose the number of steps for lookahead
+	'''
+
+	decision_model.mode = 2
+
+	num_trials = 10000
+
+	trial_idx = 0
+	step_counts = []
+	# c_range = np.arange(0, 5, 0.5)
+
+	# for i in range(c_range.size):
+	# 	decision_model.c = c_range[i]
+	# 	trial_idx = 0
+
+	while trial_idx < num_trials:
+		# print(trial_idx)
+		# print('\n #################### \n New Task \n ###################### \n')
+		decision_model.reset()
+		done_bool = False
+		num_steps = 0
+		while not done_bool:
+			act_idx = decision_model.choose_action()
+			obs_idxs = decision_model.env.get_obs(act_idx)
+			num_steps += 1
+
+			# print("Comparison", act_idx, corr_idxs)
+			if act_idx in corr_idxs:
+				if np.random.binomial(1, success_rate, 1) == 1:
+					done_bool = True
+		
+			decision_model.new_obs(act_idx, obs_idxs)
+
+			# a = input("Continue?")
+
+		step_counts.append(num_steps)
+
+		trial_idx += 1
+
+	print("Averages Number of Steps: ", np.mean(step_counts))
+	print("Standard Deviation of Steps: ", np.std(step_counts))
+		# print("Averages Number of Steps: ", np.mean(step_counts), ' c parameter', c_range[i])
+
+if __name__ == "__main__":
+	main()
 
 
-	# def robust_cand(self):
+		# elif self.mode == 3: # greedy with uncertainty
+		# 	state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+		# 	.repeat_interleave(self.task_dict['num_substates'], 1)
+
+		# 	beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+		# 	action_entropy = multinomial.inputs2ent(multinomial.probs2inputs((beta_vectors * state_probs).sum(-1)))
+
+		# 	certainty = (1 - action_entropy / self.max_action_entropy)
+
+		# 	if (torch.isnan(certainty) * 1.0).sum() > 0:
+		# 		weighted_value_estimate = self.pomdp_value_iteration(self.state_probs, k = self.k)
+		# 	else:
+		# 		value_estimate = self.pomdp_value_iteration(self.state_probs, k = self.k)
+		# 		weighted_value_estimate = certainty * value_estimate
+
+		# 	weights = (weighted_value_estimate / weighted_value_estimate.sum()).cpu().numpy()
+
+		# 	action_idx = np.argmax(weights)
+
+			# if sum(weights[:-1]) > 1.0:
+			# 	action_idx = np.argmax(weights)
+			# else:
+			# 	action_idx = np.argmax(np.random.multinomial(1, weights, size = 1))
+
+			# info_value_est = self.info_value_est(self.state_probs)
+			# action_idx = (value_estimate + info_value_est).max(0)[1].item()
+
+# def gen_likelihood_mat(num_obs, num_actions, uncertainty_range):
+# 	if num_actions == 0:
+# 		return np.expand_dims(create_confusion(num_obs, uncertainty_range), axis = 0)
+# 	else:
+# 		conf_mat = []
+# 		for i in range(num_actions):
+# 			conf_mat.append(np.expand_dims(gen_likelihood(num_obs, uncertainty_range), axis = 0))
+
+# 		return np.concatenate(conf_mat, axis = 0)
+
+# def gen_likelihood(num_obs, uncertainty_range):
+# 	uncertainty = uncertainty_range[0] + (uncertainty_range[1] - uncertainty_range[0]) * np.random.random_sample()
+# 	confusion_matrix = uncertainty * np.random.random_sample((num_options, num_options))
+
+# 	confusion_matrix[range(num_options), range(num_options)] = 1.0
+
+# 	confusion_matrix = confusion_matrix / np.tile(np.expand_dims(np.sum(confusion_matrix, axis = 1), axis = 1), (1, num_options))
+
+# 	return confusion_matrix
+
+			# print("Action", action)
+			# print("Partial Action", action_partial)
+	# def robust_action(self):
 	# 	max_entropy = 0
 	# 	for i in range(self.state_dict["num_cand"]):
 	# 		probs = self.marginalize(self.state_probs, cand_idx = i)
@@ -250,61 +450,61 @@ class Decision_Model(object):
 
 	# 	return expected_entropy
 
-def main():
+# def main():
 
-	options_names = ["Apple", "Orange", "Banana", "Bread"]
-	cand_info = {}
-	cand_info[0] = {"name": "Orange"}
-	cand_info[1] = {"name": "Bread"}
+# 	options_names = ["Apple", "Orange", "Banana", "Bread"]
+# 	cand_info = {}
+# 	cand_info[0] = {"name": "Orange"}
+# 	cand_info[1] = {"name": "Bread"}
 
-	num_options = len(options_names)
-	num_actions = 20
+# 	num_options = len(options_names)
+# 	num_actions = 20
 
-	uncertainty_range = [0.5, 0.5]
+# 	uncertainty_range = [0.5, 0.5]
 
-	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-	act_model = Action_Ideal(num_actions)
+# 	act_model = Action_Ideal(num_actions)
 
-	prob_model = Probability_Ideal(num_options, num_actions, uncertainty_range, device)
+# 	prob_model = Probability_Ideal(num_options, num_actions, uncertainty_range, device)
 
-	state_dict = gen_state_dict(cand_info, options_names)
+# 	state_dict = gen_state_dict(cand_info, options_names)
 
-	decision_model = Decision_Model(state_dict, prob_model, act_model)
+# 	decision_model = Decision_Model(state_dict, prob_model, act_model)
 
 
-	num_trials = 1000
-	pol_type = [0, 1, 2]
-	step_counts = np.zeros((len(pol_type), num_trials))
+# 	num_trials = 1000
+# 	pol_type = [0, 1, 2]
+# 	step_counts = np.zeros((len(pol_type), num_trials))
 
-	pol_idx = 0
-	trial_idx = 0
+# 	pol_idx = 0
+# 	trial_idx = 0
 
-	while trial_idx < num_trials:
-		cand_idx, act_idx = decision_model.choose_action(pol_idx)
-		options_idx = decision_model.state_dict["correct_state"][cand_idx]
-		decision_model.new_obs(options_idx)
-		decision_model.print_hypothesis()
-		a = input("Continue?")
+# 	while trial_idx < num_trials:
+# 		cand_idx, act_idx = decision_model.choose_action(pol_idx)
+# 		options_idx = decision_model.state_dict["correct_state"][cand_idx]
+# 		decision_model.new_obs(options_idx)
+# 		decision_model.print_hypothesis()
+# 		a = input("Continue?")
 
-		if decision_model.curr_entropy < 0.3:
-			step_counts[pol_idx, trial_idx] =  decision_model.step_count
-			pol_idx += 1
+# 		if decision_model.curr_entropy < 0.3:
+# 			step_counts[pol_idx, trial_idx] =  decision_model.step_count
+# 			pol_idx += 1
 
-			if pol_idx == len(pol_type):
-				decision_model.prob_model.gen_cm()
-				pol_idx = pol_idx % len(pol_type)
-				trial_idx += 1
+# 			if pol_idx == len(pol_type):
+# 				decision_model.prob_model.gen_cm()
+# 				pol_idx = pol_idx % len(pol_type)
+# 				trial_idx += 1
 
-			decision_model.reset_probs()
+# 			decision_model.reset_probs()
 
-			if (trial_idx + 1) % 50 == 0 and pol_idx == (len(pol_type) - 1):
-				print(trial_idx + 1, " trials completed of ", num_trials)
+# 			if (trial_idx + 1) % 50 == 0 and pol_idx == (len(pol_type) - 1):
+# 				print(trial_idx + 1, " trials completed of ", num_trials)
 
-	print("Averages steps: ", np.mean(step_counts, axis = 1))
+# 	print("Averages steps: ", np.mean(step_counts, axis = 1))
 
-if __name__ == "__main__":
-	main()
+# if __name__ == "__main__":
+# 	main()
 
 		#### Insertion calculation #####
 		# insert_probs = self.calc_insert_probs(macro_actions).squeeze()

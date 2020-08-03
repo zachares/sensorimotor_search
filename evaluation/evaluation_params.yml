@@ -1,53 +1,60 @@
 # want to use the same control parameters, peg list, options list and fit list
 # as those used to collect the dataset which was used to train the networks
-policy_path:  /scr2/muj_senssearch_dataset10HZ_SAC_20200706_relpos_nonoise/07-06-sac-robosuite/07-06-sac-robosuite_2020_07_06_18_39_45_0000--s-14979/ 
-#/scr2/muj_senssearch_dataset10HZ_SAC_20200629/06-29-sac-robosuite/06-29-sac-robosuite_2020_06_29_13_32_19_0000--s-59100/ 
-#"/scr2/muj_senssearch_dataset10HZ_SAC_20200625/rl/06-25-sac-robosuite/06-25-sac-robosuite_2020_06_25_14_40_31_0000--s-88765/"
-  # "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
-
-decision_params:
-  converge_thresh: 10
+task_params:
+  max_big_steps: 10
   constraint_type: 1
+  shift_bool: 1.0
+  horizon: 100
+  plus_offset: [ 0, 0, 0.04] # should match number of dimensions in action space
+  workspace_dim: 0.02
+  seed: 4321
+  mode_vect: [1,4,0,0]
+  use_bandit: True
+  use_state_est: False
 
 control_params:
-  workspace_dim: 0.02
   kp: [6, 6, 6]
   control_freq: 10
-  step_threshold: 75
-  tol: 0.002
-  seed: 4321
-  horizon: 100
-  min_length: 20
-  shift_bool: 0.0
-  # noise_parameters: [0.4, 0.4, 0.4]
+  tol: [0.005, 0.005, 0.001] #should match number of dimensions in action spac
+  movement_horizon: 100
+  noise_std: [0.0, 0.0, 0.0] #0.025 good noise scale - should match number of dimensions in action spac
+  ignore_done: False
+  done_bool: False
+  tolerance_bool: True
+  horizon_bool: False
+  steps: 0
 
 logging_params:
+  logging_folder: /scr-ssd/sens_search_logging/model_evaluation/perception/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
+  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 1.0 # 1 if display should be on, 0 if display should be off
-  logging_folder: "/scr-ssd/sens_search_logging/model_evaluation/perception/" # Place your logging folder in a seperate location then your local code repository
-  run_mode: 1 #Options include: 0 -> development, 1 -> evaluation
-  num_trials: 10
-  run_notes: "_summer_testing"
   collect_vision_bool: 0.0
-  plus_offset: [ 0, 0, 0.02]
-  logging_data_bool: 0.0
+  image_size: 32
+  collect_depth: 0.0
+  camera_name: agentview
+  print_info: True
 
 model_params:
-  use_GPU: True
+  use_cuda: True
+  action_dim: 3
+  state_dim: 7
+  torch_policy_path:  
+  #/scr2/muj_senssearch_dataset10HZ_SAC_20200706_relpos_nonoise/07-06-sac-robosuite/07-06-sac-robosuite_2020_07_06_18_39_45_0000--s-14979/ 
+  #/scr2/muj_senssearch_dataset10HZ_SAC_20200629/06-29-sac-robosuite/06-29-sac-robosuite_2020_06_29_13_32_19_0000--s-59100/ 
+  #"/scr2/muj_senssearch_dataset10HZ_SAC_20200625/rl/06-25-sac-robosuite/06-25-sac-robosuite_2020_06_25_14_40_31_0000--s-88765/"
+    # "/scr2/muj_senssearch_dataset10HZ_slide_expactions_20200517/"
 
 policy_keys: ['rel_pos', 'contact', 'peg_type'] # ["encoding"] # 
-traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
+traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 
 #### these lists are important and should be saved with the dataset
-action_dim: 3
-state_dim: 7
-
-info_flow:
-  Options_Sensor:
-    model_folder: /scr-ssd/sens_search_logging/models/20200708_training_12_rl_policy/  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
-    epoch: 46
-  Options_LikelihoodNet:
-    model_folder: /scr-ssd/sens_search_logging/models/20200708_training_12_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
-    epoch: 46
+# info_flow:
+#   Options_Sensor:
+#     model_folder: /scr-ssd/sens_search_logging/models/20200708_training_12_rl_policy/  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"
+#     epoch: 46
+#   Options_LikelihoodNet:
+#     model_folder: /scr-ssd/sens_search_logging/models/20200708_training_12_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200603_training_4_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200602_training_1_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_42_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_33_fit_wexpanded_action/"
+#     epoch: 46
 
   # Options_Sensor:
   #   model_folder: "/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/"  #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200520_training_3_fit_wexpanded_action/"

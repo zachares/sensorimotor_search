@@ -12,7 +12,7 @@ control_params:
 pretrained_path: 
 
 logging_params:
-  logging_folder: /scr2/crossmodal_lift_20200721/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
+  logging_folder: /scr2/crossmodal_lift_20200724/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 1.0
@@ -21,7 +21,7 @@ logging_params:
   camera_name: insertion
 
 policy_keys: ['gripper_to_cube'] 
-traj_keys: ['force_hi_freq', 'proprio', 'action', 'contact', 'joint_pos', 'joint_vel', 'object_state' ,'image', 'depth']
+traj_keys: ['force_hi_freq', 'proprio', 'action', 'contact', 'joint_pos', 'joint_vel', 'object_state', 'gripper_state', 'robot-state', 'image', 'depth']
 
 action_dim: 4
 state_dim: 4

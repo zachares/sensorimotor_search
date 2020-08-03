@@ -1,5 +1,5 @@
 import rlkit.torch.pytorch_util as ptu
-from rlkit.data_management.env_replay_buffer import EnvReplayBuffer, SelectiveEnvReplayBuffer
+from rlkit.data_management.env_replay_buffer import EnvReplayBuffer
 from rlkit.envs.wrappers import NormalizedBoxEnv
 from rlkit.launchers.launcher_util import setup_logger
 from rlkit.samplers.data_collector import MdpPathCollector
@@ -7,7 +7,8 @@ from rlkit.torch.sac.policies import TanhGaussianPolicy, MakeDeterministic
 from rlkit.torch.networks import FlattenMlp
 from rlkit.torch.torch_rl_algorithm import TorchBatchRLAlgorithm
 from rlkit.torch.sac.sac import SACTrainer
-from rlkit.launchers.launcher_util import run_experiment
+from rlkit.launchers.launcher_util import run_experiment_here
+
 import sys 
 
 import torch
@@ -29,23 +30,23 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def experiment(variant):
 
-    config_path = variant['config_path']
+    config_name = variant['config_name']
 
-    with open(config_path, 'r') as ymlfile:
+    with open(config_name, 'r') as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
     logging_folder = cfg["logging_params"]["logging_folder"]
-    name = "datacollection_params"
+    name = "policy_learning_params"
 
-    print("Saving ", name, " to: ", logging_folder + name + ".yml")
+    print("Saving ", name, " to: ", logging_folder + config_name)
 
-    with open(logging_folder + name + ".yml", 'w') as ymlfile2:
+    with open(logging_folder + config_name, 'w') as ymlfile2:
         yaml.dump(cfg, ymlfile2)
 
     display_bool = cfg["logging_params"]["display_bool"]
     collect_vision_bool = cfg["logging_params"]["collect_vision_bool"]
     ctrl_freq = cfg["control_params"]["control_freq"]
-    horizon = cfg["control_params"]["horizon"]
+    horizon = cfg["task_params"]["horizon"]
     image_size = cfg['logging_params']['image_size']
     collect_depth = cfg['logging_params']['collect_depth']
     camera_name = cfg['logging_params']['camera_name']
@@ -64,55 +65,56 @@ def experiment(variant):
         camera_width=image_size,\
         camera_height=image_size,\
         horizon = horizon)
-
-    if 'info_flow' in cfg.keys():
-        device = torch.device("cuda")
-        ref_model_dict = get_ref_model_dict()
-        model_dict = declare_models(ref_model_dict, cfg, device)
-
-        expl_env = SensSearchWrapper(robo_env, config_path, mode = "train2insert_choose_match", encoder = model_dict['History_Encoder'])
-        eval_env = SensSearchWrapper(robo_env, config_path, mode = "differ_choose", encoder = model_dict['History_Encoder'])
-    else:
-        expl_env = SensSearchWrapper(robo_env, config_path, mode = "train2insert_choose_match")
-        eval_env = SensSearchWrapper(robo_env, config_path, mode = "differ_choose")
-
-    obs_dim = cfg['state_dim']
-    action_dim = cfg['action_dim']
-
-    # print(cfg['state_dim'])
-    # print(cfg['action_dim'])
     
-    if variant['file'] is None:
+    if 'info_flow' in cfg.keys():
+        ref_model_dict = pl.get_ref_model_dict()
+        model_dict = sl.declare_models(ref_model_dict, cfg, device)
+        if 'SAC_Policy' in cfg['info_flow'].keys():
+            data = torch.load(self.cfg['SAC_Policy']["model_folder"] + "itr_" + str(self.cfg['SAC_Policy']["epoch"]) + ".pkl")
+            model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
+
+        if 'History_Encoder_Transformer' in model_dict.keys():
+            model_dict['encoder'] = model_dict['History_Encoder_Transformer']
+            model_dict['sensor'] = model_dict['History_Encoder_Transformer']
+    else:
+        model_dict = {}
+
+    expl_env = SensSearchWrapper(robo_env, config_name, selection_mode = 0, **model_dict)
+    eval_env = SensSearchWrapper(robo_env, config_name, selection_mode = 1, **model_dict)
+
+    obs_dim = cfg['state_size']
+    action_dim = cfg['action_size']
+    
+    if 'SAC_Policy' not in model_dict.keys():
         M = variant['layer_size']
         qf1 = FlattenMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M, M],
+            hidden_sizes=[M, M],
         )
         qf2 = FlattenMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M, M],
+            hidden_sizes=[M, M],
         )
         target_qf1 = FlattenMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M, M],
+            hidden_sizes=[M, M],
         )
         target_qf2 = FlattenMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M, M],
+            hidden_sizes=[M, M],
         )
         policy = TanhGaussianPolicy(
             obs_dim=obs_dim,
             action_dim=action_dim,
-            hidden_sizes=[M, M, M],
+            hidden_sizes=[M, M],
         )
         eval_policy = policy #MakeDeterministic(policy)
     else:
         print("Loading policy ", variant['file'])
-        data = torch.load(variant['file'])
         eval_policy = data['evaluation/policy']
         policy = data['exploration/policy']
         qf1 = data['trainer/qf1']
@@ -123,13 +125,12 @@ def experiment(variant):
     eval_path_collector = MdpPathCollector(
         eval_env,
         eval_policy,
-        return_info=False,
     )
     expl_path_collector = MdpPathCollector(
         expl_env,
         policy,
-        return_info=False,
     )
+
     replay_buffer = EnvReplayBuffer(
         variant['replay_buffer_size'],
         expl_env,
@@ -160,7 +161,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument('--file', type=str, default=None,
     #                     help='path to the snapshot file')
-    parser.add_argument('--cpu', default=False, action='store_true')
+    # parser.add_argument('--cpu', default=True, action='store_true')
     # parser.add_argument('--load', type=str, required=True)
     # parser.add_argument('--epoch_stats', type=str, required=True)
     # parser.add_argument('--env', type=str, default='default', choices=ENV_TYPES)
@@ -169,59 +170,60 @@ if __name__ == "__main__":
     # parser.add_argument('--goal', type=float, nargs='+', default=None) 
     args = parser.parse_args()
     #todo: pip install instead
-    config_path="datacollection_params.yml"
+    config_name="policy_learning_params.yml"
 
-    with open(config_path, 'r') as ymlfile:
+    with open(config_name, 'r') as ymlfile:
         cfg = yaml.safe_load(ymlfile)
 
-    horizon = cfg["control_params"]["horizon"]
+    cfg['config_name'] = config_name
     logging_folder = cfg["logging_params"]["logging_folder"]
     logging_data_bool = cfg["logging_params"]["logging_data_bool"]
-    num_paths = 10
+
+    num_paths = cfg['training_params']['num_paths']
+    horizon = cfg['task_params']['horizon']
 
     if logging_data_bool == 1.0:
         eval_num_paths = num_paths
     else:
         eval_num_paths = 1.0
 
-    if cfg['pretrained_path'] is "":
-        file = None
-    else:
-        file = cfg['pretrained_path']
+    # if cfg['model_params']['torch_policy_path'] is "":
+    #     file = None
+    # else:
+    #     file = cfg['model_params']['torch_policy_path']
 
     variant = dict(
-        file=file,
+        # file=file,
         algorithm="SAC",
         version="normal",
-        layer_size=256,
+        layer_size=128,
         replay_buffer_size=int(1E6),
         algorithm_kwargs=dict(
-            num_epochs=400,
+            num_epochs=200,
             num_eval_steps_per_epoch= eval_num_paths * horizon,
-            num_trains_per_train_loop=num_paths * 100,
+            num_trains_per_train_loop=num_paths * cfg['training_params']['updates_multiplier'],
             num_expl_steps_per_train_loop=num_paths * horizon,
             min_num_steps_before_training=0,
             max_path_length=horizon,
             batch_size=256,
         ),
         trainer_kwargs=dict(
-            discount=0.99,
-            soft_target_tau=5e-3,
-            target_update_period=1,
-            policy_lr=3E-4,
-            qf_lr=3E-4,
-            reward_scale=10,
-            use_automatic_entropy_tuning=True,
-            target_entropy=-6,
+            discount=cfg['training_params']['discount_factor'],
+            soft_target_tau=cfg['training_params']['soft_target_tau'],
+            target_update_period=cfg['training_params']['target_update_period'],
+            policy_lr=cfg['training_params']['policy_lr'],
+            qf_lr=cfg['training_params']['qf_lr'],
+            reward_scale=cfg['training_params']['reward_scale'],
+            use_automatic_entropy_tuning=cfg['training_params']['use_automatic_entropy_tuning'],
+            # target_entropy=cfg['training_params']['target_entropy'],
         ),
-        cuda=True,
-        config_path="datacollection_params.yml",
+        cuda=cfg['use_cuda'] and torch.cuda.is_available(),
+        config_name=config_name,
     )
 
-    run_experiment(experiment,
+    run_experiment_here(experiment,
                    exp_prefix='sac-robosuite',
                    variant=variant,
                    use_gpu=True,
-                   mode='local',
                    snapshot_mode="all",
                    base_log_dir=logging_folder)

@@ -1,16 +1,53 @@
 control_params:
-  workspace_dim: 0.02
   kp: [6, 6, 6]
   control_freq: 10
-  tol: 0.0005
-  seed: 4321
-  horizon: 100
+  tol: [0.0005, 0.0005, 0.001] #should match number of dimensions in action spac
   movement_horizon: 100
-  min_length: 20
-  shift_bool: 1.0
-  noise_std: [0.0, 0.0, 0.0] #0.025 good noise scale
+  noise_std: [0.0, 0.0, 0.00] #0.025 good noise scale - should match number of dimensions in action spac
+  tolerance_bool: True
+  horizon_bool: False
 
-pretrained_path: 
+task_params:
+  shift_bool: 1.0
+  horizon: 100
+  plus_offset: [ 0, 0, 0.02] # should match number of dimensions in action space
+  workspace_dim: 0.02
+  seed: 4321
+  ignore_done: True
+
+logging_params:
+  logging_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
+  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  collect_vision_bool: 0.0
+  image_size: 32
+  collect_depth: 0.0
+  camera_name: agentview
+
+training_params:
+  num_paths: 10
+  discount_factor: 0.99
+  soft_target_tau: 0.005
+  target_update_period: 1
+  policy_lr: 0.0003
+  qf_lr: 0.0003
+  reward_scale: 10
+  use_automatic_entropy_tuning: True
+  updates_multiplier: 100
+
+policy_keys: [rel_pos_shift, contact, peg_type] #, 'peg_type'] # ['rel_pos', 'rel_pos_shift', 'peg_type', 'contact'] #  ['rel_pos_shift', 'pos_params', 'peg_type'] # 
+traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
+use_cuda: True
+action_size: 3
+state_size: 7
+
+# model_params:
+#   action_dim: 3
+#   state_dim: 3
+#   use_cuda: True
+#   torch_policy_path: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_07_28_09_32_37_0000--s-28577/itr_198.pkl
+  #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_07_27_17_22_58_0000--s-20437/itr_188.pkl
+    #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_07_24_21_19_53_0000--s-97530/itr_77.pkl
   #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/07-21-sac-robosuite/rel_pos_wshift_wcurriculum_1mmperepoch_upto200/itr_208.pkl
 #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/07-19-sac-robosuite/07-19-sac-robosuite_2020_07_19_07_17_39_0000--s-42861/itr_152.pkl
   # /scr2/muj_senssearch_dataset10HZ_SAC_20200713_relpos_shift/07-14-sac-robosuite/07-14-sac-robosuite_2020_07_14_16_49_20_0000--s-54801/itr_121.pkl 
@@ -20,22 +57,8 @@ pretrained_path:
 
 
 
-logging_params:
-  logging_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
-  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
-  plus_offset: [ 0, 0, 0.02]
-  collect_vision_bool: 0.0
-  image_size: 32
-  collect_depth: 0.0
-  camera_name: agentview
 
-policy_keys: ['radial_coor_goal', 'peg_type', 'contact'] #  ['rel_pos_shift', 'pos_params', 'peg_type'] # 
-traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 
-#### these lists are important and should be saved with the dataset
-action_dim: 3
-state_dim: 9
 
 # info_flow:
 #   History_Encoder:

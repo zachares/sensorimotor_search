@@ -88,6 +88,7 @@ class Custom_DataLoader(Dataset):
                 forces = np.array(dataset['force_hi_freq'][:,:,:6])
 
                 rel_proprio = np.array(dataset['rel_proprio'])
+                length = rel_proprio.shape[0]
 
                 # tolerance = 0.025
 
@@ -100,8 +101,8 @@ class Custom_DataLoader(Dataset):
                 # if policy not in self.idx_dict["policies"]:
                 #     self.idx_dict["policies"].append(policy)
 
-                # if length < self.min_length:
-                #     continue
+                if length <= self.min_length:
+                    continue
 
                 # if self.max_length < length:
                 #     self.max_length = int(length)
@@ -233,36 +234,6 @@ class Custom_DataLoader(Dataset):
         ##########################################################
         # print(time.time() - prev_time)
         return self.transform(sample)
-
-class ToTensor(object):
-    """Convert ndarrays in sample to Tensors."""
-    def __init__(self, device = None):
-        
-        self.device = device
-
-    def __call__(self, sample):
-
-        # convert numpy arrays to pytorch tensors
-        new_dict = dict()
-        for k, v in sample.items():
-        ###########################################################
-        ##### Project Specific Code Here ##########################
-        ###########################################################
-            if k == "padding_mask":
-                new_dict[k] = torch.from_numpy(v).bool()
-            elif k[-3:] == "idx":
-                new_dict[k] = torch.from_numpy(v).long()                
-            else:
-                new_dict[k] = torch.from_numpy(v).float()
-            '''
-            Default code is
-            new_dict[k] = torch.from_numpy(v).float()
-            '''
-        ##########################################################    
-        ##### End of Project Specific Code #######################
-        ##########################################################
-
-        return new_dict
 
 
             # elif key == 'hole_info':
