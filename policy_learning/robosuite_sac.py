@@ -22,8 +22,9 @@ from robosuite.wrappers import SensSearchWrapper
 import os
 import yaml
 
-# from models import *
-# from supervised_learning_utils import *
+
+import perception_learning as pl
+import utils_sl as sl
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
@@ -68,7 +69,7 @@ def experiment(variant):
     
     if 'info_flow' in cfg.keys():
         ref_model_dict = pl.get_ref_model_dict()
-        model_dict = sl.declare_models(ref_model_dict, cfg, device)
+        model_dict = sl.declare_models(ref_model_dict, cfg, ptu.device)
         if 'SAC_Policy' in cfg['info_flow'].keys():
             data = torch.load(self.cfg['SAC_Policy']["model_folder"] + "itr_" + str(self.cfg['SAC_Policy']["epoch"]) + ".pkl")
             model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
@@ -80,7 +81,7 @@ def experiment(variant):
         model_dict = {}
 
     expl_env = SensSearchWrapper(robo_env, config_name, selection_mode = 0, **model_dict)
-    eval_env = SensSearchWrapper(robo_env, config_name, selection_mode = 1, **model_dict)
+    eval_env = SensSearchWrapper(robo_env, config_name, selection_mode = 0, **model_dict)
 
     obs_dim = cfg['state_size']
     action_dim = cfg['action_size']

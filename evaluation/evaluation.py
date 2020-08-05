@@ -30,20 +30,31 @@ if __name__ == '__main__':
 	with open("evaluation_params.yml", 'r') as ymlfile:
 		cfg = yaml.safe_load(ymlfile)
 
-	constraint_type = cfg['task_params']['constraint_type']
-	use_cuda = cfg['model_params']['use_cuda'] and torch.cuda.is_available()
-
-	print("CUDA availability", torch.cuda.is_available())
-
-	# run_mode = cfg['logging_params']['run_mode']
-	num_trials = 20 #cfg['logging_params']['num_trials']
-
+	display_bool = cfg["logging_params"]["display_bool"]
+	collect_vision_bool = cfg["logging_params"]["collect_vision_bool"]
+	ctrl_freq = cfg["control_params"]["control_freq"]
+	horizon = cfg["task_params"]["horizon"]
+	image_size = cfg['logging_params']['image_size']
+	collect_depth = cfg['logging_params']['collect_depth']
+	camera_name = cfg['logging_params']['camera_name']
 	seed = cfg['task_params']['seed']
 	ctrl_freq = cfg['control_params']['control_freq']
-	horizon = cfg['task_params']['horizon']
+	noise_scale  = 0.5
+	cfg['task_params']['noise_scale'] = noise_scale
+	logging_folder = cfg["logging_params"]["logging_folder"]
+	num_samples = cfg['logging_params']['num_samples']
+
+	name = "estimate_observation_params.yml"
+
+	print("Saving ", name, " to: ", logging_folder + name)
+
+	with open(logging_folder + name, 'w') as ymlfile2:
+		yaml.dump(cfg, ymlfile2)
+
 	##########################################################
 	### Setting up hardware for loading models
 	###########################################################
+	use_cuda = cfg['use_cuda']
 	device = torch.device("cuda:0" if use_cuda else "cpu")
 	random.seed(seed)
 	np.random.seed(seed)
@@ -57,61 +68,57 @@ if __name__ == '__main__':
 
 	if use_cuda:
 	  print("Let's use", torch.cuda.device_count(), "GPUs!")
-    ##########################################################
-    ### Initializing and loading model
-	kwargs = {
-	'use_bandit': cfg['task_params']['use_bandit'],
-	'use_state_est': cfg['task_params']['use_state_est'],
-	}
+	
+	##############################
+	### Setting up the test environment and extracting the goal locations
+	######################################################### 
+	print("Robot operating with control frequency: ", ctrl_freq)
+	robo_env = robosuite.make("PandaPegInsertion",\
+		has_renderer= display_bool,\
+		ignore_done=True,\
+		use_camera_obs= not display_bool and collect_vision_bool,\
+		has_offscreen_renderer = not display_bool and collect_vision_bool,\
+		gripper_visualization=False,\
+		control_freq=ctrl_freq,\
+		gripper_type ="CrossPegwForce",\
+		controller='position',\
+		camera_name=camera_name,\
+		camera_depth=collect_depth,\
+		camera_width=image_size,\
+		camera_height=image_size,\
+		horizon = horizon)
 
 	if 'info_flow' in cfg.keys():
 		ref_model_dict = pl.get_ref_model_dict()
 		model_dict = sl.declare_models(ref_model_dict, cfg, device)	
-		
-		if 'History_Encoder' in model_dict.keys():
-			model_dict['History_Encoder'].eval()
-			kwargs['sensor'] = model_dict["History_Encoder"]
-			kwargs['encoder'] = model_dict["History_Encoder"]
 
-		if 'Observation_Likelihood_Matrix' in model_dict.keys():
-			model_dict['Observation_Likelihood_Matrix'].eval()
-			kwargs['likelihood_model'] = model_dict["Observation_Likelihood_Matrix"]
+		if 'SAC_Policy' in cfg['info_flow'].keys():
+			data = torch.load(cfg['info_flow']['SAC_Policy']["model_folder"] + "itr_" + str(cfg['info_flow']['SAC_Policy']["epoch"]) + ".pkl")
+			model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
+			model_dict['policy'] = model_dict['SAC_Policy']
+		else:
+			spiral_mp = pu.Spiral2D_Motion_Primitive()
+			# best parameters from parameter grid search
+			spiral_mp.rt = 0.026
+			spiral_mp.nr = 2.2
+			spiral_mp.pressure = 0.003
+			model_dict['policy'] = spiral_mp.trajectory
 
-	#######################################################
-	### Setting up the test environment and extracting the goal locations
-	######################################################### 
-	print("Robot operating with control frequency: ", ctrl_freq)
+		if 'History_Encoder_Transformer' in model_dict.keys():
+			model_dict['encoder'] = model_dict['History_Encoder_Transformer']
+			model_dict['sensor'] = model_dict['History_Encoder_Transformer']
+			print(model_dict['sensor'].loading_folder)
+	else:
+		raise Exception('sensor must be provided to estimate observation model')
 
-	display_bool = cfg["logging_params"]["display_bool"]
-	collect_vision_bool = cfg["logging_params"]["collect_vision_bool"]
-	ctrl_freq = cfg["control_params"]["control_freq"]
-	horizon = cfg["task_params"]["horizon"]
-	image_size = cfg['logging_params']['image_size']
-	collect_depth = cfg['logging_params']['collect_depth']
-	camera_name = cfg['logging_params']['camera_name']
-
-	robo_env = robosuite.make("PandaPegInsertion",\
-	    has_renderer= display_bool,\
-	    ignore_done=True,\
-	    use_camera_obs= not display_bool and collect_vision_bool,\
-	    has_offscreen_renderer = not display_bool and collect_vision_bool,\
-	    gripper_visualization=False,\
-	    control_freq=ctrl_freq,\
-	    gripper_type ="CrossPegwForce",\
-	    controller='position',\
-	    camera_name=camera_name,\
-	    camera_depth=collect_depth,\
-	    camera_width=image_size,\
-	    camera_height=image_size,\
-	    horizon = horizon)
-
-	env = SensSearchWrapper(robo_env, cfg, mode_vect = cfg['task_params']['mode_vect'], **kwargs)
+	env = SensSearchWrapper(robo_env, cfg, selection_mode= 2, **model_dict)
 	############################################################
 	### Declaring decision model
 	############################################################
-	task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names, robo_env.hole_names, constraint_type = 1)
+	task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names, [['not_insert', 'insert'], robo_env.hole_names],\
+	env.sensor.likelihood_model.model.p.detach().cpu().numpy(), env.sensor.success_params.model.p.detach().cpu().numpy(), constraint_type = 1)
 
-	decision_model = Outer_Loop(env, task_dict, device = device, **kwargs)
+	decision_model = Outer_Loop(env, task_dict, device = device)
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
@@ -124,6 +131,7 @@ if __name__ == '__main__':
     ###########################################################
 
 	step_counts = []
+	num_trials = 10
 
 	for trial_num in range(num_trials + 1):
 		print("\n")
@@ -143,12 +151,10 @@ if __name__ == '__main__':
 
 		while step_count < cfg['task_params']['max_big_steps']:
 			action_idx = decision_model.choose_action()
-			
-			obs, insertion_bool = decision_model.env.big_step(action_idx, goal = pu.circ_mp2D)
+			obs_idxs = decision_model.env.big_step(action_idx)
 			# print("Step Count ", step_count)
-			obs_idxs = decision_model.env.get_obs(obs)
 
-			if insertion_bool:
+			if decision_model.env.done_bool:
 				# print("Insertion Bool", insertion_bool)
 				step_count = cfg['task_params']['max_big_steps']
 				continue

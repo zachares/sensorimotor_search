@@ -95,7 +95,7 @@ if __name__ == '__main__':
 		model_dict = sl.declare_models(ref_model_dict, cfg, device)	
 
 		if 'SAC_Policy' in cfg['info_flow'].keys():
-			data = torch.load(self.cfg['SAC_Policy']["model_folder"] + "itr_" + str(self.cfg['SAC_Policy']["epoch"]) + ".pkl")
+			data = torch.load(cfg['info_flow']['SAC_Policy']["model_folder"] + "itr_" + str(cfg['info_flow']['SAC_Policy']["epoch"]) + ".pkl")
 			model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
 			model_dict['policy'] = model_dict['SAC_Policy']
 		else:
@@ -109,37 +109,39 @@ if __name__ == '__main__':
 		if 'History_Encoder_Transformer' in model_dict.keys():
 			model_dict['encoder'] = model_dict['History_Encoder_Transformer']
 			model_dict['sensor'] = model_dict['History_Encoder_Transformer']
+			print(model_dict['sensor'].loading_folder)
 	else:
 		raise Exception('sensor must be provided to estimate observation model')
 
 	env = SensSearchWrapper(robo_env, cfg, selection_mode= 2, **model_dict)
 
-	# ll = likelihood
-	ll_size = (env.sensor.num_states, 2, env.sensor.num_observationsm)
-	ll_model = mm.Params('likelihood_model', ll_size).to(device)
-	ll_model.model.p[:] = 0.0
-
-	env.sensor.likelihood_model = ll_model
-	env.sensor.model_list.append(env.sensor.likelihood_model)
-	# env.sensor.save(9999, env.sensor.loading_folder)
+	env.sensor.likelihood_model.model.p[:] = 3.0
+	prior_samples = env.sensor.likelihood_model.model.p[:].sum().item()
+	env.sensor.success_params.model.p[:] = 0.0
 
 	for trial_num in range(num_samples):
 		env.reset(initialize=False)
 		cand_idx = env.robo_env.cand_idx
-		obs_idxs, pos_est = env.big_step(cand_idx)
+		obs_idxs = env.big_step(cand_idx)
+		substate_idx = env.robo_env.hole_sites[cand_idx][2]
+		tool_idx = env.robo_env.tool_idx
 
 		print("Observation: ", env.robo_env.hole_names[obs_idxs[1]], " Ground Truth: ", env.robo_env.hole_sites[cand_idx][0])
-		print("Pos Estimate: ", pos_est, " Ground Truth Rel Pos: ", env.current_pos2D)
-		print("Pos Error: ", np.linalg.norm(pos_est.cpu().numpy() - env.current_pos2D))
 		
-		ll_idxs = tuple([cand_idx] + list(obs_idxs))
+		ll_idxs = tuple([tool_idx, substate_idx] + list(obs_idxs))
+		success_idxs = (tool_idx, obs_idxs[0])
+
+		if tool_idx == substate_idx:
+			env.sensor.success_params.model.p[success_idxs] += 1
 
 		env.sensor.likelihood_model.model.p[ll_idxs] += 1
 		# print(env.sensor.likelihood_model())
 
-	env.sensor.likelihood_model.p[:] = env.sensor.likelihood_model.p[:] / num_samples
+	env.sensor.likelihood_model.model.p[:] = env.sensor.likelihood_model.model.p[:] / (num_samples + prior_samples)
+	env.sensor.success_params.model.p[:] = env.sensor.success_params.model.p[:] / env.sensor.success_params.model.p[:].sum(1).unsqueeze(1).repeat_interleave(2,1)
 	print(env.sensor.likelihood_model())
-	# env.sensor.save(9999, env.sensor.loading_folder)	
+	print(env.sensor.success_params())
+	env.sensor.save(9999, env.sensor.loading_folder)	
 
 
 

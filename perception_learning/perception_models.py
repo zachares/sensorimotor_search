@@ -79,8 +79,12 @@ class History_Encoder_Transformer(mm.Proto_Macromodel):
                 mm.Embedding(model_name + "_shape_embed" + str(i),\
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
-                mm.ResNetFCN(model_name + "_pos_est" + str(i),\
+                mm. ResNetFCN(model_name + "_pos_est" + str(i),\
             self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+            uc = self.uc, device = self.device).to(self.device),\
+
+                mm. ResNetFCN(model_name + "_pos_est_var" + str(i),\
+            self.state_size + self.tool_dim + 2 + 2, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_state_class" + str(i),\
@@ -88,12 +92,21 @@ class History_Encoder_Transformer(mm.Proto_Macromodel):
             uc = self.uc, device = self.device).to(self.device)
             ))
 
+        self.ll_size = (self.num_tools, self.num_states, 2, self.num_observations)
+        self.success_size = (self.num_tools, 2)
+
+        self.likelihood_model = mm.Params('likelihood_model', self.ll_size).to(device)
+        self.success_params = mm.Params('success_rate', self.success_size).to(device)
+
+        self.model_list.append(self.likelihood_model)
+        self.model_list.append(self.success_params)
+
         for model_tuple in self.ensemble_list:
             for model in model_tuple:
                 self.model_list.append(model)
 
     def get_outputs(self, input_dict, model_tuple, final_idx = None):
-        frc_enc, seq_processor, shape_embed, pos_estimator, state_classifier = model_tuple #origin_cov = model_tuple # spatial_processor,
+        frc_enc, seq_processor, shape_embed, pos_estimator, var_estimator, state_classifier = model_tuple #origin_cov = model_tuple # spatial_processor,
 
         ##### Calculating Series Encoding
         frc_encs_reshaped = self.flatten(frc_enc(input_dict["force_reshaped"]))
@@ -113,16 +126,25 @@ class History_Encoder_Transformer(mm.Proto_Macromodel):
 
         tool_embed = shape_embed(input_dict['tool_idx'].long()) 
 
-        pos_ests = 0.01 * pos_estimator(torch.cat([seq_enc, tool_embed], dim = 1))
+        pos_ests_obs = 0.01 * pos_estimator(torch.cat([seq_enc, tool_embed], dim = 1))
+        
+        pos_ests_var = 0.0001 * var_estimator(torch.cat([seq_enc, tool_embed, pos_ests_obs,\
+         input_dict['rel_pos_shift']], dim = 1)).pow(2)
 
         state_logits = state_classifier(torch.cat([seq_enc, tool_embed], dim = 1))
 
-        return pos_ests, state_logits, seq_enc
+        return pos_ests_obs, pos_ests_var, state_logits, seq_enc
 
     def forward(self, input_dict):
         self.process_inputs(input_dict)
 
-        pos_ests, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+        pos_ests_obs, pos_ests_var, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+        y = pos_ests_obs - input_dict['rel_pos_shift']
+        S = input_dict['rel_pos_shift_var'] + pos_ests_var
+        K = input_dict['rel_pos_shift_var'] / S
+
+        pos_ests = input_dict['rel_pos_shift'] + K * y
 
         return {
             'pos_est': pos_ests,
@@ -140,7 +162,7 @@ class History_Encoder_Transformer(mm.Proto_Macromodel):
             self.process_inputs(input_dict)
             self.set_uc(False)
 
-            pos_ests, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_obs, pos_ests_var, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
             return enc
 
@@ -156,35 +178,34 @@ class History_Encoder_Transformer(mm.Proto_Macromodel):
             self.eval()
             # prev_time = time.time()
             ### Method 1 #### without uncertainty estimation
-            # T = 1
-            # self.test_time_process_inputs(input_dict, T)
-            # self.process_inputs(input_dict)
-            # self.set_uc(False)
-
-            # pos_ests, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
-            
-            # pos_est = pos_ests[0]
-            # state_obs = state_logits[0].max(0)[1]
-
-            # return state_obs, pos_est, None
-
-            ### Method 2 ### with uncertainty estimation
-            T = 100
+            T = 1
             self.test_time_process_inputs(input_dict, T)
             self.process_inputs(input_dict)
-            self.set_uc(True)
+            self.set_uc(False)
 
-            pos_ests, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_obs, pos_ests_var, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            
+            state_obs = state_logits[0].max(0)[1]
 
-            state_samples = torch.zeros((input_dict["batch_size"], self.num_observations)).float().to(self.device)
-            state_samples[torch.arange(input_dict['batch_size']), state_logits.max(1)[1]] = 1.0
-            state_probs = state_samples.sum(0) / input_dict['batch_size']
+            return state_obs, pos_ests_obs[0], pos_ests_var[0]
 
-            pos_est = pos_ests.mean(0)
-            pos_est_var = pos_ests.var(0)
-            state_obs = state_probs.max(0)[1]
+            # ### Method 2 ### with uncertainty estimation
+            # T = 100
+            # self.test_time_process_inputs(input_dict, T)
+            # self.process_inputs(input_dict)
+            # self.set_uc(True)
 
-            return state_obs, pos_est, pos_est_var
+            # pos_ests, state_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+            # state_samples = torch.zeros((input_dict["batch_size"], self.num_observations)).float().to(self.device)
+            # state_samples[torch.arange(input_dict['batch_size']), state_logits.max(1)[1]] = 1.0
+            # state_probs = state_samples.sum(0) / input_dict['batch_size']
+
+            # pos_est = pos_ests.mean(0)
+            # pos_est_var = pos_ests.var(0)
+            # state_obs = state_probs.max(0)[1]
+
+            # return state_obs, pos_est, pos_est_var
 
     def process_inputs(self, input_dict):
 
@@ -216,6 +237,8 @@ class History_Encoder_Transformer(mm.Proto_Macromodel):
         input_dict['pos_change'] = input_dict['rel_proprio'][0,-1,:2].unsqueeze(0)\
         .repeat_interleave(input_dict['rel_proprio'].size(1),0)\
          - input_dict['rel_proprio'][0,:,:2]
+
+        input_dict['rel_pos_shift'] = input_dict['pos_change'][-1].unsqueeze(0).repeat_interleave(T, 0)
 
 # class Options_Sensor(mm.Proto_Macromodel):
 #     def __init__(self, model_name, init_args, device = None):

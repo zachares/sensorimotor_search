@@ -4,7 +4,7 @@ dataset_path: /scr2/muj_random_20200728/
 dataloading_params:
   num_workers: 4
   batch_size: 128
-  idx_dict_path: 
+  idx_dict_path: /scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/val_train_split.pkl
     #/scr-ssd/sens_search_logging/models/20200801_training_2_rl_policy/val_train_split.pkl
 
 training_params:
@@ -38,7 +38,7 @@ dataset_keys: ["force_hi_freq", "action", "rel_proprio", "contact", "peg_vector"
 info_flow:
   History_Encoder_Transformer:
     train: 1
-    model_folder: "" #/scr-ssd/sens_search_logging/models/20200801_training_2_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
+    model_folder: '' #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/ #/scr-ssd/sens_search_logging/models/20200801_training_2_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
     epoch: 0 #5000
     init_args:
       num_tools: 3
@@ -51,6 +51,8 @@ info_flow:
       min_length: 20
     inputs:
       rel_proprio: dataset
+      rel_pos_shift: dataset
+      rel_pos_shift_var: dataset
       action: dataset
       force_hi_freq: dataset
       contact: dataset

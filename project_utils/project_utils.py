@@ -111,9 +111,12 @@ def toTorch(array, device):
 '''
 Outer Loop Functions
 '''
-def gen_task_dict(num_actions, substate_names, observation_names, likelihood_model = None, constraint_type = 1):
+def gen_task_dict(num_actions, substate_names, observation_names, likelihood_model, success_params, constraint_type = 1):
 	num_substates = len(substate_names)
 	task_dict = {}
+
+	task_dict['tool_names'] = substate_names
+	task_dict['num_tools'] = len(task_dict['tool_names'])
 
 	if constraint_type == 0: # all possible states
 		task_dict["states"] = tuple(itertools.product(range(num_substates), repeat = num_actions))
@@ -151,7 +154,7 @@ def gen_task_dict(num_actions, substate_names, observation_names, likelihood_mod
 		task_dict['observations'] = tuple(itertools.product(*[ range(len(obs_names)) for obs_names in observation_names]))
 	### single observation at each step
 	else:
-		task_dict['observations'] = [ (i) for i in range(task_dict['obs_num']) ]
+		task_dict['observations'] = [ (i) for i in range(len(observation_names)) ]
 
 	task_dict['obs_names'] = observation_names
 	task_dict['num_obs'] = len(task_dict['observations'])
@@ -163,7 +166,7 @@ def gen_task_dict(num_actions, substate_names, observation_names, likelihood_mod
 	task_dict['alpha_vectors'] = np.zeros((num_substates, num_actions, task_dict['num_states'])) # reward vector
 
 	for act_idx in range(num_actions):
-		for tool_idx in range(num_substates):
+		for tool_idx in range(task_dict['num_tools']):
 			for state_idx, state in enumerate(task_dict['states']):
 				substate_idx = state[act_idx]
 				if substate_idx == tool_idx:
@@ -176,15 +179,22 @@ def gen_task_dict(num_actions, substate_names, observation_names, likelihood_mod
 			substate_idx = state[act_idx]
 			task_dict['beta_vectors'][act_idx, substate_idx, state_idx] = 1.0
 
-	if likelihood_model is not None:
-		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_obs'], num_actions, task_dict['num_states']))
+		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_tools'], task_dict['num_obs'],\
+		 num_actions, task_dict['num_states']))
 
+	for tool_idx in range(task_dict['num_tools']):
 		for obs_idx, obs_idxs in enumerate(task_dict['observations']):
 			for act_idx in range(num_actions):
 				for state_idx, state in enumerate(task_dict['states']):
 					substate_idx = state[act_idx]
-					probs = likelihood_model[substate_idx]
-					task_dict['loglikelihood_matrix'][obs_idx, act_idx, state_idx] = np.log(probs[obs_idxs])
+					probs = likelihood_model[tool_idx, substate_idx]
+					prob = probs[obs_idxs]
+					task_dict['loglikelihood_matrix'][tool_idx, obs_idx, act_idx, state_idx] = np.log(prob)
+
+	task_dict['success_rate'] = []
+
+	for tool_idx in range(task_dict['num_tools']):
+		task_dict['success_rate'].append(success_params[tool_idx, 1])
 
 	return task_dict
 '''

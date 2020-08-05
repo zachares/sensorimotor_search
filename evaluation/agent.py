@@ -15,29 +15,27 @@ import multinomial as multinomial
 import project_utils as pu
 
 class Outer_Loop(object):
-	def __init__(self, env, task_dict, mode = 0, success_rate = None, k = 0, device = None):
+	def __init__(self, env, task_dict, mode = 2, k = 0, device = None):
 
 		self.env = env
 		self.task_dict = task_dict
-
-		self.success_rate = success_rate
-
+		
 		self.device = device
 		self.k = k
 		self.mode = mode
 		self.sample = True
 		
-		self.print_info = False
+		self.print_info = True
 		self.reset()
 
 	def reset(self):
-		self.env.reset()
+		self.env.reset(initialize = False)
 		self.gt_dict = self.env.get_gt_dict()
 		self.reset_probs()
 		self.step_count = 1
 		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
 
-		if self.print_info and self.use_state_est:
+		if self.print_info:
 			self.print_hypothesis()
 		
 	def reset_probs(self):
@@ -91,11 +89,11 @@ class Outer_Loop(object):
 		expected_reward = (alpha_vectors * state_prior).sum(1)
 
 		if k == 0:
-			return expected_reward * self.success_rate
+			return expected_reward * self.task_dict['success_rate'][self.env.get_goal()]
 		else:
 			state_prior =state_prior.unsqueeze(0).repeat_interleave(self.task_dict['num_obs'], 0)
 			
-			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'], self.device)
+			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal()], self.device)
 
 			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix, dim = 2)
 		
@@ -110,17 +108,18 @@ class Outer_Loop(object):
 
 			expected_lookahead_value = (p_o_given_a * lookahead_value).sum(0)
 
-			return self.success_rate * expected_reward + (1 - self.success_rate) * expected_lookahead_value
+			return self.task_dict['success_rate'][self.env.get_goal()] * expected_reward\
+			 + (1 - self.task_dict['success_rate'][self.env.get_goal()]) * expected_lookahead_value
 
 	def update_state_probs(self, action_idx, obs_idxs):
 		state_prior = self.state_probs.clone()
 		obs_idx = self.task_dict['obs2idx'][obs_idxs]
-		ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][obs_idx,action_idx], self.device)
+		ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), obs_idx, action_idx], self.device)
 		# print(ll_logprobs)
 		state_posterior_logits = torch.log(state_prior) + ll_logprobs
 		# print(F.softmax(state_posterior_logits, dim = 0))
 		self.state_probs = multinomial.logits2probs(state_posterior_logits)
-		self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
+		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
 		# print(self.state_probs)
 		# a = input("Continue?")
 
@@ -129,28 +128,24 @@ class Outer_Loop(object):
 		self.action_counts[action_idx] += 1
 		self.step_count += 1
 
-		if obs_idxs != None:
-			# print(self.state_probs)
-			self.update_state_probs(action_idx, obs_idxs)
-			# print(self.state_probs)
+		# print(self.state_probs)
+		self.update_state_probs(action_idx, obs_idxs)
+		# print(self.state_probs)
 
-			### ignoring observation of insertion or not insertion
-			if self.print_info:
-				for i, obs_idx in enumerate(obs_idxs):
-					obs = self.task_dict['obs_names'][i][obs_idx]
+		### ignoring observation of insertion or not insertion
+		if self.print_info:
+			for i, obs_idx in enumerate(obs_idxs):
+				obs = self.task_dict['obs_names'][i][obs_idx]
 
-					print("Observation_" + str(i) + " " + obs)
+				print("Observation_" + str(i) + " " + obs)
 
-				gt_props = "Ground Truth Properties"
-				for info in self.gt_dict[action_idx]:
-					if type(info) == str:
-						gt_props += " - " + info 
+			gt_props = "Ground Truth Properties"
+			for info in self.gt_dict[action_idx]:
+				if type(info) == str:
+					gt_props += " - " + info 
 
-				print(gt_props)
-				self.print_hypothesis()
-		else:
-			if self.print_info:
-				print("Bad Observation")
+			print(gt_props)
+			self.print_hypothesis()
 
 	def print_hypothesis(self):
 		state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\

@@ -87,9 +87,23 @@ if __name__ == '__main__':
 	for trial_num in range(num_trials):
 		env.reset()
 
+		goal = env.gen_initpoint(2)
+
 		for i in range(cfg['task_params']['horizon']):
 			noise = np.random.normal(0.0, [noise_scale,noise_scale,noise_scale] , 3)
-			env.step(noise)
+
+			mode = random.choice([0,1,2,3])
+
+			if mode == 0: 
+				env.step(noise)
+			elif mode == 1:
+				noise[2] = -abs(noise[2])
+				env.step(noise)
+			elif mode == 2:
+				env.step(goal + noise  * 0.5)
+			elif mode == 3:
+				noise[2] = -abs(noise[2])				
+				env.step(goal + noise * 0.5)
 
 		if random.choice([0,1]) == 1:
 			for i in range(cfg['task_params']['horizon']):
@@ -102,6 +116,20 @@ if __name__ == '__main__':
 				goal[2] = 0.0
 				env.step(goal + 0.5 * noise)
 		else:
+			goal = env.gen_initpoint(2)
+
 			for i in range(cfg['task_params']['horizon']):
 				noise = np.random.normal(0.0, [noise_scale,noise_scale,noise_scale] , 3)
-				env.step(noise)
+
+				mode = random.choice([0,1,2,3])
+
+				if mode == 0: 
+					env.step(noise)
+				elif mode == 1:
+					noise[2] = -abs(noise[2])
+					env.step(noise)
+				elif mode == 2:
+					env.step(goal + noise * 0.5)
+				elif mode == 3:
+					noise[2] = -abs(noise[2])				
+					env.step(goal + noise * 0.5)

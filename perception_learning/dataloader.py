@@ -200,6 +200,8 @@ class Custom_DataLoader(Dataset):
                 sample[key] = np.array(dataset[key][idx0:idx1])
 
                 sample['rel_pos_final'] = sample[key][-1,:2]
+                sample['rel_pos_shift'] = sample[key][-1,:2] - sample[key][0,:2]
+                sample['rel_pos_shift_var'] = (0.022 * 0.022) * np.random.uniform(low=0, high=1, size=2) + 1e-6
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
             # elif key == 'virtual_force':
