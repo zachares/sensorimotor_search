@@ -15,17 +15,16 @@ import multinomial as multinomial
 import project_utils as pu
 
 class Outer_Loop(object):
-	def __init__(self, env, task_dict, mode = 2, k = 0, device = None):
+	def __init__(self, env, task_dict, mode = 2, device = None, print_info = True):
 
 		self.env = env
 		self.task_dict = task_dict
 		
 		self.device = device
-		self.k = k
 		self.mode = mode
 		self.sample = True
 		
-		self.print_info = True
+		self.print_info = print_info
 		self.reset()
 
 	def reset(self):
@@ -33,7 +32,10 @@ class Outer_Loop(object):
 		self.gt_dict = self.env.get_gt_dict()
 		self.reset_probs()
 		self.step_count = 1
-		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
+		self.action_counts = 2 * torch.ones(self.task_dict['num_actions']).float().to(self.device)
+		self.success_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
+		self.failure_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device) 
+		self.z = 1.96 # used to estimate the upper bound with a 95% confidence level
 
 		if self.print_info:
 			self.print_hypothesis()
@@ -47,75 +49,37 @@ class Outer_Loop(object):
 		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
 		
 	def choose_action(self):
-		if self.mode == 0: # random
-			action_idx = random.choice(range(self.task_dict['num_actions']))
+		if self.mode == 0: # iterator
+			weights = self.step_count / self.action_counts
+			
+		elif self.mode == 1: # with classifier
+			weights = self.success_counts / self.action_counts +\
+			 self.z * torch.sqrt(self.success_counts * self.failure_counts) / (self.action_counts * torch.sqrt(self.action_counts))
 
-		elif self.mode == 1: # iterator
-			value_estimate = torch.sqrt(np.log(self.step_count) / self.action_counts)
+		elif self.mode == 2 and 'loglikelihood_matrix' in self.task_dict.keys(): # with classifier and state estimation
+			alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+			weights = (alpha_vectors * state_prior).sum(1)
 
-			weights = (value_estimate / value_estimate.sum()).cpu().numpy()
-
-			action_idx = np.argmax(weights)
-
-			# if sum(weights[:-1]) > 1.0:
-			# 	action_idx = np.argmax(weights)
-			# else:
-			# 	action_idx = np.argmax(np.random.multinomial(1, weights, size = 1))
-
-		elif self.mode == 2: # greedy
-			value_estimate = self.pomdp_value_iteration(self.state_probs, k = self.k)
-
-			weights = (value_estimate / value_estimate.sum()).cpu().numpy()
-
-			action_idx = np.argmax(weights)
-
-			# if sum(weights[:-1]) > 1.0:
-			# 	action_idx = np.argmax(weights)
-			# else:
-			# 	action_idx = np.argmax(np.random.multinomial(1, weights, size = 1))
-
+		elif self.mode == 3 and 'loglikelihood_matrix' in self.task_dict.keys():
+			weights = self.beliefmdp_value_iteration(self.state_probs, horizon = 2)
 		else:
 			raise Exception('Mode ', self.mode, ' current unsupported')
+
+		action_idx = weights.max(0)[1].item()
+
+		# print(weights)
+		# print(action_idx)
+		# a = input("Continue")
 
 		if self.print_info:
 			print("Index of hole choice: ", action_idx)
 
 		return action_idx  
 
-	def pomdp_value_iteration(self, state_probs, k = 0): # depth of value iteration, calculating expected value
-		alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
-		state_prior = state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
-
-		expected_reward = (alpha_vectors * state_prior).sum(1)
-
-		if k == 0:
-			return expected_reward * self.task_dict['success_rate'][self.env.get_goal()]
-		else:
-			state_prior =state_prior.unsqueeze(0).repeat_interleave(self.task_dict['num_obs'], 0)
-			
-			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal()], self.device)
-
-			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix, dim = 2)
-		
-			p_o_given_a = torch.where(state_prior != 0,\
-			 torch.exp(torch.log(state_prior) + loglikelihood_matrix), torch.zeros_like(state_prior)).sum(-1)
-
-			lookahead_value = torch.zeros_like(p_o_given_a)
-
-			for obs_idx in range(self.task_dict['num_obs']):
-				for act_idx in range(self.task_dict['num_actions']):
-					lookahead_value[obs_idx, act_idx] = self.pomdp_value_iteration(state_posterior[obs_idx, act_idx], k = k-1).max(0)[0]
-
-			expected_lookahead_value = (p_o_given_a * lookahead_value).sum(0)
-
-			return self.task_dict['success_rate'][self.env.get_goal()] * expected_reward\
-			 + (1 - self.task_dict['success_rate'][self.env.get_goal()]) * expected_lookahead_value
-
-	def update_state_probs(self, action_idx, obs_idxs):
+	def update_state_probs(self, action_idx, obs_idx):
 		state_prior = self.state_probs.clone()
-		obs_idx = self.task_dict['obs2idx'][obs_idxs]
-		ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), obs_idx, action_idx], self.device)
-		# print(ll_logprobs)
+		ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, obs_idx], self.device)
 		state_posterior_logits = torch.log(state_prior) + ll_logprobs
 		# print(F.softmax(state_posterior_logits, dim = 0))
 		self.state_probs = multinomial.logits2probs(state_posterior_logits)
@@ -123,29 +87,34 @@ class Outer_Loop(object):
 		# print(self.state_probs)
 		# a = input("Continue?")
 
-	def new_obs(self, action_idx, obs_idxs):
+	def new_obs(self, action_idx, obs_idx):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
 		self.action_counts[action_idx] += 1
 		self.step_count += 1
 
-		# print(self.state_probs)
-		self.update_state_probs(action_idx, obs_idxs)
-		# print(self.state_probs)
+		if obs_idx == self.env.get_goal():
+			self.success_counts[action_idx] += 1
+		else:
+			self.failure_counts[action_idx] += 1
+
+		if 'loglikelihood_matrix' in self.task_dict.keys():
+			# print(self.state_probs)
+			self.update_state_probs(action_idx, obs_idx)
+			# print(self.state_probs)
 
 		### ignoring observation of insertion or not insertion
 		if self.print_info:
-			for i, obs_idx in enumerate(obs_idxs):
-				obs = self.task_dict['obs_names'][i][obs_idx]
-
-				print("Observation_" + str(i) + " " + obs)
+			obs = self.task_dict['obs_names'][obs_idx]
+			print("Observation_" + str(i) + " " + obs)
 
 			gt_props = "Ground Truth Properties"
 			for info in self.gt_dict[action_idx]:
 				if type(info) == str:
-					gt_props += " - " + info 
+					gt_props += " - " + info
+				print(gt_props)
 
-			print(gt_props)
-			self.print_hypothesis()
+			if 'loglikelihood_matrix' in self.task_dict.keys():
+				self.print_hypothesis()
 
 	def print_hypothesis(self):
 		state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
@@ -164,165 +133,161 @@ class Outer_Loop(object):
 			print("Probabilities", probs.detach().cpu().numpy())
 
 			pu.print_histogram(probs, self.task_dict["substate_names"])
-		print("##############################################\n")	
+		print("##############################################\n")
 
-	# def marginalize(self, state_probs, action_idx = None, substate_idx = None):
-	# 	#### marginalize out other actions / hole choices
-	# 	if action_idx is not None:
-	# 		margin = torch.zeros((self.task_dict["num_substates"])).to(self.device)
-	# 		for i, state in enumerate(self.task_dict["states"]):
-	# 			margin[state[action_idx]] += state_probs[i]
+	def beliefmdp_value_iteration(self, state_probs, horizon = 1): # depth of value iteration, calculating expected value
+		alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)		
+		state_prior = state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
 
-	# 	#### marginalize out other state types
-	# 	else:
-	# 		margin = torch.zeros((self.task_dict["num_actions"])).to(self.device)
-	# 		for i, state in enumerate(self.task_dict["states"]):
-	# 			if substate_idx in state:
-	# 				idx = state.index(substate_idx)
-	# 				margin[idx] += state_probs[i]
+		expected_reward = (alpha_vectors * state_prior).sum(1)
+
+		if horizon == 1:
+			return expected_reward
+		else:
+			state_prior = state_prior.unsqueeze(1).repeat_interleave(self.task_dict['num_obs'], 1)
+			
+			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal()], self.device)
+
+			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix, dim = 2)
+		
+			p_o_given_a = torch.where(state_prior != 0,\
+			 torch.exp(torch.log(state_prior) + loglikelihood_matrix), torch.zeros_like(state_prior)).sum(-1)
+
+			lookahead_value = torch.zeros_like(p_o_given_a)
+
+			for obs_idx in range(self.task_dict['num_obs']):
+				for act_idx in range(self.task_dict['num_actions']):
+					lookahead_value[obs_idx, act_idx] = self.beliefmdp_value_iteration(state_posterior[obs_idx, act_idx], horizon = horizon-1).max(0)[0]
+
+			expected_lookahead_value = (p_o_given_a * lookahead_value).sum(1)
+
+			return expected_reward + expected_lookahead_value	
+
+	def marginalize(self, state_probs, action_idx = None, substate_idx = None):
+		#### marginalize out other actions / hole choices
+		if action_idx is not None:
+			margin = torch.zeros((self.task_dict["num_substates"])).to(self.device)
+			for i, state in enumerate(self.task_dict["states"]):
+				margin[state[action_idx]] += state_probs[i]
+
+		#### marginalize out other state types
+		else:
+			margin = torch.zeros((self.task_dict["num_actions"])).to(self.device)
+			for i, state in enumerate(self.task_dict["states"]):
+				if substate_idx in state:
+					idx = state.index(substate_idx)
+					margin[idx] += state_probs[i]
 
 	# 	return margin
 
 def main():
-	## success rate if correct fruit is chosen
 	device = torch.device("cuda")
+
+	mode = 0 # iterator
+	mode = 1 # Upper confidence bounds
+	mode = 2 # greedy approach with state estimation
+	mode = 3 # belief mdp value iteration with fixed horizon
+
+	## success rate if correct building material is chosen
+	success_rate =  0.7
+
+	num_block_types = 4
+	num_each_block = [1,1,1,1]
+
+	num_trials = 10000 #00
+
+	uncertainty = 0.2 # 0.1 - 90%, 0.2 - 85%, 0.3 - 77%, 0.5 - 66%
 	# Toy problem
-	fruit_properties = [
-	['apple', 'sweet', 'citric_acid'],
-	['orange', 'sour', 'citric_acid'],
-	['lemon', 'sweet', 'citric_acid'],
-	['banana', 'sweet', 'potassium']
-	]
+	block_types = ['lego','kinect','popsicle_stick','play_dough', 'red_brick', '2by4', 'cement', 'steel_ibeams']
+	block_types = block_types[:num_block_types]
 
-	substate_names = []
+	num_blocks = len(block_types)
+	substate_names = block_types
+	obs_names = substate_names[:]
 
-	for fp in fruit_properties:
-		substate_names.append(fp[0])
-
-	observation_names = [['sweet', 'sour'], ['potassium', 'citric_acid']]
-
-	goal = 'orange'
-	goal_idx = substate_names.index(goal)
+	goal_idx = random.choice(range(len(block_types)))
+	goal = block_types[goal_idx]
 
 	### uncertainty addition to observation model
-	uncertainty = 0.1
-
-	num_each_fruit = [1,1,1,1]
-	corr_idxs = []
-
-	cand_fruits = OrderedDict()
+	cand_blocks = OrderedDict()
 	cand_num = 0
 
-	for i, num_fruit in enumerate(num_each_fruit):
-		fp =  fruit_properties[i]
-		for j in range(num_fruit):
-			cand_fruits[cand_num] = fp
-
-			if goal in fp:
-				corr_idxs.append(cand_num)
-
+	for i, num_block in enumerate(num_each_block):
+		bt =  block_types[i]
+		for j in range(num_block):
+			cand_blocks[cand_num] = (bt, i)
 			cand_num += 1
 
-	num_fruits = len(cand_fruits.keys())
+	num_cand = len(cand_blocks.keys())
 
 	### generating observation model
-	likelihood_model = torch.zeros((len(substate_names)))
+	likelihood_model = torch.zeros((num_blocks, num_blocks, num_blocks)) # tools, observations, states
 
-	for obs_names in observation_names:
-		likelihood_model = likelihood_model.unsqueeze(-1).repeat_interleave(len(obs_names), -1)
-
-	for i, fp in enumerate(fruit_properties):
-		obs_idxs = []
-
-		for obs_names in observation_names:
-			for j, obs in enumerate(obs_names):
-				if obs in fp:
-					obs_idxs.append(j)
-
-		obs_idxs = tuple([i] + obs_idxs)
-		likelihood_model[obs_idxs] = 1.0
+	for i in range(num_blocks):
+		likelihood_model[:,i,i] = 1.0
 
 	### adding uncertainty and normalizing
 	noise = Uniform(0, uncertainty)
 	likelihood_model += noise.rsample(sample_shape=likelihood_model.size())
-	likelihood_model = likelihood_model / likelihood_model.sum()
+	# normalizing over the dimension of observations
+	likelihood_model = likelihood_model / likelihood_model.sum(1).unsqueeze(1).repeat_interleave(num_blocks, 1)
 
 	# print("Success Rate: ", success_rate)
 
-	class Fruit_Env(object):
-		def __init__(self, goal_idx, cand_fruits, likelihood_model):
+	class Block_Env(object):
+		def __init__(self, goal_idx, cand_blocks, likelihood_model):
 			self.goal_idx = goal_idx
-			self.cand_fruits = cand_fruits
+			self.cand_blocks = cand_blocks
 			self.likelihood_model = likelihood_model
 
-		def reset(self):
+		def reset(self, initialize = False):
 			pass
 
 		def get_goal(self):
 			return self.goal_idx
 
 		def get_gt_dict(self):
-			return self.cand_fruits
+			return self.cand_blocks
 
 		def get_obs(self, action_idx):
-			substate_idx = substate_names.index(self.cand_fruits[action_idx][0])
+			substate_idx = self.cand_blocks[action_idx][1]
+			probs = self.likelihood_model[self.goal_idx, :, substate_idx]
+			obs_idx = np.argmax(np.random.multinomial(1, probs.numpy(), size = 1))
 
-			logits = self.likelihood_model[substate_idx]
-			probs = logits / logits.sum()
-			probs_shape = probs.size()
-
-			probs_flattened = torch.flatten(probs)
-
-			obs_idx_flat = np.argmax(np.random.multinomial(1, probs_flattened.numpy(), size = 1))
-
-			sample_flattened = torch.zeros((probs_flattened.size()))
-			sample_flattened[obs_idx_flat] = 1.0
-
-			obs_idx = np.unravel_index(np.argmax(sample_flattened.numpy()), probs_shape)
-
-			# print(self.cand_fruits[action_idx])
-			# print("Logits: ", logits)
-			# print("Probs: ", probs)
-			# print("Probs Flattened: ", probs_flattened)
-			# print("Obs_idx_flat: ", obs_idx_flat)
-			# print("Sample Flattened: ", sample_flattened)
-			# print("Obs idx: ", obs_idx)
-			# a = input("Continue?")
+			# print(self.likelihood_model)
+			# print(probs)
+			# print(obs_idx)
+			# a =  input("Continue?")
 			return obs_idx
 
-	fruit_env = Fruit_Env(goal_idx, cand_fruits, likelihood_model)
+	block_env = Block_Env(goal_idx, cand_blocks, likelihood_model)
 
-	success_rate =  0.7
+	if all(num == 1.0 for num in num_each_block):
+		print("Using Constraint that there is one of each object type")
+		task_dict = pu.gen_task_dict(num_cand, substate_names, obs_names,\
+		 loglikelihood_model = torch.log(likelihood_model).cpu().numpy(), constraint_type = 1)
+	else:
+		print("No constraint on the type of each candidate object")
+		task_dict = pu.gen_task_dict(num_cand, substate_names, obs_names,\
+		 loglikelihood_model = torch.log(likelihood_model).cpu().numpy(), constraint_type = 0)
 
-	task_dict = pu.gen_task_dict(num_fruits, substate_names, observation_names,\
-	 likelihood_model = likelihood_model.cpu().numpy(), constraint_type = 1)
-
-	k = 1
-
-	print("Num steps: ", k)
-	decision_model = Outer_Loop(fruit_env, task_dict, success_rate = success_rate, k=k, device = device)
-
-	'''
-	Questions
-	1. How can you automatically choose the discount factor
-	2. How can you automattically choose the number of steps for lookahead
-	'''
-
-	decision_model.mode = 2
-
-	num_trials = 10000
+	decision_model = Outer_Loop(block_env, task_dict, mode=mode, device = device, print_info = False)
 
 	trial_idx = 0
 	step_counts = []
-	# c_range = np.arange(0, 5, 0.5)
-
-	# for i in range(c_range.size):
-	# 	decision_model.c = c_range[i]
-	# 	trial_idx = 0
 
 	while trial_idx < num_trials:
 		# print(trial_idx)
 		# print('\n #################### \n New Task \n ###################### \n')
+		goal_idx = random.choice(range(len(block_types)))
+		goal = block_types[goal_idx]
+		decision_model.env.goal_idx = goal_idx
+
+		corr_idxs = []
+		for k, v in block_env.cand_blocks.items():
+			if v[1] == goal_idx:
+				corr_idxs.append(k)
+
 		decision_model.reset()
 		done_bool = False
 		num_steps = 0
@@ -335,6 +300,7 @@ def main():
 			if act_idx in corr_idxs:
 				if np.random.binomial(1, success_rate, 1) == 1:
 					done_bool = True
+					# print("Completed")
 		
 			decision_model.new_obs(act_idx, obs_idxs)
 

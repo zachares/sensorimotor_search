@@ -35,48 +35,16 @@ training_params:
   use_automatic_entropy_tuning: True
   updates_multiplier: 100
 
-policy_keys: [encoding, peg_type, rel_pos_shift, rel_pos_est, rel_pos_est_var] #, 'peg_type'] # ['rel_pos', 'rel_pos_shift', 'peg_type', 'contact'] #  ['rel_pos_shift', 'pos_params', 'peg_type'] # 
+policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var] #, 'peg_type'] # ['rel_pos', 'rel_pos_shift', 'peg_type', 'contact'] #  ['rel_pos_shift', 'pos_params', 'peg_type'] # 
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
 action_size: 3
-state_size: 75
+state_size: 78
 
 info_flow:
-  History_Encoder_Transformer:
-    model_folder: /scr-ssd/sens_search_logging/models/20200804_training_3_rl_policy/ #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200704_training_2_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
+  History_Encoder_wUncertainty:
+    model_folder: /scr-ssd/sens_search_logging/models/20200813_training_3_rl_policy/ #/scr-ssd/sens_search_logging/models/20200812_training_11_rl_policy/ #/scr-ssd/sens_search_logging/models/20200813_training_0_rl_policy/ 
     epoch: 5000
-
-# model_params:
-#   action_dim: 3
-#   state_dim: 3
-#   use_cuda: True
-#   torch_policy_path: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_07_28_09_32_37_0000--s-28577/itr_198.pkl
-  #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_07_27_17_22_58_0000--s-20437/itr_188.pkl
-    #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_07_24_21_19_53_0000--s-97530/itr_77.pkl
-  #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/07-21-sac-robosuite/rel_pos_wshift_wcurriculum_1mmperepoch_upto200/itr_208.pkl
-#/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/07-19-sac-robosuite/07-19-sac-robosuite_2020_07_19_07_17_39_0000--s-42861/itr_152.pkl
-  # /scr2/muj_senssearch_dataset10HZ_SAC_20200713_relpos_shift/07-14-sac-robosuite/07-14-sac-robosuite_2020_07_14_16_49_20_0000--s-54801/itr_121.pkl 
-# /scr2/muj_senssearch_dataset10HZ_SAC_20200713_relpos_shift/07-14-sac-robosuite/07-14-sac-robosuite_2020_07_14_16_03_43_0000--s-1947/itr_21.pkl
-  # /scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/07-06-sac-robosuite/07-06-sac-robosuite_2020_07_06_18_30_43_0000--s-1476/itr_158.pkl
- #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_relpos_nonoise/07-06-sac-robosuite/07-06-sac-robosuite_2020_07_06_18_39_45_0000--s-14979/itr_159.pkl" # "/scr2/muj_senssearch_dataset10HZ_SAC_20200704/07-03-sac-robosuite/07-03-sac-robosuite_2020_07_03_13_01_49_0000--s-39256/itr_150.pkl"
-
-
-
-
-
-
-# info_flow:
-#   History_Encoder:
-#     model_folder: /scr-ssd/sens_search_logging/models/20200714_training_14_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200704_training_2_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-#     epoch: 3340
-# #   History_Encoder:
-# #     model_folder: /scr-ssd/sens_search_logging/models/20200712_training_96_rl_policy/ #"/scr-ssd/sens_search_logging/models/20200704_training_2_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-# #     epoch: 1960
-# #     # model_folder: "/scr-ssd/sens_search_logging/models/20200711_training_9_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200704_training_2_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-# #     # epoch: 4280
-# #   # History_Encoder:
-# #   #   model_folder: "/scr-ssd/sens_search_logging/models/20200710_training_17_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200704_training_2_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-# #   #   epoch: 5000
-# #   # History_Encoder:
-# #   #   model_folder: "/scr-ssd/sens_search_logging/models/20200706_training_1_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200704_training_2_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200627_training_25_rl_policy/" #"/scr-ssd/sens_search_logging/models/20200602_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_44_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200601_training_7_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_27_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200531_training_21_fit_wexpanded_action/"  #"/scr-ssd/sens_search_logging/models/20200530_training_12_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_45_fit_wexpanded_action/" #"/scr-ssd/sens_search_logging/models/20200529_training_20_fit_wexpanded_action/"
-# #   #   epoch: 5000
+  # History_Encoder_Baseline:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200811_training_13_rl_policy/ 
+  #   epoch: 5000

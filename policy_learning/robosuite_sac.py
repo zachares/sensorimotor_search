@@ -4,7 +4,7 @@ from rlkit.envs.wrappers import NormalizedBoxEnv
 from rlkit.launchers.launcher_util import setup_logger
 from rlkit.samplers.data_collector import MdpPathCollector
 from rlkit.torch.sac.policies import TanhGaussianPolicy, MakeDeterministic
-from rlkit.torch.networks import FlattenMlp
+from rlkit.torch.networks import ConcatMlp
 from rlkit.torch.torch_rl_algorithm import TorchBatchRLAlgorithm
 from rlkit.torch.sac.sac import SACTrainer
 from rlkit.launchers.launcher_util import run_experiment_here
@@ -74,9 +74,13 @@ def experiment(variant):
             data = torch.load(self.cfg['SAC_Policy']["model_folder"] + "itr_" + str(self.cfg['SAC_Policy']["epoch"]) + ".pkl")
             model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
 
-        if 'History_Encoder_Transformer' in model_dict.keys():
-            model_dict['encoder'] = model_dict['History_Encoder_Transformer']
-            model_dict['sensor'] = model_dict['History_Encoder_Transformer']
+        if 'History_Encoder_wUncertainty' in model_dict.keys():
+            model_dict['encoder'] = model_dict['History_Encoder_wUncertainty']
+            model_dict['sensor'] = model_dict['History_Encoder_wUncertainty']
+
+        if 'History_Encoder_Baseline' in model_dict.keys():
+            model_dict['encoder'] = model_dict['History_Encoder_Baseline']
+            model_dict['sensor'] = model_dict['History_Encoder_Baseline']
     else:
         model_dict = {}
 
@@ -88,22 +92,22 @@ def experiment(variant):
     
     if 'SAC_Policy' not in model_dict.keys():
         M = variant['layer_size']
-        qf1 = FlattenMlp(
+        qf1 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
             hidden_sizes=[M, M],
         )
-        qf2 = FlattenMlp(
+        qf2 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
             hidden_sizes=[M, M],
         )
-        target_qf1 = FlattenMlp(
+        target_qf1 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
             hidden_sizes=[M, M],
         )
-        target_qf2 = FlattenMlp(
+        target_qf2 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
             hidden_sizes=[M, M],

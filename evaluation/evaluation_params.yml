@@ -10,7 +10,6 @@ control_params:
   horizon_bool: False
 
 task_params:
-  max_big_steps: 10
   constraint_type: 1
   shift_bool: 1.0
   horizon: 100
@@ -37,6 +36,7 @@ action_size: 3
 state_size: 75
 
 info_flow:
+# First completely working model
   SAC_Policy:
     model_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_23_27_17_0000--s-9748/ #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_09_17_43_0000--s-90315/
     epoch: 105 #33 # 17

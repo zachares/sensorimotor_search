@@ -118,7 +118,7 @@ if __name__ == '__main__':
 	task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names, [['not_insert', 'insert'], robo_env.hole_names],\
 	env.sensor.likelihood_model.model.p.detach().cpu().numpy(), env.sensor.success_params.model.p.detach().cpu().numpy(), constraint_type = 1)
 
-	decision_model = Outer_Loop(env, task_dict, device = device)
+	decision_model = Outer_Loop(env, task_dict, k = 0, device = device)
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
@@ -131,9 +131,13 @@ if __name__ == '__main__':
     ###########################################################
 
 	step_counts = []
-	num_trials = 10
+	completion_count = 0
+	pos_diverge_count = 0
+	state_diverge_count = 0
 
-	for trial_num in range(num_trials + 1):
+	num_trials = 81
+
+	for trial_num in range(num_trials):
 		print("\n")
 		print("############################################################")
 		print("######                BEGINNING NEW TRIAL              #####")
@@ -146,27 +150,33 @@ if __name__ == '__main__':
 		###########################################################
 		decision_model.reset()
 		# decision_model.print_hypothesis()
-		step_count = decision_model.step_count
+		continue_bool = True
+		step_count = 0
 		# a = input("Continue?")
 
-		while step_count < cfg['task_params']['max_big_steps']:
+		while continue_bool:
 			action_idx = decision_model.choose_action()
-			obs_idxs = decision_model.env.big_step(action_idx)
+			obs_idxs, obs_logprobs = decision_model.env.big_step(action_idx)
+			step_count += 1
 			# print("Step Count ", step_count)
 
 			if decision_model.env.done_bool:
-				# print("Insertion Bool", insertion_bool)
-				step_count = cfg['task_params']['max_big_steps']
-				continue
-			
-			decision_model.new_obs(action_idx, obs_idxs)
-
-			step_count = decision_model.step_count
-
-
-		step_counts.append(step_count)
+				completion_count += 1
+				step_counts.append(step_count)
+				continue_bool = False
+			elif decision_mode.env.pos_diverge_bool:
+				pos_diverge_count += 1
+				continue_bool = False
+			elif decision_model.env.state_diverge_bool:
+				state_diverge_count += 1
+				continue_bool = False
+			else:
+				decision_model.new_obs(action_idx, obs_idxs, obs_logprobs)
 
 	print("Mean Number of Steps Per Trial: ", sum(step_counts) / len(step_counts))
+	print("Completion Rate: ", completion_count / num_trials)
+	print("Pos Divergence Rate: ", pos_diverge_count / num_trials)
+	print("State Divergence Rate: ", state_diverge_count / num_trials)
 
 		# if not debugging_flag:
 

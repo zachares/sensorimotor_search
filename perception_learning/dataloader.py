@@ -6,6 +6,7 @@ import time
 import os
 import yaml
 from torch.utils.data import Dataset
+import random
 
 ## ADD data normalization
 def read_h5(path):
@@ -201,7 +202,7 @@ class Custom_DataLoader(Dataset):
 
                 sample['rel_pos_final'] = sample[key][-1,:2]
                 sample['rel_pos_shift'] = sample[key][-1,:2] - sample[key][0,:2]
-                sample['rel_pos_shift_var'] = (0.022 * 0.022) * np.random.uniform(low=0, high=1, size=2) + 1e-6
+                sample['rel_pos_shift_var'] = (0.022 * 0.022) * np.random.uniform(low=1e-6, high=1, size=2)
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
             # elif key == 'virtual_force':
@@ -223,7 +224,13 @@ class Custom_DataLoader(Dataset):
                     sample["tool_idx"] = np.array(sample[key].argmax(0))
                 elif key == "hole_vector":
                     sample["state_vector"] = sample[key]
-                    sample["state_idx"] = np.array(sample[key].argmax(0))                   
+                    sample["state_idx"] = np.array(sample[key].argmax(0))
+                    
+                    sample["state_prior"] = [np.array([np.random.uniform(low=0, high=1)])]
+                    sample["state_prior"].append((1 - sample['state_prior'][-1])*np.random.uniform(low=0, high=1))
+                    sample["state_prior"].append(np.array([1 - np.sum(sample["state_prior"])])) 
+                    random.shuffle(sample["state_prior"])                 
+                    sample["state_prior"] = np.concatenate(sample['state_prior'])
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
         # sample["pol_idx"] = np.array(dataset['policy'][-1,0])

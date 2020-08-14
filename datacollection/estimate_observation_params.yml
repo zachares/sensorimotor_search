@@ -8,7 +8,7 @@ control_params:
   horizon_bool: False
 
 task_params:
-  max_big_steps: 10
+  max_big_steps: 20
   constraint_type: 1
   shift_bool: 1.0
   horizon: 100
@@ -21,7 +21,7 @@ task_params:
 logging_params:
   logging_folder: /scr2/muj_motion_primitive_20200722/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
   logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
@@ -36,10 +36,10 @@ state_size: 75
 
 info_flow:
   SAC_Policy:
-    model_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_23_27_17_0000--s-9748/ #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_09_17_43_0000--s-90315/
-    epoch: 105 # 33
+    model_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_09_21_36_16_0000--s-95437/ #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_23_27_17_0000--s-9748/ #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_09_17_43_0000--s-90315/
+    epoch: 193 #105 # 33
   History_Encoder_Transformer:
-    model_folder: /scr-ssd/sens_search_logging/models/20200804_training_3_rl_policy/ #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/
+    model_folder: /scr-ssd/sens_search_logging/models/20200806_training_0_rl_policy/ #/scr-ssd/sens_search_logging/models/20200804_training_3_rl_policy/ #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/
     epoch: 5000
 
 
