@@ -63,8 +63,7 @@ if __name__ == '__main__':
 	controller='position', 
 	camera_depth=True,
 	camera_width=128,
-	camera_height=128
-	 )
+	camera_height=128,)
 
 	# env.viewer.set_camera(camera_id=2)
 
@@ -108,7 +107,7 @@ if __name__ == '__main__':
 	# append_x(noise_list, 0.3, 10)
 
 
-	print(noise_list)
+	# print(noise_list)
 	option_file_num = 0
 
 	for noise in noise_list:

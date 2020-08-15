@@ -63,9 +63,8 @@ if __name__ == '__main__':
     controller='position', 
     camera_depth=True,
     camera_width=128,
-    camera_height=128
-     )
-
+    camera_height=128,
+    )
     # env.viewer.set_camera(camera_id=2)
 
     tol = 0.008
@@ -80,8 +79,8 @@ if __name__ == '__main__':
         peg_top_site = peg_type + "Peg_top_site"
         peg_bottom_site = peg_type + "Peg_bottom_site"
         top = np.concatenate([env._get_sitepos(peg_top_site) - np.array([0, 0, 0.01]), ori_action])
-        print(top)
-        print(env._get_sitepos(peg_bottom_site))
+        # print(top)
+        # print(env._get_sitepos(peg_bottom_site))
         top_height = top[2]
         hole_poses.append((top, peg_type))
 
@@ -103,7 +102,7 @@ if __name__ == '__main__':
     append_x(noise_list, 0.1, 20)
 
 
-    print(noise_list)
+    # print(noise_list)
     option_file_num = 0
 
     for noise in noise_list:
@@ -199,7 +198,7 @@ if __name__ == '__main__':
                                                 fixed_params, points_list, point_idx, 
                                                 obs, obs_dict, noise_std=noise)
 
-            print("points: ", len(obs_dict['proprio']))
+            # print("points: ", len(obs_dict['proprio']))
             if len(obs_dict['proprio']) >1000: 
                 if logging_data_bool == 1:
                     file_num += 1
