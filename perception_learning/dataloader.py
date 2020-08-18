@@ -205,32 +205,42 @@ class Custom_DataLoader(Dataset):
                 sample['rel_pos_shift_var'] = (0.022 * 0.022) * np.random.uniform(low=1e-6, high=1, size=2)
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-            # elif key == 'virtual_force':
-            #     sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
-            #     sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'contact':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
-            elif key == 'peg_vector' or key == 'hole_vector' or key == 'macro_action' or key == 'fit_vector':
+            elif key == 'peg_vector':
                 sample[key] = np.array(dataset[key])
+                sample["tool_vector"] = sample[key]
+                sample["tool_idx"] = np.array(sample[key].argmax(0))
 
-                if key == "fit_vector":
-                    sample["option_vector"] = sample[key]
-                    sample["fit_idx"] = np.array(sample[key].argmax(0))
-                elif key == "peg_vector":
-                    sample["tool_vector"] = sample[key]
-                    sample["tool_idx"] = np.array(sample[key].argmax(0))
-                elif key == "hole_vector":
-                    sample["state_vector"] = sample[key]
-                    sample["state_idx"] = np.array(sample[key].argmax(0))
-                    
-                    sample["state_prior"] = [np.array([np.random.uniform(low=0, high=1)])]
-                    sample["state_prior"].append((1 - sample['state_prior'][-1])*np.random.uniform(low=0, high=1))
-                    sample["state_prior"].append(np.array([1 - np.sum(sample["state_prior"])])) 
-                    random.shuffle(sample["state_prior"])                 
-                    sample["state_prior"] = np.concatenate(sample['state_prior'])
+            elif key == 'hole_vector':
+                sample[key] = np.array(dataset[key])
+                sample["state_vector"] = sample[key]
+                sample["state_idx"] = np.array(sample[key].argmax(0))
+                
+                sample["state_prior"] = [np.array([np.random.uniform(low=0, high=1)])]
+                sample["state_prior"].append((1 - sample['state_prior'][-1])*np.random.uniform(low=0, high=1))
+                sample["state_prior"].append(np.array([1 - np.sum(sample["state_prior"])])) 
+                random.shuffle(sample["state_prior"])                 
+                sample["state_prior"] = np.concatenate(sample['state_prior'])
+
+                if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
+                    sample['done_mask'] = np.zeros((sample[key].size))
+                else:
+                    sample['done_mask'] = np.ones((sample[key].size))
+
+            elif key == 'fit_vector':
+                sample[key] = np.array(dataset[key])
+                sample["obs_vector"] = sample[key]
+                sample["fit_idx"] = np.array(sample[key].argmax(0))
+                sample["obs_idx"] = np.array(sample[key].argmax(0))
+                
+                # if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
+                #     sample['done_mask'] = np.zeros((sample[key].size))
+                # else:
+                #     sample['done_mask'] = np.ones((sample[key].size))
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
         # sample["pol_idx"] = np.array(dataset['policy'][-1,0])

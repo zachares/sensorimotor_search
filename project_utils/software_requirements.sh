@@ -35,6 +35,8 @@ conda install -c conda-forge tensorboard
 conda install -c conda-forge tensorboardx
 
 conda install -c intel scikit-learn
+# echo 'export USE_DAAL4PY_SKLEARN=YES' >> ./etc/conda/activate.d/env_vars.sh
+# echo 'unset USE_DAAL4PY_SKLEARN' >> ./etc/conda/deactivate.d/env_vars.sh
 
 conda install -c conda-forge gym
 
@@ -60,12 +62,12 @@ cd robosuite
 pip install -e .
 cd ..
 
-git clone -b https://github.com/vitchyr/rlkit.git
+git clone -b https://github.com/zachares/rlkit.git
 cd rlkit
 pip install -e .
 cd ..
 
-git clone https://github.com/zachares/rlkit.git
+git clone https://github.com/vitchyr/viskit.git
 cd viskit
 pip install -e .
 cd ..
