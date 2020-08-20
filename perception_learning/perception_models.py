@@ -33,6 +33,19 @@ def get_ref_model_dict():
 #######################################
 
 #### All models must have three input arguments: model_name, init_args, device
+def sample_gaussian(m, v, device):
+    
+    epsilon = Normal(0, 1).sample(m.size())
+    z = m + torch.sqrt(v) * epsilon.to(device)
+
+    return z
+
+def gaussian_parameters(h, dim=-1):
+
+    m, h = torch.split(h, h.size(dim) // 2, dim=dim)
+    v = F.softplus(h) + 1e-8
+    return m, v
+
 class History_Encoder_wUncertainty(mm.Proto_Macromodel):
     def __init__(self, model_name, init_args, device = None):
         super().__init__()
@@ -43,7 +56,7 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
 
         self.num_tools = init_args['num_tools']
         self.num_states = init_args['num_states']
-        self.num_obs = init_args['num_obs']
+        self.num_obs = init_args['num_states']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -146,7 +159,8 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
         S = input_dict['rel_pos_shift_var'] + pos_ests_var
         K = input_dict['rel_pos_shift_var'] / S
 
-        pos_ests = input_dict['rel_pos_shift'] + K * y
+        pos_post = input_dict['rel_pos_shift'] + K * y
+        pos_post_var = (1 - K) * input_dict['rel_pos_shift_var']
 
         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
 
@@ -156,8 +170,7 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
         # print(input_dict['done_mask'][:,0].mean())
 
         return {
-            'pos_est': pos_ests,
-            'pos_est_params': (pos_ests_mean, 1 / pos_ests_var),
+            'pos_est': pos_post,
             'obs_logits': obs_logits,
             'obs_inputs': multinomial.logits2inputs(obs_logits),
             'state_logits': state_logits,
@@ -243,7 +256,7 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
 
         self.num_tools = init_args['num_tools']
         self.num_states = init_args['num_states']
-        self.num_obs = init_args['num_obs']
+        self.num_obs = 2 #init_args['num_states']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -299,7 +312,8 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
                 self.model_list.append(model)
 
     def get_outputs(self, input_dict, model_tuple, final_idx = None):
-        frc_enc, seq_processor, shape_embed, pos_estimator, obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
+        frc_enc, seq_processor, shape_embed, pos_model,\
+         obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
 
         ##### Calculating Series Encoding
         frc_encs_reshaped = self.flatten(frc_enc(input_dict["force_reshaped"]))
@@ -318,6 +332,39 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
+        pos_samples = 0.01 * torch.cat([\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1),\
+        pos_model(states_T).unsqueeze(1)\
+        ], dim = 1)
+        pos_ests_mean = torch.mean(pos_samples, dim = 1)
+        pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
+
+        # obs_logits_samples = torch.cat([\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     obs_classifier(states_T).unsqueeze(1),\
+        #     ], dim = 1)
+
+        # obs_logits_mean = torch.mean(obs_logits_samples, dim = 1)
+        # obs_logits_var = torch.var(obs_logits_samples, unbiased = True, dim =1)
+
+        # obs_logits = sample_gaussian(obs_logits_mean, obs_logits_var, self.device)
+        
         obs_logits = obs_classifier(states_T)
 
         # likelihood network
@@ -326,41 +373,22 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
 
         state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits, dim = 1).max(1)[1]]
 
-        return obs_logits, state_logprobs, states_T
+        return pos_ests_mean, pos_ests_var, obs_logits, state_logprobs, states_T
 
     def forward(self, input_dict):
         self.process_inputs(input_dict)
         self.set_uc(True)
-        obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
-
-        state_logits = torch.log(input_dict['state_prior']) + obs_logprobs 
-
-        pos_estimator = self.ensemble_list[0][-3]
-
-        pos_samples = 0.01 * torch.cat([\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1),\
-        pos_estimator(enc).unsqueeze(1)\
-        ], dim = 1)
-
-        pos_ests_mean = torch.mean(pos_samples, dim = 1)
-        pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
+        pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
         y = pos_ests_mean - input_dict['rel_pos_shift']
         S = input_dict['rel_pos_shift_var'] + pos_ests_var
         K = input_dict['rel_pos_shift_var'] / S
         pos_ests = input_dict['rel_pos_shift'] + K * y
 
+        state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
+
         return {
             'pos_est': pos_ests,
-            # 'pos_est_params': (pos_ests_mean, 1 / pos_ests_var),
             'obs_logits': obs_logits,
             'obs_inputs': multinomial.logits2inputs(obs_logits),
             'state_logits': state_logits,
@@ -378,7 +406,7 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
             self.process_inputs(input_dict)
             self.set_uc(False)
 
-            obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
             return enc
 
@@ -399,25 +427,27 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
             self.process_inputs(input_dict)
             self.set_uc(True)
 
-            obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
-            pos_estimator = self.ensemble_list[0][-3]
+            # obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
-            pos_samples = 0.01 * torch.cat([\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1),\
-            pos_estimator(enc).unsqueeze(1)\
-            ], dim = 1)
+            # pos_estimator = self.ensemble_list[0][-3]
 
-            pos_ests_mean = torch.mean(pos_samples, dim = 1)
-            pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
+            # pos_samples = 0.01 * torch.cat([\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1),\
+            # pos_estimator(enc).unsqueeze(1)\
+            # ], dim = 1)
+
+            # pos_ests_mean = torch.mean(pos_samples, dim = 1)
+            # pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
                     
             obs_idx = F.softmax(obs_logits[0], dim = 0).max(0)[1]
 

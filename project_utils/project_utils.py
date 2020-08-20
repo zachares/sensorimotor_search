@@ -188,6 +188,12 @@ def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_
 						substate_idx = state[act_idx]
 						task_dict['loglikelihood_matrix'][tool_idx, act_idx, obs_idx, state_idx] = loglikelihood_model[tool_idx, obs_idx, substate_idx]
 
+	task_dict['substate_idxs'] = np.zeros((num_actions, task_dict['num_states'])).astype(np.int16)
+
+	for act_idx in range(num_actions):
+		for state_idx, state in enumerate(task_dict['states']):
+			substate_idx = state[act_idx]
+			task_dict['substate_idxs'][act_idx, state_idx] = substate_idx
 	return task_dict
 '''
 Control Functions

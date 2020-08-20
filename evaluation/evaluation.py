@@ -96,29 +96,42 @@ if __name__ == '__main__':
 			data = torch.load(cfg['info_flow']['SAC_Policy']["model_folder"] + "itr_" + str(cfg['info_flow']['SAC_Policy']["epoch"]) + ".pkl")
 			model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
 			model_dict['policy'] = model_dict['SAC_Policy']
+			cfg['policy_keys'] = cfg['info_flow']['SAC_Policy']['policy_keys']
+			cfg['state_size'] = cfg['info_flow']['SAC_Policy']['state_size'] 
 		else:
-			spiral_mp = pu.Spiral2D_Motion_Primitive()
-			# best parameters from parameter grid search
-			spiral_mp.rt = 0.026
-			spiral_mp.nr = 2.2
-			spiral_mp.pressure = 0.003
-			model_dict['policy'] = spiral_mp.trajectory
+			raise Exception('No policy provided to perform evaluaiton')
 
-		if 'History_Encoder_Transformer' in model_dict.keys():
-			model_dict['encoder'] = model_dict['History_Encoder_Transformer']
-			model_dict['sensor'] = model_dict['History_Encoder_Transformer']
+		if 'History_Encoder_wUncertainty' in model_dict.keys():
+			model_dict['encoder'] = model_dict['History_Encoder_wUncertainty']
+			model_dict['sensor'] = model_dict['History_Encoder_wUncertainty']
+			print(model_dict['sensor'].loading_folder)
+
+		if 'History_Encoder_wEstUncertainty' in model_dict.keys():
+			model_dict['encoder'] = model_dict['History_Encoder_wEstUncertainty']
+			model_dict['sensor'] = model_dict['History_Encoder_wEstUncertainty']
+			print(model_dict['sensor'].loading_folder)
+
+		if 'History_Encoder_Baseline' in model_dict.keys():
+			model_dict['encoder'] = model_dict['History_Encoder_Baseline']
+			model_dict['sensor'] = model_dict['History_Encoder_Baseline']
 			print(model_dict['sensor'].loading_folder)
 	else:
 		raise Exception('sensor must be provided to estimate observation model')
 
-	env = SensSearchWrapper(robo_env, cfg, selection_mode= 2, **model_dict)
+	env = SensSearchWrapper(robo_env, cfg, selection_mode=2, **model_dict)
 	############################################################
 	### Declaring decision model
 	############################################################
-	task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names, [['not_insert', 'insert'], robo_env.hole_names],\
-	env.sensor.likelihood_model.model.p.detach().cpu().numpy(), env.sensor.success_params.model.p.detach().cpu().numpy(), constraint_type = 1)
+	if env.sensor.num_obs == len(robo_env.fit_names):
+		task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names,\
+		 robo_env.fit_names, constraint_type = cfg['info_flow']['SAC_Policy']['constraint'])
+	elif env.sensor.num_obs == len(robo_env.hole_names):
+		task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names,\
+		 robo_env.hole_names, constraint_type = cfg['info_flow']['SAC_Policy']['constraint'])
+	else:
+		raise Exception('unsupported observation space')
 
-	decision_model = Outer_Loop(env, task_dict, k = 0, device = device)
+	decision_model = Outer_Loop(env, task_dict, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device)
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
@@ -131,16 +144,21 @@ if __name__ == '__main__':
     ###########################################################
 
 	step_counts = []
+	pos_diff_list = []
+	prob_diff_list = []
 	completion_count = 0
 	pos_diverge_count = 0
 	state_diverge_count = 0
 
 	num_trials = 81
+	trial_num = 81
 
-	for trial_num in range(num_trials):
+	while trial_num > 0:
+
 		print("\n")
 		print("############################################################")
 		print("######                BEGINNING NEW TRIAL              #####")
+		print("######         Number of Trials Left: ", trial_num, "       #####")
 		print("############################################################")
 		print("\n")
 
@@ -156,24 +174,36 @@ if __name__ == '__main__':
 
 		while continue_bool:
 			action_idx = decision_model.choose_action()
-			obs_idxs, obs_logprobs = decision_model.env.big_step(action_idx)
+			obs_idxs, obs_logprobs, bad_bool = decision_model.env.big_step(action_idx)
 			step_count += 1
+			if not bad_bool:
+				pos_diff_list.append(decision_model.env.pos_diff)
 			# print("Step Count ", step_count)
 
-			if decision_model.env.done_bool:
-				completion_count += 1
-				step_counts.append(step_count)
-				continue_bool = False
-			elif decision_mode.env.pos_diverge_bool:
-				pos_diverge_count += 1
-				continue_bool = False
-			elif decision_model.env.state_diverge_bool:
-				state_diverge_count += 1
-				continue_bool = False
+			if not bad_bool:
+				if decision_model.env.done_bool:
+					completion_count += 1
+					step_counts.append(step_count)
+					continue_bool = False
+					trial_num -=1
+				elif decision_model.env.pos_diverge_bool:
+					pos_diverge_count += 1
+					continue_bool = False
+					trial_num -=1
+				elif decision_model.env.state_diverge_bool:
+					state_diverge_count += 1
+					continue_bool = False
+					trial_num -=1
+				else:
+					decision_model.new_obs(action_idx, obs_idxs, obs_logprobs)
+					prob_diff_list.append(decision_model.prob_diff)
 			else:
-				decision_model.new_obs(action_idx, obs_idxs, obs_logprobs)
+				continue_bool = False
+				print("\n\n GOT STUCK \n\n")
 
 	print("Mean Number of Steps Per Trial: ", sum(step_counts) / len(step_counts))
+	print("Mean Change in Position Error: ", sum(pos_diff_list) / len(pos_diff_list))
+	print("Mean Correct Prob Change: ", sum(prob_diff_list) / len(prob_diff_list))
 	print("Completion Rate: ", completion_count / num_trials)
 	print("Pos Divergence Rate: ", pos_diverge_count / num_trials)
 	print("State Divergence Rate: ", state_diverge_count / num_trials)

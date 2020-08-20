@@ -31,20 +31,24 @@ training_params:
   target_update_period: 1
   policy_lr: 0.0003
   qf_lr: 0.0003
-  reward_scale: 20
+  reward_scale: 10
   use_automatic_entropy_tuning: True
   updates_multiplier: 100
 
-policy_keys: ['rel_pos_shift', 'peg_type', 'contact']  #[encoding, rel_pos_shift, rel_pos_est, fit_est] #, 'peg_type'] # ['rel_pos', 'rel_pos_shift', 'peg_type', 'contact'] #  ['rel_pos_shift', 'pos_params', 'peg_type'] # 
+policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+#[encoding, rel_pos_shift, rel_pos_est, fit_est] #, 'peg_type'] 
+# ['rel_pos', 'rel_pos_shift', 'peg_type', 'contact'] #  ['rel_pos_shift', 'pos_params', 'peg_type'] # 
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
 action_size: 3
-state_size: 7
+state_size: 86
 
-# info_flow:
-  # History_Encoder_wUncertainty:
-  #   model_folder: /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
-  #   epoch: 5000
+info_flow:
+  History_Encoder_wUncertainty:
+    model_folder: /scr-ssd/sens_search_logging/models/20200818_training_3_wout_actions/ # fit observations /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
+    epoch: 5000
+ 
+    
   # History_Encoder_wEstUncertainty:
   #   model_folder: /scr-ssd/sens_search_logging/models/20200815_training_49_rl_policy/
   #   epoch: 5000

@@ -44,6 +44,18 @@ class Outer_Loop(object):
 		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
 		self.state_probs = self.state_probs.float().to(self.device)
 
+		for i, state in enumerate(self.task_dict['states']):
+			correct = True
+			for cand_idx, substate_idx in enumerate(state):
+				if self.env.robo_env.hole_sites[cand_idx][2] != substate_idx:
+					correct = False
+
+			if correct:
+				self.corr_idx = i
+
+		for i in range(self.task_dict['num_actions']):
+			if self.env.robo_env.hole_sites[i][3] == 0:
+					self.corr_act_idx = i
 		# self.max_action_entropy = multinomial.inputs2ent(multinomial.probs2inputs(torch.ones((self.task_dict["num_actions"])) / self.task_dict["num_substates"]))
 		# self.max_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()		
 		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
@@ -56,7 +68,7 @@ class Outer_Loop(object):
 			weights = self.success_counts / self.action_counts +\
 			 self.z * torch.sqrt(self.success_counts * self.failure_counts) / (self.action_counts * torch.sqrt(self.action_counts))
 
-		elif self.mode == 2 and 'loglikelihood_matrix' in self.task_dict.keys(): # with classifier and state estimation
+		elif self.mode == 2: # with classifier and state estimation
 			alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
 			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
 			weights = (alpha_vectors * state_prior).sum(1)
@@ -77,44 +89,77 @@ class Outer_Loop(object):
 
 		return action_idx  
 
-	def update_state_probs(self, action_idx, obs_idx):
+	def update_state_probs(self, action_idx, obs_idx, obs_logprobs = None):
 		state_prior = self.state_probs.clone()
-		ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, obs_idx], self.device)
-		state_posterior_logits = torch.log(state_prior) + ll_logprobs
+
+		if obs_logprobs is not None:
+			state_posterior_logits = torch.log(state_prior) + obs_logprobs[self.task_dict['substate_idxs'][action_idx]]
+		else:
+			ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, obs_idx], self.device)
+			state_posterior_logits = torch.log(state_prior) + ll_logprobs
 		# print(F.softmax(state_posterior_logits, dim = 0))
 		self.state_probs = multinomial.logits2probs(state_posterior_logits)
 		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
 		# print(self.state_probs)
 		# a = input("Continue?")
 
-	def new_obs(self, action_idx, obs_idx):
+	def new_obs(self, action_idx, obs_idx, obs_logprobs = None):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
 		self.action_counts[action_idx] += 1
 		self.step_count += 1
 
-		if obs_idx == self.env.get_goal():
-			self.success_counts[action_idx] += 1
-		else:
-			self.failure_counts[action_idx] += 1
+		prev_prob = self.success_counts[self.corr_act_idx] /\
+		 (self.success_counts[self.corr_act_idx] + self.failure_counts[self.corr_act_idx])
 
-		if 'loglikelihood_matrix' in self.task_dict.keys():
+		if hasattr(self.env, 'sensor'):
+			if self.env.sensor.num_obs == 2:
+				if obs_idx == 0: #self.env.get_goal():
+					self.success_counts[action_idx] += 1
+				else:
+					self.failure_counts[action_idx] += 1
+			elif self.env.sensor.num_obs == 3:
+				if obs_idx == self.env.get_goal():
+					self.success_counts[action_idx] += 1
+				else:
+					self.failure_counts[action_idx] += 1
+			else:
+				raise Exception('unsupported observation space')
+		else:
+			if obs_idx == 0:
+				self.success_counts[action_idx] += 1
+			else:
+				self.failure_counts[action_idx] += 1
+
+		curr_prob = self.success_counts[self.corr_act_idx] /\
+		 (self.success_counts[self.corr_act_idx] + self.failure_counts[self.corr_act_idx])
+
+		self.prob_diff = (curr_prob - prev_prob).item()
+
+		if obs_logprobs is not None:
 			# print(self.state_probs)
-			self.update_state_probs(action_idx, obs_idx)
+			prev_prob = self.state_probs[self.corr_idx]
+			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_logprobs, self.device))
+			curr_prob = self.state_probs[self.corr_idx]
+			self.prob_diff = (curr_prob - prev_prob).item()
 			# print(self.state_probs)
 
 		### ignoring observation of insertion or not insertion
 		if self.print_info:
 			obs = self.task_dict['obs_names'][obs_idx]
-			print("Observation_" + str(i) + " " + obs)
+			print("Observation_" + obs)
 
 			gt_props = "Ground Truth Properties"
 			for info in self.gt_dict[action_idx]:
 				if type(info) == str:
 					gt_props += " - " + info
-				print(gt_props)
+			
+			print(gt_props)
 
-			if 'loglikelihood_matrix' in self.task_dict.keys():
+			if obs_logprobs is not None:
 				self.print_hypothesis()
+			else:
+				probs = self.success_counts / (self.success_counts + self.failure_counts)
+				pu.print_histogram(probs, [ "Object " + str(i) for i in range(self.task_dict['num_actions'])])
 
 	def print_hypothesis(self):
 		state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\

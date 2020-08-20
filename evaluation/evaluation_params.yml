@@ -22,24 +22,72 @@ task_params:
 logging_params:
   logging_folder: /scr2/muj_motion_primitive_20200722/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
   logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
   camera_name: insertion
   num_samples: 300
 
-policy_keys: [encoding, peg_type, rel_pos_shift, rel_pos_est, rel_pos_est_var] #['rel_pos', 'contact', 'peg_type'] # ["encoding"] # 
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
 action_size: 3
-state_size: 75
 
 info_flow:
+  # SAC_Policy: # fit observations
+  #   model_folder: /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_westuncertainty/
+  #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+  #   epoch: 135
+  #   mode: 2
+  #   constraint: 1
+  #   state_size: 85
+  # History_Encoder_wEstUncertainty:
+  #   model_folder:  /scr-ssd/sens_search_logging/models/20200815_training_49_rl_policy/
+  #   epoch: 5000
+  # SAC_Policy: # fit observations
+  #   model_folder: /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_wuncertainty/
+  #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+  #   epoch: 164
+  #   mode: 2
+  #   constraint: 1
+  #   state_size: 85
+  # History_Encoder_wUncertainty:
+  #   model_folder:  /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
+  #   epoch: 5000
+  # SAC_Policy: # fit observations
+  #   model_folder: /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_woutuncertainty/
+  #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, fit_est]
+  #   epoch: 169
+  #   mode: 1
+  #   constraint: 1
+  #   state_size: 78
+  # History_Encoder_Baseline:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200815_training_5_rl_policy/  
+  #   epoch: 5000
+  SAC_Policy: # state observations
+    model_folder: /scr2/rl_models/wstate_obs_wuncertainty/
+    policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+    epoch: 191
+    mode: 2
+    constraint: 1
+    state_size: 86
+  History_Encoder_wUncertainty:
+    model_folder: /scr-ssd/sens_search_logging/models/20200818_training_3_wout_actions/  
+    epoch: 5000
+  # SAC_Policy: # state observations w state_est reward
+  #   model_folder: /scr2/rl_models/wstate_obs_wuncertainty_wstate_est_reward/
+  #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+  #   epoch: 196
+  #   mode: 2
+  #   constraint: 1
+  #   state_size: 86
+  # History_Encoder_wUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200818_training_3_wout_actions/  
+  #   epoch: 5000
 # First completely working model
-  SAC_Policy:
-    model_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_23_27_17_0000--s-9748/ #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_09_17_43_0000--s-90315/
-    epoch: 105 #33 # 17
-  History_Encoder_Transformer:
-    model_folder: /scr-ssd/sens_search_logging/models/20200804_training_3_rl_policy/ #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/
-    epoch: 9999
+  # SAC_Policy:
+  #   model_folder: /scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_23_27_17_0000--s-9748/ #/scr2/muj_senssearch_dataset10HZ_SAC_20200718_relpos_nonoise/sac-robosuite/sac-robosuite_2020_08_04_09_17_43_0000--s-90315/
+  #   epoch: 105
+  # History_Encoder_Transformer:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200804_training_3_rl_policy/ #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/
+  #   epoch: 9999
