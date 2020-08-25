@@ -57,27 +57,44 @@ def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 
 	return tensor_dict
 
-def print_histogram(probs, labels):
+def print_histogram(probs, labels, direction = False): # dir = 0 - no direction, dir = 1 - direction
 	block_length = 10 # magic number
-	histogram_height = 10 # magic number
+	histogram_height = 5 # magic number
 	fill = "#"
 	line = "-"
 	gap = " "
 	num_labels = len(labels)
 
-	counts = torch.round(probs * histogram_height).squeeze()
+	probs_clipped = torch.clamp(probs, -1, 1)
 
-	for line_idx in range(histogram_height, 0, -1):
+	counts = torch.round(probs_clipped * histogram_height).squeeze()
+
+	if direction:
+		lower_bound = -histogram_height-1
+	else:
+		lower_bound = 0
+
+	for line_idx in range(histogram_height, lower_bound, -1):
 		string = "   "
 
 		for i in range(num_labels):
 			count = counts[i]
-			if count < line_idx:
-				string += (block_length * gap)
-			else:
-				string += (block_length * fill)
 
-			string += "   "
+			if count < line_idx and line_idx > 0:
+				string += block_length * gap
+				string += 3 * gap
+			elif count >= line_idx and line_idx > 0:
+				string += block_length * fill
+				string += 3 * gap
+			elif line_idx == 0:
+				string += block_length * line
+				string += 3 * line
+			elif count >= line_idx and line_idx < 0:
+				string += block_length * gap
+				string += 3 * gap
+			else:
+				string += block_length * fill
+				string += 3 * gap
 
 		print(string)
 

@@ -78,9 +78,9 @@ def experiment(variant):
             model_dict['encoder'] = model_dict['History_Encoder_wUncertainty']
             model_dict['sensor'] = model_dict['History_Encoder_wUncertainty']
 
-        if 'History_Encoder_wEstUncertainty' in model_dict.keys():
-            model_dict['encoder'] = model_dict['History_Encoder_wEstUncertainty']
-            model_dict['sensor'] = model_dict['History_Encoder_wEstUncertainty']
+        if 'History_Encoder_wConstantUncertainty' in model_dict.keys():
+            model_dict['encoder'] = model_dict['History_Encoder_wConstantUncertainty']
+            model_dict['sensor'] = model_dict['History_Encoder_wConstantUncertainty']
 
         if 'History_Encoder_Baseline' in model_dict.keys():
             model_dict['encoder'] = model_dict['History_Encoder_Baseline']

@@ -22,7 +22,7 @@ task_params:
 logging_params:
   logging_folder: /scr2/muj_motion_primitive_20200722/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
   logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
@@ -34,15 +34,65 @@ use_cuda: True
 action_size: 3
 
 info_flow:
-  # SAC_Policy: # fit observations
-  #   model_folder: /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_westuncertainty/
+    # SAC_Policy: # state observations - baseline
+    #   model_folder: /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_wbaseline_scaledposition/ 
+    #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+    #   epoch: 190
+    #   mode: 1
+    #   constraint: 1
+    #   state_size: 86
+    # History_Encoder_Baseline:
+    #   model_folder: /scr-ssd/sens_search_logging/models/20200820_training_28_w_L2/
+    #   epoch: 5000
+    # SAC_Policy: # state observations - constant uncertainty
+    #   model_folder:  /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_wconstantuncertainty_scaledposition/
+    #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+    #   epoch: 194
+    #   mode: 2
+    #   constraint: 1
+    #   state_size: 86
+    # History_Encoder_wConstantUncertainty:
+    #   model_folder: /scr-ssd/sens_search_logging/models/20200820_training_26_w_L2/
+    #   epoch: 5000
+    # SAC_Policy: # state observations - reg uncertainty
+    #   model_folder: /scr2/rl_models/wuncertainty_wcorrectposstateest/ # /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_wconstantuncertainty_scaledposition/
+    #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+    #   epoch: 125
+    #   mode: 2
+    #   constraint: 1
+    #   state_size: 86
+    # History_Encoder_wUncertainty:
+    #   model_folder: /scr-ssd/sens_search_logging/models/20200823_training_8_w_L2/
+    #   epoch: 5000
+    # SAC_Policy: # state observations - reg uncertainty
+    #   model_folder:  /scr2/rl_models/wstate_obs_wuncertainty_wreg/ # /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_wconstantuncertainty_scaledposition/
+    #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+    #   epoch: 190
+    #   mode: 2
+    #   constraint: 1
+    #   state_size: 86
+    # History_Encoder_wUncertainty:
+    #   model_folder: /scr-ssd/sens_search_logging/models/20200821_training_0_w_L2/
+    #   epoch: 5000
+  #   SAC_Policy: # state observations
+  #     model_folder: 
+  #     policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+  #     epoch: 
+  #     mode: 2
+  #     constraint: 1
+  #     state_size: 86
+  #   History_Encoder_wUncertainty:
+  #     model_folder:  
+  #     epoch: 5000
+  # # SAC_Policy: # state observations
+  #   model_folder: /scr2/rl_models/wstate_obs_wreg_pos_est_wuncertainty/
   #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
-  #   epoch: 135
+  #   epoch: 183
   #   mode: 2
   #   constraint: 1
   #   state_size: 85
-  # History_Encoder_wEstUncertainty:
-  #   model_folder:  /scr-ssd/sens_search_logging/models/20200815_training_49_rl_policy/
+  # History_Encoder_wUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200820_training_21_w_L2/  
   #   epoch: 5000
   # SAC_Policy: # fit observations
   #   model_folder: /scr2/rl_models/encoding_rel_pos_shift_rel_pos_est_rel_pos_est_var_wuncertainty/
@@ -64,16 +114,16 @@ info_flow:
   # History_Encoder_Baseline:
   #   model_folder: /scr-ssd/sens_search_logging/models/20200815_training_5_rl_policy/  
   #   epoch: 5000
-  SAC_Policy: # state observations
-    model_folder: /scr2/rl_models/wstate_obs_wuncertainty/
-    policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
-    epoch: 191
-    mode: 2
-    constraint: 1
-    state_size: 86
-  History_Encoder_wUncertainty:
-    model_folder: /scr-ssd/sens_search_logging/models/20200818_training_3_wout_actions/  
-    epoch: 5000
+  # SAC_Policy: # state observations
+  #   model_folder: /scr2/rl_models/wstate_obs_wuncertainty/
+  #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]
+  #   epoch: 191
+  #   mode: 2
+  #   constraint: 1
+  #   state_size: 86
+  # History_Encoder_wUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200818_training_3_wout_actions/  
+  #   epoch: 5000
   # SAC_Policy: # state observations w state_est reward
   #   model_folder: /scr2/rl_models/wstate_obs_wuncertainty_wstate_est_reward/
   #   policy_keys: [encoding, rel_pos_shift, rel_pos_est, rel_pos_est_var, fit_est, fit_unc, shape_unc, shape_ent]

@@ -106,9 +106,9 @@ if __name__ == '__main__':
 			model_dict['sensor'] = model_dict['History_Encoder_wUncertainty']
 			print(model_dict['sensor'].loading_folder)
 
-		if 'History_Encoder_wEstUncertainty' in model_dict.keys():
-			model_dict['encoder'] = model_dict['History_Encoder_wEstUncertainty']
-			model_dict['sensor'] = model_dict['History_Encoder_wEstUncertainty']
+		if 'History_Encoder_wConstantUncertainty' in model_dict.keys():
+			model_dict['encoder'] = model_dict['History_Encoder_wConstantUncertainty']
+			model_dict['sensor'] = model_dict['History_Encoder_wConstantUncertainty']
 			print(model_dict['sensor'].loading_folder)
 
 		if 'History_Encoder_Baseline' in model_dict.keys():
@@ -150,8 +150,8 @@ if __name__ == '__main__':
 	pos_diverge_count = 0
 	state_diverge_count = 0
 
-	num_trials = 81
-	trial_num = 81
+	num_trials = 100
+	trial_num = 100
 
 	while trial_num > 0:
 
@@ -200,6 +200,9 @@ if __name__ == '__main__':
 			else:
 				continue_bool = False
 				print("\n\n GOT STUCK \n\n")
+
+			if step_count > 20:
+				continue_bool = False
 
 	print("Mean Number of Steps Per Trial: ", sum(step_counts) / len(step_counts))
 	print("Mean Change in Position Error: ", sum(pos_diff_list) / len(pos_diff_list))

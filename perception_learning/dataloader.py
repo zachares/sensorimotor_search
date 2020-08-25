@@ -200,9 +200,9 @@ class Custom_DataLoader(Dataset):
             elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
 
-                sample['rel_pos_final'] = sample[key][-1,:2]
-                sample['rel_pos_shift'] = sample[key][-1,:2] - sample[key][0,:2]
-                sample['rel_pos_shift_var'] = (0.022 * 0.022) * np.random.uniform(low=1e-6, high=1, size=2)
+                sample['rel_pos_final'] = 100 * sample[key][-1,:2]
+                sample['rel_pos_prior_mean'] = 100 * np.random.uniform(low=-0.03, high = 0.03, size = 2)
+                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2)) 
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 

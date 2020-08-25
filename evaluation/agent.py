@@ -65,8 +65,9 @@ class Outer_Loop(object):
 			weights = self.step_count / self.action_counts
 			
 		elif self.mode == 1: # with classifier
-			weights = self.success_counts / self.action_counts +\
-			 self.z * torch.sqrt(self.success_counts * self.failure_counts) / (self.action_counts * torch.sqrt(self.action_counts))
+			action_counts = self.success_counts + self.failure_counts
+			weights = self.success_counts / (action_counts) +\
+			 self.z * torch.sqrt(self.success_counts * self.failure_counts) / (action_counts * torch.sqrt(action_counts))
 
 		elif self.mode == 2: # with classifier and state estimation
 			alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
@@ -118,7 +119,9 @@ class Outer_Loop(object):
 				else:
 					self.failure_counts[action_idx] += 1
 			elif self.env.sensor.num_obs == 3:
+				# print("This happened")
 				if obs_idx == self.env.get_goal():
+					# print("This happened?")
 					self.success_counts[action_idx] += 1
 				else:
 					self.failure_counts[action_idx] += 1
@@ -138,9 +141,31 @@ class Outer_Loop(object):
 		if obs_logprobs is not None:
 			# print(self.state_probs)
 			prev_prob = self.state_probs[self.corr_idx]
+
+			state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+				.repeat_interleave(self.task_dict['num_substates'], 1)
+
+			beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+			prev_substate_probs = (beta_vectors * state_probs).sum(-1)
+
 			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_logprobs, self.device))
+
 			curr_prob = self.state_probs[self.corr_idx]
 			self.prob_diff = (curr_prob - prev_prob).item()
+
+			state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+				.repeat_interleave(self.task_dict['num_substates'], 1)
+
+			beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+			curr_substate_probs = (beta_vectors * state_probs).sum(-1)
+
+			for i in range(self.task_dict['num_actions']):
+				prob_diff = curr_substate_probs - prev_substate_probs
+				pu.print_histogram(3 * prob_diff[i], self.task_dict["substate_names"], direction = True)
+
+
 			# print(self.state_probs)
 
 		### ignoring observation of insertion or not insertion
@@ -155,11 +180,13 @@ class Outer_Loop(object):
 			
 			print(gt_props)
 
-			if obs_logprobs is not None:
-				self.print_hypothesis()
-			else:
+
+			if obs_logprobs is None:
 				probs = self.success_counts / (self.success_counts + self.failure_counts)
 				pu.print_histogram(probs, [ "Object " + str(i) for i in range(self.task_dict['num_actions'])])
+			else:
+				pass
+				# self.print_hypothesis()
 
 	def print_hypothesis(self):
 		state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\

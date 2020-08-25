@@ -25,7 +25,7 @@ def get_ref_model_dict():
         # 'History_Encoder_CNN': History_Encoder_CNN,
         'History_Encoder_wUncertainty': History_Encoder_wUncertainty,
         'History_Encoder_Baseline': History_Encoder_Baseline,
-        'History_Encoder_wEstUncertainty': History_Encoder_wEstUncertainty,
+        'History_Encoder_wConstantUncertainty': History_Encoder_wConstantUncertainty,
     }
 
 ######################################
@@ -98,8 +98,8 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
             self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
-                mm.ResNetFCN(model_name + "_pos_est_var" + str(i),\
-            self.state_size + self.tool_dim + 4, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+                mm.ResNetFCN(model_name + "_pos_est_obs_noise" + str(i),\
+            self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
@@ -116,7 +116,7 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
                 self.model_list.append(model)
 
     def get_outputs(self, input_dict, model_tuple, final_idx = None):
-        frc_enc, seq_processor, shape_embed, pos_estimator, var_estimator,\
+        frc_enc, seq_processor, shape_embed, pos_estimator, obs_noise_estimator,\
          obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
 
         ##### Calculating Series Encoding
@@ -136,9 +136,9 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
-        pos_ests_obs = 0.01 * pos_estimator(states_T)
+        pos_ests_obs = pos_estimator(states_T)
         
-        pos_ests_var = 0.0001 * var_estimator(torch.cat([states_T, pos_ests_obs, input_dict['rel_pos_shift']], dim = 1)).pow(2)
+        pos_ests_obs_noise = obs_noise_estimator(states_T).pow(2)
 
         obs_logits = obs_classifier(states_T)
 
@@ -148,19 +148,21 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
 
         state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits, dim = 1).max(1)[1]]
 
-        return pos_ests_obs, pos_ests_var, obs_logits, state_logprobs, states_T
+        return pos_ests_obs, pos_ests_obs_noise, obs_logits, state_logprobs, states_T
 
     def forward(self, input_dict):
         self.process_inputs(input_dict)
 
-        pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+        pos_ests_mean, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
-        y = pos_ests_mean - input_dict['rel_pos_shift']
-        S = input_dict['rel_pos_shift_var'] + pos_ests_var
-        K = input_dict['rel_pos_shift_var'] / S
+        prior_noise = input_dict['rel_pos_prior_var']
 
-        pos_post = input_dict['rel_pos_shift'] + K * y
-        pos_post_var = (1 - K) * input_dict['rel_pos_shift_var']
+        y = pos_ests_mean - input_dict['rel_pos_prior_mean']
+        S = prior_noise + pos_ests_obs_noise
+        K = prior_noise / S
+
+        pos_post = input_dict['rel_pos_prior_mean'] + K * y
+        pos_post_var = (1 - K) * prior_noise
 
         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
 
@@ -169,8 +171,13 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
         # print(state_logits[:10])
         # print(input_dict['done_mask'][:,0].mean())
 
+        # print((1 / pos_post_var)[:10])
+        # if torch.isnan(1 / pos_post_var).any():
+        #     print("Problem")
+
         return {
             'pos_est': pos_post,
+            # 'pos_est_params': (pos_post, 1 / pos_post_var),
             'obs_logits': obs_logits,
             'obs_inputs': multinomial.logits2inputs(obs_logits),
             'state_logits': state_logits,
@@ -188,7 +195,7 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
             self.process_inputs(input_dict)
             self.set_uc(False)
 
-            pos_ests_obs, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_mean, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
             return enc
 
@@ -209,11 +216,11 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
             self.process_inputs(input_dict)
             self.set_uc(False)
 
-            pos_ests_obs, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_mean, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
             obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
 
-            return int(obs_idx.item()), obs_logprobs[0], pos_ests_obs[0], pos_ests_var[0]
+            return int(obs_idx.item()), obs_logprobs[0], 0.01 * pos_ests_mean[0], 0.0001 * pos_ests_obs_noise[0]
 
     def process_inputs(self, input_dict):
 
@@ -246,7 +253,7 @@ class History_Encoder_wUncertainty(mm.Proto_Macromodel):
 
         input_dict['rel_pos_shift'] = input_dict['pos_change'][-1].unsqueeze(0).repeat_interleave(T, 0)
 
-class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
+class History_Encoder_wConstantUncertainty(mm.Proto_Macromodel):
     def __init__(self, model_name, init_args, device = None):
         super().__init__()
 
@@ -256,7 +263,7 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
 
         self.num_tools = init_args['num_tools']
         self.num_states = init_args['num_states']
-        self.num_obs = 2 #init_args['num_states']
+        self.num_obs = init_args['num_states']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -279,7 +286,7 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
         self.num_tl = 4
         self.num_cl = 3
         self.flatten = nn.Flatten()
-        self.uc = True
+        self.uc = False
 
         for i in range(self.num_ensembles):
             self.ensemble_list.append((\
@@ -295,16 +302,19 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_pos_est" + str(i),\
-            self.state_size + self.tool_dim, 2, 2 * self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+            self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+            uc = self.uc, device = self.device).to(self.device),\
+
+                mm.ResNetFCN(model_name + "_pos_est_obs_noise" + str(i),\
+            self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
             self.state_size + self.tool_dim, self.num_obs, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
-                mm.ResNetFCN(model_name + "_obs_likelihood" + str(i),\
-            self.state_size + self.tool_dim, self.num_obs * self.num_states, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
-            uc = self.uc, device = self.device).to(self.device),\
+                mm.Embedding(model_name + "_obs_likelihood" + str(i),\
+                         self.num_tools, self.num_states * self.num_obs, device= self.device).to(self.device),\
             ))
 
         for model_tuple in self.ensemble_list:
@@ -312,7 +322,7 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
                 self.model_list.append(model)
 
     def get_outputs(self, input_dict, model_tuple, final_idx = None):
-        frc_enc, seq_processor, shape_embed, pos_model,\
+        frc_enc, seq_processor, shape_embed, pos_estimator, obs_noise_estimator,\
          obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
 
         ##### Calculating Series Encoding
@@ -332,69 +342,49 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
-        pos_samples = 0.01 * torch.cat([\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1),\
-        pos_model(states_T).unsqueeze(1)\
-        ], dim = 1)
-        pos_ests_mean = torch.mean(pos_samples, dim = 1)
-        pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
-
-        # obs_logits_samples = torch.cat([\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     obs_classifier(states_T).unsqueeze(1),\
-        #     ], dim = 1)
-
-        # obs_logits_mean = torch.mean(obs_logits_samples, dim = 1)
-        # obs_logits_var = torch.var(obs_logits_samples, unbiased = True, dim =1)
-
-        # obs_logits = sample_gaussian(obs_logits_mean, obs_logits_var, self.device)
+        pos_ests_obs = pos_estimator(states_T)
         
+        pos_ests_var = obs_noise_estimator(states_T).pow(2)
+
         obs_logits = obs_classifier(states_T)
 
         # likelihood network
-        obs_state_logits = torch.reshape(obs_likelihood(states_T), (input_dict['batch_size'], self.num_obs, self.num_states))
+        obs_state_logits = torch.reshape(obs_likelihood(input_dict['tool_idx'].long()), (input_dict['batch_size'], self.num_obs, self.num_states))
         obs_state_logprobs = F.log_softmax(obs_state_logits, dim = 1)
 
         state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits, dim = 1).max(1)[1]]
 
-        return pos_ests_mean, pos_ests_var, obs_logits, state_logprobs, states_T
+        return pos_ests_obs, pos_ests_var, obs_logits, state_logprobs, states_T
 
     def forward(self, input_dict):
         self.process_inputs(input_dict)
-        self.set_uc(True)
-        pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
-        y = pos_ests_mean - input_dict['rel_pos_shift']
-        S = input_dict['rel_pos_shift_var'] + pos_ests_var
-        K = input_dict['rel_pos_shift_var'] / S
-        pos_ests = input_dict['rel_pos_shift'] + K * y
+        pos_ests_mean, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+        prior_noise = input_dict['rel_pos_prior_var']
+
+        y = pos_ests_mean - input_dict['rel_pos_prior_mean']
+        S = prior_noise + pos_ests_obs_noise
+        K = prior_noise / S
+
+        pos_post = input_dict['rel_pos_prior_mean'] + K * y
+        pos_post_var = (1 - K) * prior_noise
 
         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
 
+        # print(state_logits_unc[:10])
+        # print(input_dict['done_mask'][:10])
+        # print(state_logits[:10])
+        # print(input_dict['done_mask'][:,0].mean())
+
         return {
-            'pos_est': pos_ests,
+            'pos_est': pos_post,
             'obs_logits': obs_logits,
             'obs_inputs': multinomial.logits2inputs(obs_logits),
             'state_logits': state_logits,
             'state_inputs': multinomial.logits2inputs(state_logits),
             'obs_logprobs_inputs': multinomial.logits2inputs(obs_logprobs),
-        }      
+        }
 
     def get_encoding(self, input_dict):
         with torch.no_grad():
@@ -406,7 +396,7 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
             self.process_inputs(input_dict)
             self.set_uc(False)
 
-            pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_obs, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
             return enc
 
@@ -425,33 +415,13 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
             T = 1
             self.test_time_process_inputs(input_dict, T)
             self.process_inputs(input_dict)
-            self.set_uc(True)
+            self.set_uc(False)
 
-            pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            pos_ests_obs, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
-            # obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+            obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
 
-            # pos_estimator = self.ensemble_list[0][-3]
-
-            # pos_samples = 0.01 * torch.cat([\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1),\
-            # pos_estimator(enc).unsqueeze(1)\
-            # ], dim = 1)
-
-            # pos_ests_mean = torch.mean(pos_samples, dim = 1)
-            # pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
-                    
-            obs_idx = F.softmax(obs_logits[0], dim = 0).max(0)[1]
-
-            return int(obs_idx.item()), obs_logprobs[0], pos_ests_mean[0], pos_ests_var[0]
+            return int(obs_idx.item()), obs_logprobs[0], 0.01 * pos_ests_obs[0], 0.0001 * pos_ests_obs_noise[0]
 
     def process_inputs(self, input_dict):
 
@@ -478,6 +448,12 @@ class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
 
+        input_dict['pos_change'] = input_dict['rel_proprio'][0,-1,:2].unsqueeze(0)\
+        .repeat_interleave(input_dict['rel_proprio'].size(1),0)\
+         - input_dict['rel_proprio'][0,:,:2]
+
+        input_dict['rel_pos_shift'] = input_dict['pos_change'][-1].unsqueeze(0).repeat_interleave(T, 0)
+
 class History_Encoder_Baseline(mm.Proto_Macromodel):
     def __init__(self, model_name, init_args, device = None):
         super().__init__()
@@ -488,7 +464,7 @@ class History_Encoder_Baseline(mm.Proto_Macromodel):
 
         self.num_tools = init_args['num_tools']
         self.num_states = init_args['num_states']
-        self.num_obs = init_args['num_obs']
+        self.num_obs = init_args['num_states']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -560,7 +536,7 @@ class History_Encoder_Baseline(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
-        pos_ests = 0.01 * pos_estimator(states_T)
+        pos_ests = pos_estimator(states_T)
 
         obs_logits = obs_classifier(states_T)
 
@@ -611,7 +587,7 @@ class History_Encoder_Baseline(mm.Proto_Macromodel):
             
             obs_idx = F.softmax(obs_logits[0], dim = 0).max(0)[1]
 
-            return int(obs_idx.item()), None, pos_ests_obs[0], None
+            return int(obs_idx.item()), None, 0.01 * pos_ests_obs[0]
 
     def process_inputs(self, input_dict):
 
@@ -637,6 +613,451 @@ class History_Encoder_Baseline(mm.Proto_Macromodel):
         input_dict["rel_proprio"] = input_dict['rel_proprio'].repeat_interleave(T, 0)
         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
+
+# class History_Encoder_wUncertainty(mm.Proto_Macromodel):
+#     def __init__(self, model_name, init_args, device = None):
+#         super().__init__()
+
+#         self.device = device
+#         self.model_list = []
+#         self.ensemble_list = []
+
+#         self.num_tools = init_args['num_tools']
+#         self.num_states = init_args['num_states']
+#         self.num_obs = init_args['num_states']
+
+#         self.action_size = init_args['action_size']
+#         self.force_size = init_args['force_size']
+#         self.proprio_size = init_args['proprio_size']
+#         self.min_length = init_args['min_length']
+#         self.contact_size = 1
+
+#         self.dropout_prob = init_args['dropout_prob']
+
+#         self.force_mean = torch.from_numpy(np.array(init_args['force_mean'])).to(self.device).float()
+#         self.force_std = torch.from_numpy(np.array(init_args['force_std'])).to(self.device).float()
+
+#         self.frc_enc_size = 48
+#         self.tool_dim = 6
+
+#         self.state_size = self.frc_enc_size + self.proprio_size + self.action_size + self.contact_size
+
+#         self.num_ensembles = 1
+
+#         self.num_tl = 4
+#         self.num_cl = 3
+#         self.flatten = nn.Flatten()
+#         self.uc = False
+
+#         for i in range(self.num_ensembles):
+#             self.ensemble_list.append((\
+#                 mm.CONV1DN(model_name + "_frc_enc" + str(i),\
+#                  (self.force_size[0], self.force_size[1]), (self.frc_enc_size, 1),\
+#                   nonlinear = False, batchnorm = True, dropout = True, dropout_prob = self.dropout_prob,\
+#                    uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.Transformer_Comparer(model_name + "_sequential_process" + str(i),\
+#           self.state_size, self.num_tl, dropout_prob = self.dropout_prob, uc = self.uc, device = self.device).to(self.device),\
+                
+#                 mm.Embedding(model_name + "_shape_embed" + str(i),\
+#                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_pos_est" + str(i),\
+#             self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_pos_est_dyn_noise" + str(i),\
+#             self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_pos_est_obs_noise" + str(i),\
+#             self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
+#             self.state_size + self.tool_dim, self.num_obs, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_obs_likelihood" + str(i),\
+#             self.state_size + self.tool_dim, self.num_obs * self.num_states, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+#             ))
+
+#         for model_tuple in self.ensemble_list:
+#             for model in model_tuple:
+#                 self.model_list.append(model)
+
+#     def get_outputs(self, input_dict, model_tuple, final_idx = None):
+#         frc_enc, seq_processor, shape_embed, pos_estimator, dyn_noise_estimator, obs_noise_estimator,\
+#          obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
+
+#         ##### Calculating Series Encoding
+#         frc_encs_reshaped = self.flatten(frc_enc(input_dict["force_reshaped"]))
+
+#         frc_encs = torch.reshape(frc_encs_reshaped,\
+#          (input_dict['batch_size'], input_dict['sequence_size'], self.frc_enc_size))
+
+#         states_t = torch.cat([frc_encs, input_dict['sensor_inputs']], dim = 2).transpose(0,1)
+
+#         if "padding_mask" in input_dict.keys():
+#             seq_enc = seq_processor(states_t, padding_mask = input_dict["padding_mask"]).max(0)[0]
+#         else:
+#             seq_enc = seq_processor(states_t).max(0)[0]
+
+#         tool_embed = shape_embed(input_dict['tool_idx'].long()) 
+
+#         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
+
+#         pos_ests_obs = pos_estimator(states_T)
+        
+#         pos_ests_dyn_noise = dyn_noise_estimator(states_T).pow(2) + 1e-2 #+ pos_ests_obs.pow(2)
+
+#         pos_ests_obs_noise = obs_noise_estimator(states_T).pow(2) + 1e-2
+
+#         obs_logits = obs_classifier(states_T)
+
+#         # likelihood network
+#         obs_state_logits = torch.reshape(obs_likelihood(states_T), (input_dict['batch_size'], self.num_obs, self.num_states))
+#         obs_state_logprobs = F.log_softmax(obs_state_logits, dim = 1)
+
+#         state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits, dim = 1).max(1)[1]]
+
+#         return pos_ests_obs, pos_ests_dyn_noise, pos_ests_obs_noise, obs_logits, state_logprobs, states_T
+
+#     def forward(self, input_dict):
+#         self.process_inputs(input_dict)
+
+#         pos_ests_mean, pos_ests_dyn_noise, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#         prior_noise = input_dict['rel_pos_prior_var'] + pos_ests_dyn_noise
+
+#         y = pos_ests_mean - input_dict['rel_pos_prior_mean']
+#         S = prior_noise + pos_ests_obs_noise
+#         K = prior_noise / S
+
+#         pos_post = input_dict['rel_pos_prior_mean'] + K * y
+#         pos_post_var = (1 - K) * prior_noise
+
+#         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
+
+#         # print(state_logits_unc[:10])
+#         # print(input_dict['done_mask'][:10])
+#         # print(state_logits[:10])
+#         # print(input_dict['done_mask'][:,0].mean())
+
+#         # print((1 / pos_post_var)[:10])
+#         # if torch.isnan(1 / pos_post_var).any():
+#         #     print("Problem")
+
+#         return {
+#             'pos_est': pos_post,
+#             'pos_est_params': (pos_post, 1 / pos_post_var),
+#             'obs_logits': obs_logits,
+#             'obs_inputs': multinomial.logits2inputs(obs_logits),
+#             'state_logits': state_logits,
+#             'state_inputs': multinomial.logits2inputs(state_logits),
+#             'obs_logprobs_inputs': multinomial.logits2inputs(obs_logprobs),
+#         }
+
+#     def get_encoding(self, input_dict):
+#         with torch.no_grad():
+#             self.eval()
+#             ### need self uc to be off
+#             # prev_time = time.time()          
+#             T = 1
+#             self.test_time_process_inputs(input_dict, T)
+#             self.process_inputs(input_dict)
+#             self.set_uc(False)
+
+#             pos_ests_mean, pos_ests_dyn_noise, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#             return enc
+
+#     def set_uc(self, uc_bool):
+#         for model in self.ensemble_list[0]:
+#             if hasattr(model, 'set_uc'):
+#                 model.set_uc(uc_bool)
+#             elif hasattr(model, 'uc'):
+#                 model.uc = uc_bool
+
+#     def get_obs(self, input_dict):
+#         with torch.no_grad():
+#             self.eval()
+#             # prev_time = time.time()
+#             ### Method 1 #### without uncertainty estimation
+#             T = 1
+#             self.test_time_process_inputs(input_dict, T)
+#             self.process_inputs(input_dict)
+#             self.set_uc(False)
+
+#             pos_ests_mean, pos_ests_dyn_noise, pos_ests_obs_noise, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#             obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
+
+#             return int(obs_idx.item()), obs_logprobs[0], 0.01 * pos_ests_mean[0], 0.0001 * pos_ests_dyn_noise[0], 0.0001 * pos_ests_obs_noise[0]
+
+#     def process_inputs(self, input_dict):
+
+#         ##### feature processing
+#         input_dict["force"] = input_dict["force_hi_freq"].transpose(2,3)
+        
+#         input_dict["force_reshaped"] = torch.reshape(input_dict["force"],\
+#          (input_dict["force"].size(0) * input_dict["force"].size(1), \
+#          input_dict["force"].size(2), input_dict["force"].size(3)))
+
+#         input_dict["batch_size"] = input_dict["force"].size(0)
+#         input_dict["sequence_size"] = input_dict["force"].size(1)
+
+#         input_dict['rel_proprio_diff'] = torch.where(input_dict['rel_proprio'][:,1:] != 0,\
+#          input_dict['rel_proprio'][:,1:] - input_dict['rel_proprio'][:,:-1], torch.zeros_like(input_dict['rel_proprio'][:,1:]))
+
+#         input_dict['sensor_inputs'] = torch.cat([input_dict['action'], input_dict['contact'], input_dict['rel_proprio_diff']], dim = 2)
+    
+#     def test_time_process_inputs(self, input_dict, T):
+
+#         input_dict["force_hi_freq"] = input_dict["force_hi_freq"][:,1:].repeat_interleave(T, 0)
+#         input_dict["action"] = input_dict["action"][:, :-1].repeat_interleave(T, 0)
+#         input_dict["rel_proprio"] = input_dict['rel_proprio'].repeat_interleave(T, 0)
+#         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
+#         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
+
+#         input_dict['pos_change'] = input_dict['rel_proprio'][0,-1,:2].unsqueeze(0)\
+#         .repeat_interleave(input_dict['rel_proprio'].size(1),0)\
+#          - input_dict['rel_proprio'][0,:,:2]
+
+#         input_dict['rel_pos_shift'] = input_dict['pos_change'][-1].unsqueeze(0).repeat_interleave(T, 0)
+
+# class History_Encoder_wEstUncertainty(mm.Proto_Macromodel):
+#     def __init__(self, model_name, init_args, device = None):
+#         super().__init__()
+
+#         self.device = device
+#         self.model_list = []
+#         self.ensemble_list = []
+
+#         self.num_tools = init_args['num_tools']
+#         self.num_states = init_args['num_states']
+#         self.num_obs = 2 #init_args['num_states']
+
+#         self.action_size = init_args['action_size']
+#         self.force_size = init_args['force_size']
+#         self.proprio_size = init_args['proprio_size']
+#         self.min_length = init_args['min_length']
+#         self.contact_size = 1
+
+#         self.dropout_prob = init_args['dropout_prob']
+
+#         self.force_mean = torch.from_numpy(np.array(init_args['force_mean'])).to(self.device).float()
+#         self.force_std = torch.from_numpy(np.array(init_args['force_std'])).to(self.device).float()
+
+#         self.frc_enc_size = 48
+#         self.tool_dim = 6
+
+#         self.state_size = self.frc_enc_size + self.proprio_size + self.action_size + self.contact_size
+
+#         self.num_ensembles = 1
+
+#         self.num_tl = 4
+#         self.num_cl = 3
+#         self.flatten = nn.Flatten()
+#         self.uc = True
+
+#         for i in range(self.num_ensembles):
+#             self.ensemble_list.append((\
+#                 mm.CONV1DN(model_name + "_frc_enc" + str(i),\
+#                  (self.force_size[0], self.force_size[1]), (self.frc_enc_size, 1),\
+#                   nonlinear = False, batchnorm = True, dropout = True, dropout_prob = self.dropout_prob,\
+#                    uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.Transformer_Comparer(model_name + "_sequential_process" + str(i),\
+#           self.state_size, self.num_tl, dropout_prob = self.dropout_prob, uc = self.uc, device = self.device).to(self.device),\
+                
+#                 mm.Embedding(model_name + "_shape_embed" + str(i),\
+#                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_pos_est" + str(i),\
+#             self.state_size + self.tool_dim, 2, 2 * self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
+#             self.state_size + self.tool_dim, self.num_obs, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+
+#                 mm.ResNetFCN(model_name + "_obs_likelihood" + str(i),\
+#             self.state_size + self.tool_dim, self.num_obs * self.num_states, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+#             uc = self.uc, device = self.device).to(self.device),\
+#             ))
+
+#         for model_tuple in self.ensemble_list:
+#             for model in model_tuple:
+#                 self.model_list.append(model)
+
+#     def get_outputs(self, input_dict, model_tuple, final_idx = None):
+#         frc_enc, seq_processor, shape_embed, pos_model,\
+#          obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
+
+#         ##### Calculating Series Encoding
+#         frc_encs_reshaped = self.flatten(frc_enc(input_dict["force_reshaped"]))
+
+#         frc_encs = torch.reshape(frc_encs_reshaped,\
+#          (input_dict['batch_size'], input_dict['sequence_size'], self.frc_enc_size))
+
+#         states_t = torch.cat([frc_encs, input_dict['sensor_inputs']], dim = 2).transpose(0,1)
+
+#         if "padding_mask" in input_dict.keys():
+#             seq_enc = seq_processor(states_t, padding_mask = input_dict["padding_mask"]).max(0)[0]
+#         else:
+#             seq_enc = seq_processor(states_t).max(0)[0]
+
+#         tool_embed = shape_embed(input_dict['tool_idx'].long()) 
+
+#         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
+
+#         pos_samples = 0.01 * torch.cat([\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1),\
+#         pos_model(states_T).unsqueeze(1)\
+#         ], dim = 1)
+#         pos_ests_mean = torch.mean(pos_samples, dim = 1)
+#         pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
+
+#         # obs_logits_samples = torch.cat([\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     obs_classifier(states_T).unsqueeze(1),\
+#         #     ], dim = 1)
+
+#         # obs_logits_mean = torch.mean(obs_logits_samples, dim = 1)
+#         # obs_logits_var = torch.var(obs_logits_samples, unbiased = True, dim =1)
+
+#         # obs_logits = sample_gaussian(obs_logits_mean, obs_logits_var, self.device)
+        
+#         obs_logits = obs_classifier(states_T)
+
+#         # likelihood network
+#         obs_state_logits = torch.reshape(obs_likelihood(states_T), (input_dict['batch_size'], self.num_obs, self.num_states))
+#         obs_state_logprobs = F.log_softmax(obs_state_logits, dim = 1)
+
+#         state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits, dim = 1).max(1)[1]]
+
+#         return pos_ests_mean, pos_ests_var, obs_logits, state_logprobs, states_T
+
+#     def forward(self, input_dict):
+#         self.process_inputs(input_dict)
+#         self.set_uc(True)
+#         pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#         y = pos_ests_mean - input_dict['rel_pos_shift']
+#         S = input_dict['rel_pos_shift_var'] + pos_ests_var
+#         K = input_dict['rel_pos_shift_var'] / S
+#         pos_ests = input_dict['rel_pos_shift'] + K * y
+
+#         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
+
+#         return {
+#             'pos_est': pos_ests,
+#             'obs_logits': obs_logits,
+#             'obs_inputs': multinomial.logits2inputs(obs_logits),
+#             'state_logits': state_logits,
+#             'state_inputs': multinomial.logits2inputs(state_logits),
+#             'obs_logprobs_inputs': multinomial.logits2inputs(obs_logprobs),
+#         }      
+
+#     def get_encoding(self, input_dict):
+#         with torch.no_grad():
+#             self.eval()
+#             ### need self uc to be off
+#             # prev_time = time.time()          
+#             T = 1
+#             self.test_time_process_inputs(input_dict, T)
+#             self.process_inputs(input_dict)
+#             self.set_uc(False)
+
+#             pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#             return enc
+
+#     def set_uc(self, uc_bool):
+#         for model in self.ensemble_list[0]:
+#             if hasattr(model, 'set_uc'):
+#                 model.set_uc(uc_bool)
+#             elif hasattr(model, 'uc'):
+#                 model.uc = uc_bool
+
+#     def get_obs(self, input_dict):
+#         with torch.no_grad():
+#             self.eval()
+#             # prev_time = time.time()
+#             ### Method 1 #### without uncertainty estimation
+#             T = 1
+#             self.test_time_process_inputs(input_dict, T)
+#             self.process_inputs(input_dict)
+#             self.set_uc(True)
+
+#             pos_ests_mean, pos_ests_var, obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#             # obs_logits, obs_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+#             # pos_estimator = self.ensemble_list[0][-3]
+
+#             # pos_samples = 0.01 * torch.cat([\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1),\
+#             # pos_estimator(enc).unsqueeze(1)\
+#             # ], dim = 1)
+
+#             # pos_ests_mean = torch.mean(pos_samples, dim = 1)
+#             # pos_ests_var = torch.var(pos_samples, unbiased=True, dim = 1)
+                    
+#             obs_idx = F.softmax(obs_logits[0], dim = 0).max(0)[1]
+
+#             return int(obs_idx.item()), obs_logprobs[0], pos_ests_mean[0], pos_ests_var[0]
+
+#     def process_inputs(self, input_dict):
+
+#         ##### feature processing
+#         input_dict["force"] = input_dict["force_hi_freq"].transpose(2,3)
+        
+#         input_dict["force_reshaped"] = torch.reshape(input_dict["force"],\
+#          (input_dict["force"].size(0) * input_dict["force"].size(1), \
+#          input_dict["force"].size(2), input_dict["force"].size(3)))
+
+#         input_dict["batch_size"] = input_dict["force"].size(0)
+#         input_dict["sequence_size"] = input_dict["force"].size(1)
+
+#         input_dict['rel_proprio_diff'] = torch.where(input_dict['rel_proprio'][:,1:] != 0,\
+#          input_dict['rel_proprio'][:,1:] - input_dict['rel_proprio'][:,:-1], torch.zeros_like(input_dict['rel_proprio'][:,1:]))
+
+#         input_dict['sensor_inputs'] = torch.cat([input_dict['action'], input_dict['contact'], input_dict['rel_proprio_diff']], dim = 2)
+    
+#     def test_time_process_inputs(self, input_dict, T):
+
+#         input_dict["force_hi_freq"] = input_dict["force_hi_freq"][:,1:].repeat_interleave(T, 0)
+#         input_dict["action"] = input_dict["action"][:, :-1].repeat_interleave(T, 0)
+#         input_dict["rel_proprio"] = input_dict['rel_proprio'].repeat_interleave(T, 0)
+#         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
+#         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
 
 # ### Method 2 ### with uncertainty estimation
 # T = 100
