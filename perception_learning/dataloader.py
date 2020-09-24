@@ -11,7 +11,11 @@ import random
 ## ADD data normalization
 def read_h5(path):
     return h5py.File(path, 'r', swmr=True, libver = 'latest')
-    
+
+def shuffle_along_axis(a, axis):
+    idx = np.random.rand(*a.shape).argsort(axis=axis)
+    return np.take_along_axis(a,idx,axis=axis)
+
 class Custom_DataLoader(Dataset):
     def __init__(self, cfg, idx_dict = None, device = None, transform=None):
         dataset_path = cfg['dataset_path']
@@ -174,6 +178,16 @@ class Custom_DataLoader(Dataset):
         ###########################################################
         # prev_time = time.time()
         dataset = read_h5(self.idx_dict[key_set][idx])
+
+        # if idx == 0:
+        #     idx_unpaired = idx + 1
+        # elif idx == (len(self.idx_dict[key_set].keys()) - 1):
+        #     idx_unpaired = idx - 1
+        # else:
+        #     idx_unpaired = idx + random.choice([-1,1])
+
+        # dataset_unpaired = read_h5(self.idx_dict[key_set][idx_unpaired])
+
         max_traj_length = np.array(dataset['proprio']).shape[0]
 
         max_length = self.idx_dict["max_length"]
@@ -186,28 +200,73 @@ class Custom_DataLoader(Dataset):
         unpadded = idx1 - idx0 - 1
         sample = {}
 
+        num_particles = 100
         # pixel_shift = np.random.choice(range(-10,11), 2)
 
         for key in self.dataset_keys:
             if key == 'action':
                 sample[key] = np.array(dataset[key][idx0:(idx1 - 1)]) # each action corresponds to the action causing the difference recorded
+                sample['final_action'] = np.array(dataset[key][idx1 - 1])
+
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'force_hi_freq':
-                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])[:,:,:6]
+                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
+
+                sample['final_force'] = sample[key][-1,-1]
+                sample['next_force'] = np.array(dataset[key][idx1,-1])
+
+                sample[key + '_unpaired'] = shuffle_along_axis(sample[key], 0)
+
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1], sample[key].shape[2]))], axis = 0)
+
+                sample[key + '_unpaired'] = np.concatenate([sample[key + '_unpaired'],\
+                 np.zeros((padded, sample[key + '_unpaired'].shape[1], sample[key + '_unpaired'].shape[2]))], axis = 0)
 
             elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
 
-                sample['rel_pos_final'] = 100 * sample[key][-1,:2]
                 sample['rel_pos_prior_mean'] = 100 * np.random.uniform(low=-0.03, high = 0.03, size = 2)
                 sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2)) 
 
+                sample['final_rel_pos'] = 100 * sample[key][-1,:2]
+
+                r = np.random.uniform(low=0, high = 2, size = num_particles)
+                theta = np.random.uniform(low=0, high = 2 * np.pi, size = num_particles)
+                r_base = np.random.uniform(low=0, high = 2)
+                theta_base = np.random.uniform(low=0, high = 2 * np.pi)
+
+                base_pos = sample['final_rel_pos'] + np.array([r_base * np.cos(theta_base), r_base * np.sin(theta_base)])
+
+                sample['pos_particles'] = np.repeat(np.expand_dims(base_pos, axis = 1), num_particles, axis = 1) +\
+                 np.array([r * np.cos(theta), r * np.sin(theta)])
+
+                sample['pos_particles'] = np.transpose(sample['pos_particles'])
+
+                sample['next_rel_pos'] = 100 * np.array(dataset[key][idx1, :2])
+
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
+            elif key == 'proprio':   
+                sample[key] = np.array(dataset[key][idx0:idx1])
+
+                sample[key + '_unpaired'] = sample[key] #shuffle_along_axis(sample[key], 0)
+
+                sample['final_pos'] = sample[key][-1,:2]
+                sample['next_pos'] = np.array(dataset[key][idx1, :2])
+                
+                sample['final_pos_change'] = 1000 * sample[key][-1,:2] - sample[key][-2,:2]
+                sample['next_pos_change'] = 1000 * np.array(dataset[key][idx1, :2]) - sample[key][-1,:2]
+
+                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
+                sample[key + '_unpaired'] = np.concatenate([sample[key + '_unpaired'], np.zeros((padded, sample[key + '_unpaired'].shape[1]))], axis = 0)
+
             elif key == 'contact':
-                sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
+                sample[key] = np.array(dataset[key][(idx0 + 1):idx1]).astype(np.int32)
+
+                sample['final_contact_idx'] = np.array(dataset[key][idx1-1,0]).astype(np.int32)
+                sample['next_contact_idx'] = np.array(dataset[key][idx1,0]).astype(np.int32)
+
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'peg_vector':
@@ -220,22 +279,24 @@ class Custom_DataLoader(Dataset):
                 sample["state_vector"] = sample[key]
                 sample["state_idx"] = np.array(sample[key].argmax(0))
                 
-                sample["state_prior"] = [np.array([np.random.uniform(low=0, high=1)])]
-                sample["state_prior"].append((1 - sample['state_prior'][-1])*np.random.uniform(low=0, high=1))
-                sample["state_prior"].append(np.array([1 - np.sum(sample["state_prior"])])) 
-                random.shuffle(sample["state_prior"])                 
-                sample["state_prior"] = np.concatenate(sample['state_prior'])
+                sample["state_prior"] = np.random.uniform(low=0, high=1, size = sample[key].shape[0])
+                sample['state_prior'] = sample['state_prior'] / np.sum(sample['state_prior'])
 
-                if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
-                    sample['done_mask'] = np.zeros((sample[key].size))
-                else:
-                    sample['done_mask'] = np.ones((sample[key].size))
+                sample['type_particles_idx'] = np.random.randint(sample[key].shape[0], size = num_particles)
 
-            elif key == 'fit_vector':
-                sample[key] = np.array(dataset[key])
-                sample["obs_vector"] = sample[key]
-                sample["fit_idx"] = np.array(sample[key].argmax(0))
-                sample["obs_idx"] = np.array(sample[key].argmax(0))
+                sample['weights'] = np.random.uniform(low=0, high=1, size = num_particles)
+                sample['weights_particles'] = sample['weights'] / np.sum(sample['weights'])
+
+            #     if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
+            #         sample['done_mask'] = np.zeros((sample[key].size))
+            #     else:
+            #         sample['done_mask'] = np.ones((sample[key].size))
+
+            # elif key == 'fit_vector':
+            #     sample[key] = np.array(dataset[key])
+            #     sample["obs_vector"] = sample[key]
+            #     sample["fit_idx"] = np.array(sample[key].argmax(0))
+            #     sample["obs_idx"] = np.array(sample[key].argmax(0))
                 
                 # if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
                 #     sample['done_mask'] = np.zeros((sample[key].size))
@@ -246,6 +307,7 @@ class Custom_DataLoader(Dataset):
         # sample["pol_idx"] = np.array(dataset['policy'][-1,0])
 
         dataset.close()
+        # dataset_unpaired.close()
 
         # a = input(" ")
         ##########################################################    

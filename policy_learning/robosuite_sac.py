@@ -70,21 +70,22 @@ def experiment(variant):
     if 'info_flow' in cfg.keys():
         ref_model_dict = pl.get_ref_model_dict()
         model_dict = sl.declare_models(ref_model_dict, cfg, ptu.device)
+        
         if 'SAC_Policy' in cfg['info_flow'].keys():
             data = torch.load(self.cfg['SAC_Policy']["model_folder"] + "itr_" + str(self.cfg['SAC_Policy']["epoch"]) + ".pkl")
             model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
 
-        if 'History_Encoder_wUncertainty' in model_dict.keys():
-            model_dict['encoder'] = model_dict['History_Encoder_wUncertainty']
-            model_dict['sensor'] = model_dict['History_Encoder_wUncertainty']
+        for model_name in cfg['info_flow'].keys():
+            if model_name == 'SAC_Policy':
+                continue
 
-        if 'History_Encoder_wConstantUncertainty' in model_dict.keys():
-            model_dict['encoder'] = model_dict['History_Encoder_wConstantUncertainty']
-            model_dict['sensor'] = model_dict['History_Encoder_wConstantUncertainty']
+            if cfg['info_flow'][model_name]['sensor']:
+                model_dict['sensor'] = model_dict[model_name]
+                print("Sensor: ", model_name)
+            if cfg['info_flow'][model_name]['encoder']:
+                model_dict['encoder'] = model_dict[model_name]
+                print("Encoder: ", model_name)
 
-        if 'History_Encoder_Baseline' in model_dict.keys():
-            model_dict['encoder'] = model_dict['History_Encoder_Baseline']
-            model_dict['sensor'] = model_dict['History_Encoder_Baseline']
     else:
         model_dict = {}
 
@@ -99,27 +100,27 @@ def experiment(variant):
         qf1 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M],
+            hidden_sizes=[M, M, M],
         )
         qf2 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M],
+            hidden_sizes=[M, M, M],
         )
         target_qf1 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M],
+            hidden_sizes=[M, M, M],
         )
         target_qf2 = ConcatMlp(
             input_size=obs_dim + action_dim,
             output_size=1,
-            hidden_sizes=[M, M],
+            hidden_sizes=[M, M, M],
         )
         policy = TanhGaussianPolicy(
             obs_dim=obs_dim,
             action_dim=action_dim,
-            hidden_sizes=[M, M],
+            hidden_sizes=[M, M, M],
         )
         eval_policy = policy #MakeDeterministic(policy)
     else:

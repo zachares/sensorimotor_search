@@ -1,0 +1,7 @@
+control_params:
+  kp: [6, 6, 6]
+  control_freq: 10
+  tol: [0.0005, 0.0005, 0.0005] #should match number of dimensions in action spac
+  movement_horizon: 100
+  noise_std: [0.0, 0.0, 0.0] #0.025 good noise scale - should match number of dimensions in action spac
+

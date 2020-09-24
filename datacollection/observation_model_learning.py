@@ -98,50 +98,87 @@ if __name__ == '__main__':
 			data = torch.load(cfg['info_flow']['SAC_Policy']["model_folder"] + "itr_" + str(cfg['info_flow']['SAC_Policy']["epoch"]) + ".pkl")
 			model_dict['SAC_Policy'] = data['exploration/policy'].to(device)
 			model_dict['policy'] = model_dict['SAC_Policy']
+			cfg['policy_keys'] = cfg['info_flow']['SAC_Policy']['policy_keys']
+			cfg['state_size'] = cfg['info_flow']['SAC_Policy']['state_size'] 
 		else:
-			spiral_mp = pu.Spiral2D_Motion_Primitive()
-			# best parameters from parameter grid search
-			spiral_mp.rt = 0.026
-			spiral_mp.nr = 2.2
-			spiral_mp.pressure = 0.003
-			model_dict['policy'] = spiral_mp.trajectory
+			raise Exception('No policy provided to perform evaluaiton')
 
-		if 'History_Encoder_Transformer' in model_dict.keys():
-			model_dict['encoder'] = model_dict['History_Encoder_Transformer']
-			model_dict['sensor'] = model_dict['History_Encoder_Transformer']
-			print(model_dict['sensor'].loading_folder)
+		for model_name in cfg['info_flow'].keys():
+			if model_name == 'SAC_Policy':
+				continue
+
+			if cfg['info_flow'][model_name]['sensor']:
+				model_dict['sensor'] = model_dict[model_name]
+				print("Sensor: ", model_name)
+
+				if model_name == 'StateSensor_wConstantUncertainty':
+					likelihood_embedding = model_dict['sensor'].ensemble_list[0][-1]
+					likelihood_params = torch.cat([\
+						torch.reshape(likelihood_embedding(pu.toTorch(np.array([0]), device).long()), (1,3,3)),\
+						torch.reshape(likelihood_embedding(pu.toTorch(np.array([1]), device).long()), (1,3,3)),\
+						torch.reshape(likelihood_embedding(pu.toTorch(np.array([2]), device).long()), (1,3,3)),\
+						], dim = 0)
+
+					loglikelihood_matrix = F.log_softmax(likelihood_params, dim = 1)
+				else:
+					loglikelihood_matrix = None
+
+
+			if cfg['info_flow'][model_name]['encoder']:
+				model_dict['encoder'] = model_dict[model_name]
+				print("Encoder: ", model_name)
+
 	else:
 		raise Exception('sensor must be provided to estimate observation model')
 
-	env = SensSearchWrapper(robo_env, cfg, selection_mode= 2, **model_dict)
+	env = SensSearchWrapper(robo_env, cfg, selection_mode = 0, **model_dict)
 
-	env.sensor.likelihood_model.model.p[:] = 3.0
-	prior_samples = env.sensor.likelihood_model.model.p[:].sum().item()
-	env.sensor.success_params.model.p[:] = 0.0
+	# env.sensor.likelihood_model.model.p[:] = 3.0
+	# prior_samples = env.sensor.likelihood_model.model.p[:].sum().item()
+	# env.sensor.success_params.model.p[:] = 0.0
 
-	for trial_num in range(num_samples):
+	num_tools = len(env.robo_env.peg_names)
+	success_params = np.ones((num_tools, 2))
+	trial_num = 0
+
+	# print("Success Params: ", success_params,\
+	 # success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
+
+	while trial_num < num_samples:
 		env.reset(initialize=False)
+		print("Trial Num ", trial_num + 1, " out of ", num_samples, " trials")
 		cand_idx = env.robo_env.cand_idx
-		obs_idxs = env.big_step(cand_idx)
-		substate_idx = env.robo_env.hole_sites[cand_idx][2]
+
+		if env.big_step(cand_idx):
+			continue
+		else:
+			trial_num += 1
+
+		# substate_idx = env.robo_env.hole_sites[cand_idx][2]
 		tool_idx = env.robo_env.tool_idx
 
-		print("Observation: ", env.robo_env.hole_names[obs_idxs[1]], " Ground Truth: ", env.robo_env.hole_sites[cand_idx][0])
+		# print("Observation: ", env.robo_env.hole_names[obs_idxs[1]], " Ground Truth: ", env.robo_env.hole_sites[cand_idx][0])
 		
-		ll_idxs = tuple([tool_idx, substate_idx] + list(obs_idxs))
-		success_idxs = (tool_idx, obs_idxs[0])
+		# ll_idxs = tuple([tool_idx, substate_idx] + list(obs_idxs))
+		# success_idxs = (tool_idx, obs_idxs[0])
 
-		if tool_idx == substate_idx:
-			env.sensor.success_params.model.p[success_idxs] += 1
+		# if tool_idx == substate_idx:
+		if env.done_bool:
+			success_params[tool_idx,1] += 1
+		else:
+			success_params[tool_idx,0] += 1
 
-		env.sensor.likelihood_model.model.p[ll_idxs] += 1
+		# env.sensor.likelihood_model.model.p[ll_idxs] += 1
 		# print(env.sensor.likelihood_model())
 
-	env.sensor.likelihood_model.model.p[:] = env.sensor.likelihood_model.model.p[:] / (num_samples + prior_samples)
-	env.sensor.success_params.model.p[:] = env.sensor.success_params.model.p[:] / env.sensor.success_params.model.p[:].sum(1).unsqueeze(1).repeat_interleave(2,1)
-	print(env.sensor.likelihood_model())
-	print(env.sensor.success_params())
-	env.sensor.save(9999, env.sensor.loading_folder)	
+	# env.sensor.likelihood_model.model.p[:] = env.sensor.likelihood_model.model.p[:] / (num_samples + prior_samples)
+	# env.sensor.success_params.model.p[:] = env.sensor.success_params.model.p[:] / env.sensor.success_params.model.p[:].sum(1).unsqueeze(1).repeat_interleave(2,1)
+	# print(env.sensor.likelihood_model())
+	# print(env.sensor.success_params())
+	# env.sensor.save(9999, env.sensor.loading_folder)
+
+	print("Success Params: ", success_params,\
+	 success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
 
 
 

@@ -14,28 +14,39 @@ from collections import OrderedDict
 import multinomial as multinomial
 import project_utils as pu
 
-class Outer_Loop(object):
-	def __init__(self, env, task_dict, mode = 2, device = None, print_info = True):
-
-		self.env = env
-		self.task_dict = task_dict
-		
+class Joint_POMDP(object):
+	def __init__(self, env, mode = 2, device = None, print_info = True, horizon = 3, success_params = None):
+		self.env = env		
 		self.device = device
 		self.mode = mode
-		self.sample = True
+		self.horizon = horizon
+		self.success_params = None #success_params
 		
 		self.print_info = print_info
 		self.reset()
 
 	def reset(self):
 		self.env.reset(initialize = False)
+
+		if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'loglikelihood_model'):
+			loglikelihood_model = self.env.sensor.loglikelihood_model
+		else:
+			loglikelihood_model = None
+
+		if hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.fit_names):
+			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+			 self.env.robo_env.fit_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+
+		elif hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.hole_names):
+			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+			 self.env.robo_env.hole_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+		else:
+			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+			 self.env.robo_env.hole_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+
 		self.gt_dict = self.env.get_gt_dict()
 		self.reset_probs()
-		self.step_count = 1
-		self.action_counts = 2 * torch.ones(self.task_dict['num_actions']).float().to(self.device)
-		self.success_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
-		self.failure_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device) 
-		self.z = 1.96 # used to estimate the upper bound with a 95% confidence level
+		self.step_count = 0
 
 		if self.print_info:
 			self.print_hypothesis()
@@ -43,6 +54,15 @@ class Outer_Loop(object):
 	def reset_probs(self):
 		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
 		self.state_probs = self.state_probs.float().to(self.device)
+		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
+		self.corr_action_idx_list = []
+		self.corr_state_idx_list = OrderedDict()
+
+		for j in range(self.task_dict['num_actions']):
+			if self.env.robo_env.hole_sites[j][3] == 0:
+					self.corr_action_idx_list.append(j)
+
+			self.corr_state_idx_list[j] = []
 
 		for i, state in enumerate(self.task_dict['states']):
 			correct = True
@@ -51,125 +71,113 @@ class Outer_Loop(object):
 					correct = False
 
 			if correct:
-				self.corr_idx = i
+				self.corr_state_idx = i
 
-		for i in range(self.task_dict['num_actions']):
-			if self.env.robo_env.hole_sites[i][3] == 0:
-					self.corr_act_idx = i
-		# self.max_action_entropy = multinomial.inputs2ent(multinomial.probs2inputs(torch.ones((self.task_dict["num_actions"])) / self.task_dict["num_substates"]))
-		# self.max_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()		
-		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
-		
+			for j in self.corr_action_idx_list:
+				substate_idx = state[j]
+
+				if substate_idx == self.env.robo_env.peg_idx:
+					self.corr_state_idx_list[j].append(i)
+
 	def choose_action(self):
+		if self.success_params is None:
+			alphas = (1 / self.action_counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
+		else:
+			alpha = self.success_params[self.env.get_goal()]
+			alphas = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * alpha
+
 		if self.mode == 0: # iterator
-			weights = self.step_count / self.action_counts
-			
-		elif self.mode == 1: # with classifier
-			action_counts = self.success_counts + self.failure_counts
-			weights = self.success_counts / (action_counts) +\
-			 self.z * torch.sqrt(self.success_counts * self.failure_counts) / (action_counts * torch.sqrt(action_counts))
+			print("Iterating")
+			print("Index of hole choice: ", self.action_counts.min(0)[1].item())
+			return self.action_counts.min(0)[1].item()
 
 		elif self.mode == 2: # with classifier and state estimation
-			alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+			print("Greedy")
+			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
 			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
-			weights = (alpha_vectors * state_prior).sum(1)
+			prob_fit = (reward_vectors * state_prior * alphas).sum(1)
 
-		elif self.mode == 3 and 'loglikelihood_matrix' in self.task_dict.keys():
-			weights = self.beliefmdp_value_iteration(self.state_probs, horizon = 2)
+			weights = prob_fit
+
+		elif self.mode == 3: # with classifier and state estimation
+			print("Explore")
+			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+			prob_fit = (reward_vectors * state_prior * alphas).sum(1)			
+
+			beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+			state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+			.repeat_interleave(self.task_dict['num_substates'], 1)
+
+			substate_probs = (beta_vectors * state_probs).sum(-1)
+			substate_entropy = (-substate_probs * torch.log(substate_probs)).sum(-1)
+
+			weights = prob_fit + 2 * substate_entropy
+
+			print("Prob Fit: ", prob_fit)
+			print("Entropy Bonus: ", 2 * substate_entropy)
+
+		elif self.mode == 4:
+			print("POMDP with horizon - ",  self.horizon)
+			prev_time = time.time()
+			weights = self.POMDP_value_iteration(self.state_probs, self.action_counts, horizon = self.horizon)
+			print("Calculation time: ", time.time() - prev_time)
+			print(weights.cpu().numpy())
+
 		else:
 			raise Exception('Mode ', self.mode, ' current unsupported')
 
 		action_idx = weights.max(0)[1].item()
-
-		# print(weights)
-		# print(action_idx)
-		# a = input("Continue")
 
 		if self.print_info:
 			print("Index of hole choice: ", action_idx)
 
 		return action_idx  
 
-	def update_state_probs(self, action_idx, obs_idx, obs_logprobs = None):
-		state_prior = self.state_probs.clone()
-
-		if obs_logprobs is not None:
-			state_posterior_logits = torch.log(state_prior) + obs_logprobs[self.task_dict['substate_idxs'][action_idx]]
+	def update_state_probs(self, action_idx, obs_idx, obs_state_logprobs):
+		if self.success_params is None:
+			prob_success = (1 / self.action_counts[action_idx])
 		else:
-			ll_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, obs_idx], self.device)
-			state_posterior_logits = torch.log(state_prior) + ll_logprobs
-		# print(F.softmax(state_posterior_logits, dim = 0))
+			prob_success = self.success_params[self.env.get_goal()]
+
+		alphas = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal(), action_idx], self.device) * prob_success
+		transition_function = 1 - alphas
+
+		state_prior = self.state_probs.clone()
+		
+		state_logprobs = obs_state_logprobs[obs_idx]
+
+		state_posterior_logits = torch.log(state_prior) + state_logprobs[self.task_dict['substate_idxs'][action_idx]] + torch.log(transition_function)
+
 		self.state_probs = multinomial.logits2probs(state_posterior_logits)
-		# self.curr_state_entropy = multinomial.inputs2ent(multinomial.probs2inputs(self.state_probs)).item()
-		# print(self.state_probs)
-		# a = input("Continue?")
 
-	def new_obs(self, action_idx, obs_idx, obs_logprobs = None):
+	def new_obs(self, action_idx, obs_idx, obs_state_logprobs):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
-		self.action_counts[action_idx] += 1
+		print("Updating based on observation")
 		self.step_count += 1
-
-		prev_prob = self.success_counts[self.corr_act_idx] /\
-		 (self.success_counts[self.corr_act_idx] + self.failure_counts[self.corr_act_idx])
+		
+		self.action_counts[action_idx] += 1
 
 		if hasattr(self.env, 'sensor'):
-			if self.env.sensor.num_obs == 2:
-				if obs_idx == 0: #self.env.get_goal():
-					self.success_counts[action_idx] += 1
-				else:
-					self.failure_counts[action_idx] += 1
-			elif self.env.sensor.num_obs == 3:
-				# print("This happened")
-				if obs_idx == self.env.get_goal():
-					# print("This happened?")
-					self.success_counts[action_idx] += 1
-				else:
-					self.failure_counts[action_idx] += 1
-			else:
-				raise Exception('unsupported observation space')
-		else:
-			if obs_idx == 0:
-				self.success_counts[action_idx] += 1
-			else:
-				self.failure_counts[action_idx] += 1
+			for i in range(self.task_dict['num_obs']):
+				state_logprobs = obs_state_logprobs[i]
+				self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, i] = state_logprobs[self.task_dict['substate_idxs'][action_idx]]	
 
-		curr_prob = self.success_counts[self.corr_act_idx] /\
-		 (self.success_counts[self.corr_act_idx] + self.failure_counts[self.corr_act_idx])
+		if obs_state_logprobs is not None:
+			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_state_logprobs, self.device))
 
-		self.prob_diff = (curr_prob - prev_prob).item()
+			if action_idx in self.corr_action_idx_list:
+				sum_events = 0
+				count = 0
 
-		if obs_logprobs is not None:
-			# print(self.state_probs)
-			prev_prob = self.state_probs[self.corr_idx]
+				for i in self.corr_state_idx_list[action_idx]:
+					sum_events += self.state_probs[i]
+					count += 1
 
-			state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
-				.repeat_interleave(self.task_dict['num_substates'], 1)
+				self.prob_diff = self.state_probs[self.corr_state_idx].item() / sum_events.item() - 1 / count
 
-			beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
-
-			prev_substate_probs = (beta_vectors * state_probs).sum(-1)
-
-			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_logprobs, self.device))
-
-			curr_prob = self.state_probs[self.corr_idx]
-			self.prob_diff = (curr_prob - prev_prob).item()
-
-			state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
-				.repeat_interleave(self.task_dict['num_substates'], 1)
-
-			beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
-
-			curr_substate_probs = (beta_vectors * state_probs).sum(-1)
-
-			for i in range(self.task_dict['num_actions']):
-				prob_diff = curr_substate_probs - prev_substate_probs
-				pu.print_histogram(3 * prob_diff[i], self.task_dict["substate_names"], direction = True)
-
-
-			# print(self.state_probs)
-
-		### ignoring observation of insertion or not insertion
-		if self.print_info:
+		if self.print_info and hasattr(self.env, 'sensor'):
 			obs = self.task_dict['obs_names'][obs_idx]
 			print("Observation_" + obs)
 
@@ -179,14 +187,7 @@ class Outer_Loop(object):
 					gt_props += " - " + info
 			
 			print(gt_props)
-
-
-			if obs_logprobs is None:
-				probs = self.success_counts / (self.success_counts + self.failure_counts)
-				pu.print_histogram(probs, [ "Object " + str(i) for i in range(self.task_dict['num_actions'])])
-			else:
-				pass
-				# self.print_hypothesis()
+			self.print_hypothesis()
 
 	def print_hypothesis(self):
 		state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
@@ -204,36 +205,46 @@ class Outer_Loop(object):
 
 			print("Probabilities", probs.detach().cpu().numpy())
 
-			pu.print_histogram(probs, self.task_dict["substate_names"])
+			pu.print_histogram(probs, self.task_dict["substate_names"], histogram_height = 10)
 		print("##############################################\n")
 
-	def beliefmdp_value_iteration(self, state_probs, horizon = 1): # depth of value iteration, calculating expected value
-		alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)		
+	def POMDP_value_iteration(self, state_probs, counts, horizon = 1): # depth of value iteration, calculating expected value
+		if self.success_params is None:
+			probs_success = (1 / counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
+		else:
+			prob_success = self.success_params[self.env.get_goal()]
+			probs_success = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * prob_success
+
+		alphas = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device) * probs_success
+		transition_function = 1 - alphas
+
 		state_prior = state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
 
-		expected_reward = (alpha_vectors * state_prior).sum(1)
+		expected_reward = (state_prior * alphas).sum(1)
 
 		if horizon == 1:
 			return expected_reward
 		else:
+			# actions, observations, states
+			transition_function = transition_function.unsqueeze(1).repeat_interleave(self.task_dict['num_obs'], 1)
 			state_prior = state_prior.unsqueeze(1).repeat_interleave(self.task_dict['num_obs'], 1)
 			
 			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal()], self.device)
 
-			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix, dim = 2)
+			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix  + torch.log(transition_function), dim = 2)
 		
-			p_o_given_a = torch.where(state_prior != 0,\
-			 torch.exp(torch.log(state_prior) + loglikelihood_matrix), torch.zeros_like(state_prior)).sum(-1)
+			p_o_given_a = (torch.where(state_prior != 0,\
+			 torch.exp(torch.log(state_prior) + loglikelihood_matrix + torch.log(transition_function)), torch.zeros_like(state_prior))).sum(-1)
 
-			lookahead_value = torch.zeros_like(p_o_given_a)
+			value = torch.zeros_like(p_o_given_a)
 
 			for obs_idx in range(self.task_dict['num_obs']):
 				for act_idx in range(self.task_dict['num_actions']):
-					lookahead_value[obs_idx, act_idx] = self.beliefmdp_value_iteration(state_posterior[obs_idx, act_idx], horizon = horizon-1).max(0)[0]
+					new_counts = copy.deepcopy(counts)
+					new_counts[act_idx] += 1
+					value[act_idx, obs_idx] = self.POMDP_value_iteration(state_posterior[act_idx, obs_idx], new_counts, horizon = horizon-1).max(0)[0]
 
-			expected_lookahead_value = (p_o_given_a * lookahead_value).sum(1)
-
-			return expected_reward + expected_lookahead_value	
+			return (expected_reward + (p_o_given_a * value).sum(1))
 
 	def marginalize(self, state_probs, action_idx = None, substate_idx = None):
 		#### marginalize out other actions / hole choices
@@ -250,7 +261,206 @@ class Outer_Loop(object):
 					idx = state.index(substate_idx)
 					margin[idx] += state_probs[i]
 
-	# 	return margin
+		return margin
+
+class Separate_POMDP(object):
+	def __init__(self, env, mode = 2, device = None, print_info = True, horizon = 3, success_params = None):
+		self.env = env		
+		self.device = device
+		self.mode = mode
+		self.sample = True
+		self.horizon = horizon
+		self.success_params = success_params
+		
+		self.print_info = print_info
+		self.reset()
+
+	def reset(self):
+		self.env.reset(initialize = False)
+		self.task_dict = {}
+
+		if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'get_loglikelihood_model'):
+			self.task_dict['loglikelihood_matrix'] = self.env.sensor.get_loglikelihood_model()
+		else:
+			self.task_dict['loglikelihood_matrix'] = np.log(np.ones((self.env.robo_env.peg_names, len(self.env.robo_env.hole_names),\
+			 len(self.env.robo_env.hole_names))) / len(self.env.robo_env.hole_names))
+
+		self.task_dict['num_tools'] = len(self.env.robo_env.peg_names)
+		self.task_dict['num_actions'] = len(self.env.robo_env.hole_sites.keys())
+		self.task_dict['num_substates'] = len(self.env.robo_env.hole_names)
+		self.task_dict['substate_names'] = self.env.robo_env.hole_names
+		self.task_dict['num_obs'] = len(self.env.robo_env.hole_names)
+		self.task_dict['obs_names'] = self.env.robo_env.hole_names
+
+		self.gt_dict = self.env.get_gt_dict()
+		self.reset_probs()
+		self.step_count = 0
+
+		if self.print_info:
+			self.print_hypothesis()
+		
+	def reset_probs(self):
+		self.state_probs = torch.ones((self.task_dict['num_actions'], self.task_dict["num_substates"])) / self.task_dict["num_substates"]
+		self.state_probs = self.state_probs.float().to(self.device)
+
+		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
+		self.corr_action_idx_list = []
+
+		for j in range(self.task_dict['num_actions']):
+			if self.env.robo_env.hole_sites[j][3] == 0:
+					self.corr_action_idx_list.append(j)
+
+	def choose_action(self):
+		if self.success_params is None:
+			probs_success = 1 / counts
+		else:
+			probs_success = self.success_params[self.env.get_goal()] * torch.ones(self.task_dict['num_actions']).to(self.device)
+
+		if self.mode == 0: # iterator
+			print("Iterating")
+			print("Index of hole choice: ", self.action_counts.min(0)[1].item())
+			return self.action_counts.min(0)[1].item()
+
+		elif self.mode == 2: # with classifier and state estimation
+			print("Greedy")
+			weights = self.state_probs[:, self.env.get_goal()] * probs_success
+
+		elif self.mode == 3: # with classifier and state estimation
+			print("Explore")
+			prob_success = self.state_probs[:, self.env.get_goal()]	* probs_success	
+			substate_entropy = (-self.state_probs * torch.log(self.state_probs)).sum(-1)
+
+			weights = prob_fit + 2 * substate_entropy
+
+			print("Prob Success: ", prob_success)
+			print("Entropy Bonus: ", 2 * substate_entropy)
+
+		elif self.mode == 4:
+			print("POMDP with horizon - ",  self.horizon)
+			prev_time = time.time()
+			weights = self.POMDP_value_iteration(self.state_probs, self.action_counts, horizon = self.horizon)
+			print("Calculation time: ", time.time() - prev_time)
+			print(weights.cpu().numpy())
+
+		else:
+			raise Exception('Mode ', self.mode, ' current unsupported')
+
+		action_idx = weights.max(0)[1].item()
+
+		if self.print_info:
+			print("Index of hole choice: ", action_idx)
+
+		return action_idx  
+
+	def update_state_probs(self, action_idx, obs_idx, obs_state_logprobs):
+		if self.success_params is None:
+			prob_success = 1 / counts[action_idx]
+			transition_prob = 1 - prob_success
+		else:
+			prob_success = self.success_params[self.env.get_goal()]
+			transition_prob = 1 - prob_success
+
+		transition_function = torch.ones(self.task_dict['num_substates']).to(self.device)
+		transition_function[self.env.get_goal()] = transition_prob
+
+		state_prior = self.state_probs[action_idx].clone()
+		
+		state_logprobs = obs_state_logprobs[obs_idx]
+
+		state_posterior_logits = torch.log(state_prior) + state_logprobs + torch.log(transition_function)
+
+		self.state_probs[action_idx] = multinomial.logits2probs(state_posterior_logits)
+
+	def new_obs(self, action_idx, obs_idx, obs_state_logprobs):
+		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
+		print("Updating based on observation")
+		self.step_count += 1
+		
+		self.action_counts[action_idx] += 1
+
+		if hasattr(self.env, 'sensor'):
+			self.task_dict['loglikelihood_matrix'][self.env.get_goal()] = obs_state_logprobs	
+
+		if obs_state_logprobs is not None:
+			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_state_logprobs, self.device))
+
+			if action_idx in self.corr_action_idx_list:
+				self.prob_diff = 0
+				count = 0
+				for i in range(self.task_dict['num_actions']):
+					if i == action_idx:
+						continue
+
+					self.prob_diff += (self.state_probs[i, self.env.robo_env.hole_sites[i][2]] - 1 / self.task_dict['num_substates']).item()
+					count += 1
+
+				self.prob_diff = self.prob_diff / count
+
+		if self.print_info and hasattr(self.env, 'sensor'):
+			obs = self.task_dict['obs_names'][obs_idx]
+			print("Observation_" + obs)
+
+			gt_props = "Ground Truth Properties"
+			for info in self.gt_dict[action_idx]:
+				if type(info) == str:
+					gt_props += " - " + info
+			
+			print(gt_props)
+			self.print_hypothesis()
+
+	def print_hypothesis(self):
+		for act_idx in range(self.task_dict["num_actions"]):
+			probs = self.state_probs[act_idx]
+
+			print("Model Hypthesis:", self.task_dict["substate_names"][probs.max(0)[1]] ,\
+			 " , Ground Truth:", self.gt_dict[act_idx][0])
+
+			print("Probabilities", probs.detach().cpu().numpy())
+
+			pu.print_histogram(probs, self.task_dict["substate_names"], histogram_height = 10)
+		print("##############################################\n")
+
+	def POMDP_value_iteration(self, state_probs, counts, horizon = 1): # depth of value iteration, calculating expected value
+		if self.success_params is None:
+			probs_success = (1 / counts)
+		else:
+			prob_success = self.success_params[self.env.get_goal()]
+			probs_success = torch.ones((self.task_dict['num_actions'])).to(self.device) * prob_success
+
+		exp_reward = state_probs[:,self.env.get_goal()] * probs_success
+
+		if horizon == 1:
+			return exp_reward
+		else:
+			transition_function = torch.ones((self.task_dict['num_actions'], self.task_dict['num_obs'], self.task_dict['num_substates'])).to(self.device)
+			transition_function[:,:,self.env.get_goal()] = 1 - prob_success
+
+			state_prior = state_probs.unsqueeze(1).repeat_interleave(self.task_dict['num_obs'], 1)
+			
+			loglikelihood_matrix = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal()], self.device).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], dim=0)
+			# print(self.task_dict['loglikelihood_matrix'][self.env.get_goal()].shape)
+			# print(loglikelihood_matrix.size())
+			# print(state_prior.size())
+			# print(transition_function.size())
+
+			state_posterior = F.softmax(torch.log(state_prior) + loglikelihood_matrix + torch.log(transition_function), dim = 2)
+		
+			p_o_given_a = (torch.where(state_prior != 0,\
+			 torch.exp(torch.log(state_prior) + loglikelihood_matrix + torch.log(transition_function)), torch.zeros_like(state_prior))).sum(-1)
+
+			value = torch.zeros_like(p_o_given_a)
+
+			for obs_idx in range(self.task_dict['num_obs']):
+				for act_idx in range(self.task_dict['num_actions']):
+					new_counts = copy.deepcopy(counts)
+					new_counts[act_idx] += 1
+
+					new_state_prior = state_probs.clone()
+					new_state_prior[act_idx] = state_posterior[act_idx, obs_idx]
+
+					value[act_idx, obs_idx] = self.POMDP_value_iteration(new_state_prior, new_counts, horizon = horizon-1).max(0)[0]
+
+			return (exp_reward + (p_o_given_a * value).sum(1))
 
 def main():
 	device = torch.device("cuda")
@@ -388,6 +598,73 @@ def main():
 
 if __name__ == "__main__":
 	main()
+
+			# print(self.state_probs)
+
+			# prev_prob = self.state_probs[self.corr_state_idx].item()
+
+			# state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+			# 	.repeat_interleave(self.task_dict['num_substates'], 1)
+
+			# beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+			# prev_substate_probs = (beta_vectors * state_probs).sum(-1)
+
+			# state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
+			# 	.repeat_interleave(self.task_dict['num_substates'], 1)
+
+			# beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+
+			# curr_substate_probs = (beta_vectors * state_probs).sum(-1)
+
+			# self.prob_diff = (curr_prob - prev_prob).item()
+
+			# for i in range(self.task_dict['num_actions']):
+			# 	prob_diff = curr_substate_probs - prev_substate_probs
+			# 	pu.print_histogram(3 * prob_diff[i], self.task_dict["substate_names"], direction = True)
+		# else:
+		# 	self.state_probs = (self.state_counts / torch.sum(self.state_counts)).to(self.device)
+
+			# print(self.state_probs)
+
+		### ignoring observation of insertion or not insertion
+
+			# if self.env.sensor.num_obs == 2: # fit classification
+			# 	for state_idx in range(self.task_dict['num_states']):
+			# 		substate_idx = self.task_dict['substate_idxs'][action_idx, state_idx]
+
+			# 		if obs_idx == 0 and (substate_idx == self.env.get_goal()): # Fit
+			# 			self.state_counts[state_idx] += 1
+
+			# 		elif obs_idx == 1 and (substate_idx != self.env.get_goal()):
+			# 			self.state_counts[state_idx] += 1
+
+
+			# elif self.env.sensor.num_obs == 3: # shape classification
+			# 	for state_idx, state in enumerate(self.task_dict['states']):
+			# 		substate_idx = self.task_dict['substate_idxs'][action_idx, state_idx]
+			# 		if substate_idx == obs_idx:
+			# 			self.state_counts[state_idx] += 1
+
+			# else:
+			# 	raise Exception('unsupported observation space')	
+
+		# alpha_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+		# state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+		# prob_fit = (alpha_vectors * state_prior).sum(1)
+
+		# prob_success = torch.sum((1 - 1 / self.action_counts) * prob_fit) / len(self.corr_action_idx_list)
+
+		# print("Prob Success: ", prob_success.item())
+
+		# strategy = np.random.binomial(1, prob_success.item(), 1)  
+		# strategy = 1
+		
+		# elif self.mode == 1: # with classifier
+
+		# 	action_counts = self.success_counts + self.failure_counts
+		# 	weights = self.success_counts / (action_counts) +\
+		# 	 self.z * torch.sqrt(self.success_counts * self.failure_counts) / (action_counts * torch.sqrt(action_counts))
 
 
 		# elif self.mode == 3: # greedy with uncertainty

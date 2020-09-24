@@ -57,9 +57,8 @@ def obs2Torch(numpy_dict, device): #, hole_type, macro_action):
 
 	return tensor_dict
 
-def print_histogram(probs, labels, direction = False): # dir = 0 - no direction, dir = 1 - direction
+def print_histogram(probs, labels, direction = False, histogram_height = 5): # dir = 0 - no direction, dir = 1 - direction
 	block_length = 10 # magic number
-	histogram_height = 5 # magic number
 	fill = "#"
 	line = "-"
 	gap = " "
@@ -128,58 +127,37 @@ def toTorch(array, device):
 '''
 Outer Loop Functions
 '''
-def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_model = None, constraint_type = 1):
+def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_model = None, num_each_object_list = None):
 	num_substates = len(substate_names)
 	task_dict = {}
 
 	task_dict['tool_names'] = substate_names
 	task_dict['num_tools'] = len(task_dict['tool_names'])
 
-	if constraint_type == 0: # all possible states
-		task_dict["states"] = tuple(itertools.product(range(num_substates), repeat = num_actions))
-	elif constraint_type == 1: # states only without copies of the same substate
-		assert num_actions <= num_substates
-		task_dict["states"] = list(itertools.permutations(range(num_substates), num_actions))
-	elif constraint_type == 2: # only for states comprised of fit, not fit and a task where only one object fits
-		if num_substates != 2:
-			raise Exception("Wrong number of substate types for constraint 2")
+	if num_each_object_list is not None: # states only without copies of the same substate
+		task_dict['num_each_object'] = num_each_object_list
 
-		states = []
+		substate_idxs = []
+		for i, num_object in enumerate(task_dict['num_each_object']):
+			for j in range(num_object):
+				substate_idxs.append(i)
 
-		for i in range(num_actions):
-			state = []
-			for j in range(num_actions):
-				state.append(1)
-
-			state[i] = 0
-
-			states.append(tuple(state))
-
-		task_dict["states"] = tuple(states)
+		assert num_actions <= len(substate_idxs)
+		task_dict["states"] = list(itertools.permutations(substate_idxs, num_actions))
 	else:
-		raise Exception("this constraint type is not currently supported")
+		raise Exception('Due the space complexity of this formulation,\n\
+		 it is better to use a  different POMDP formulation where each\n\
+		  objects type is estimated seperately')
 
 	task_dict["substate_names"] = substate_names
 	task_dict["num_substates"] = num_substates
-
 	task_dict["num_actions"] = num_actions
-
 	task_dict["num_states"] = len(task_dict["states"])
-
-	# ### multiple observations each step
-	# if type(observation_names[0]) == list:
-	# 	task_dict['observations'] = tuple(itertools.product(*[ range(len(obs_names)) for obs_names in observation_names]))
-	# ### single observation at each step
-	# else:
 	task_dict['observations'] = [ i for i in range(len(observation_names)) ]
 	task_dict['obs_names'] = observation_names
 	task_dict['num_obs'] = len(task_dict['observations'])
-	# ### to avoid search during online execution
-	# task_dict['obs2idx'] = {} 
-	# for i, obs in enumerate(task_dict['observations']):
-	# 	task_dict['obs2idx'][obs] = i
 
-	task_dict['alpha_vectors'] = np.zeros((num_substates, num_actions, task_dict['num_states'])) # reward vector
+	task_dict['alpha_vectors'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_states'])) # reward vector
 
 	for act_idx in range(num_actions):
 		for tool_idx in range(task_dict['num_tools']):
@@ -203,7 +181,14 @@ def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_
 				for act_idx in range(num_actions):
 					for state_idx, state in enumerate(task_dict['states']):
 						substate_idx = state[act_idx]
-						task_dict['loglikelihood_matrix'][tool_idx, act_idx, obs_idx, state_idx] = loglikelihood_model[tool_idx, obs_idx, substate_idx]
+						task_dict['loglikelihood_matrix'][tool_idx, act_idx, obs_idx, state_idx] =\
+						 loglikelihood_model[tool_idx, obs_idx, substate_idx]
+	else:
+		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_obs'], task_dict['num_states']))
+
+		default_logprob = np.log(1 / task_dict['num_obs'])
+
+		task_dict['loglikelihood_matrix'][:] = default_logprob
 
 	task_dict['substate_idxs'] = np.zeros((num_actions, task_dict['num_states'])).astype(np.int16)
 
@@ -211,7 +196,52 @@ def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_
 		for state_idx, state in enumerate(task_dict['states']):
 			substate_idx = state[act_idx]
 			task_dict['substate_idxs'][act_idx, state_idx] = substate_idx
+
 	return task_dict
+
+	# ### to avoid search during online execution
+	# task_dict['obs2idx'] = {} 
+	# for i, obs in enumerate(task_dict['observations']):
+	# 	task_dict['obs2idx'][obs] = i
+
+	# ### multiple observations each step
+	# if type(observation_names[0]) == list:
+	# 	task_dict['observations'] = tuple(itertools.product(*[ range(len(obs_names)) for obs_names in observation_names]))
+	# ### single observation at each step
+	# else:
+
+	# elif constraint_type == 2: # only for states comprised of fit, not fit and a task where only one object fits
+	# 	if num_substates != 2:
+	# 		raise Exception("Wrong number of substate types for constraint 2")
+
+	# 	states = []
+
+	# 	for i in range(num_actions):
+	# 		state = []
+	# 		for j in range(num_actions):
+	# 			state.append(1)
+
+	# 		state[i] = 0
+
+	# 		states.append(tuple(state))
+
+	# 	task_dict["states"] = tuple(states)
+	# else:
+	# 	raise Exception("this constraint type is not currently supported")
+
+	# task_dict['loglikelihood_mapping'] = {}
+
+	# for act_idx in range(num_actions):
+	# 	for tool_idx in range(task_dict['num_tools']):
+	# 		task_dict['loglikelihood_mapping'][tool_idx, act_idx] = [[],[],[]]
+	# 		for obs_idx in task_dict['observations']:
+	# 			for state_idx, state in enumerate(task_dict['states']):
+	# 				substate_idx = state[act_idx]
+	# 				task_dict['loglikelihood_mapping'][tool_idx][0].append(act_idx)
+	# 				task_dict['loglikelihood_mapping'][tool_idx][0].append((obs_idx))
+	# 				task_dict['loglikelihood_mapping'][tool_idx][1].append((state_idx))
+	# 				task_dict['loglikelihood_mapping'][tool_idx][2].append((substate_idx))
+
 '''
 Control Functions
 '''

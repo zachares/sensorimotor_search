@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 import perception_learning as pl
 from logger import Logger
-from agent import Outer_Loop
+from agent import Joint_POMDP, Separate_POMDP
 import project_utils as pu
 import utils_sl as sl
 
@@ -101,20 +101,31 @@ if __name__ == '__main__':
 		else:
 			raise Exception('No policy provided to perform evaluaiton')
 
-		if 'History_Encoder_wUncertainty' in model_dict.keys():
-			model_dict['encoder'] = model_dict['History_Encoder_wUncertainty']
-			model_dict['sensor'] = model_dict['History_Encoder_wUncertainty']
-			print(model_dict['sensor'].loading_folder)
+		for model_name in cfg['info_flow'].keys():
+			if model_name == 'SAC_Policy':
+				continue
 
-		if 'History_Encoder_wConstantUncertainty' in model_dict.keys():
-			model_dict['encoder'] = model_dict['History_Encoder_wConstantUncertainty']
-			model_dict['sensor'] = model_dict['History_Encoder_wConstantUncertainty']
-			print(model_dict['sensor'].loading_folder)
+			if cfg['info_flow'][model_name]['sensor']:
+				model_dict['sensor'] = model_dict[model_name]
+				print("Sensor: ", model_name)
 
-		if 'History_Encoder_Baseline' in model_dict.keys():
-			model_dict['encoder'] = model_dict['History_Encoder_Baseline']
-			model_dict['sensor'] = model_dict['History_Encoder_Baseline']
-			print(model_dict['sensor'].loading_folder)
+				if model_name == 'StateSensor_wConstantUncertainty':
+					likelihood_embedding = model_dict['sensor'].ensemble_list[0][-1]
+					likelihood_params = torch.cat([\
+						torch.reshape(likelihood_embedding(pu.toTorch(np.array([0]), device).long()), (1,3,3)),\
+						torch.reshape(likelihood_embedding(pu.toTorch(np.array([1]), device).long()), (1,3,3)),\
+						torch.reshape(likelihood_embedding(pu.toTorch(np.array([2]), device).long()), (1,3,3)),\
+						], dim = 0)
+
+					loglikelihood_matrix = F.log_softmax(likelihood_params, dim = 1)
+				else:
+					loglikelihood_matrix = None
+
+
+			if cfg['info_flow'][model_name]['encoder']:
+				model_dict['encoder'] = model_dict[model_name]
+				print("Encoder: ", model_name)
+
 	else:
 		raise Exception('sensor must be provided to estimate observation model')
 
@@ -122,16 +133,12 @@ if __name__ == '__main__':
 	############################################################
 	### Declaring decision model
 	############################################################
-	if env.sensor.num_obs == len(robo_env.fit_names):
-		task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names,\
-		 robo_env.fit_names, constraint_type = cfg['info_flow']['SAC_Policy']['constraint'])
-	elif env.sensor.num_obs == len(robo_env.hole_names):
-		task_dict = pu.gen_task_dict(len(robo_env.hole_sites.keys()), robo_env.hole_names,\
-		 robo_env.hole_names, constraint_type = cfg['info_flow']['SAC_Policy']['constraint'])
-	else:
-		raise Exception('unsupported observation space')
-
-	decision_model = Outer_Loop(env, task_dict, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device)
+	if cfg['info_flow']['SAC_Policy']['unconstrained'] == 1:
+		decision_model = Separate_POMDP(env, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device,\
+		 success_params = cfg['info_flow']['SAC_Policy']['success_params'], horizon = cfg['info_flow']['SAC_Policy']['horizon'])	
+	else: 
+		decision_model = Joint_POMDP(env, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device,\
+		 success_params = cfg['info_flow']['SAC_Policy']['success_params'], horizon = cfg['info_flow']['SAC_Policy']['horizon'])
     ##################################################################################
     #### Logging tool to save scalars, images and models during training#####
     ##################################################################################
@@ -143,9 +150,16 @@ if __name__ == '__main__':
     ### Starting tests
     ###########################################################
 
+	step_counts = [10,8,3]
+
+	step_counts = np.array(step_counts)
+
+	print("Standard Deviation of Number of Steps Per Trial: ", np.std(step_counts))
+
 	step_counts = []
 	pos_diff_list = []
 	prob_diff_list = []
+	failure_count = 0
 	completion_count = 0
 	pos_diverge_count = 0
 	state_diverge_count = 0
@@ -167,6 +181,8 @@ if __name__ == '__main__':
 
 		###########################################################
 		decision_model.reset()
+
+		ref_ests = copy.deepcopy(decision_model.env.cand_ests)
 		# decision_model.print_hypothesis()
 		continue_bool = True
 		step_count = 0
@@ -174,42 +190,77 @@ if __name__ == '__main__':
 
 		while continue_bool:
 			action_idx = decision_model.choose_action()
-			obs_idxs, obs_logprobs, bad_bool = decision_model.env.big_step(action_idx)
+			pos_init = copy.deepcopy(decision_model.env.cand_ests[action_idx][0])
+
+			got_stuck = decision_model.env.big_step(action_idx, ref_ests = ref_ests)
+
+			pos_final = decision_model.env.cand_ests[action_idx][0]
+
+			if not decision_model.env.done_bool:				
+				pos_actual = decision_model.env.robo_env.hole_sites[action_idx][-3][:2]
+
+				error_init = np.linalg.norm(pos_init - pos_actual)
+				error_final = np.linalg.norm(pos_final - pos_actual)
+
+				error_diff = error_final - error_init
+				
+				error_diff_per_step = error_final - error_init
+
+				print("pos error difference ", error_diff_per_step)
+				
+				if not got_stuck:
+					pos_diff_list.append(error_diff_per_step)
+
 			step_count += 1
-			if not bad_bool:
-				pos_diff_list.append(decision_model.env.pos_diff)
+
 			# print("Step Count ", step_count)
 
-			if not bad_bool:
+			if not got_stuck:
 				if decision_model.env.done_bool:
 					completion_count += 1
+					
+					obs_idx = decision_model.env.robo_env.peg_idx
+
+					new_logprobs = torch.ones_like(pu.toTorch(decision_model.env.obs_state_logprobs, decision_model.env.device)) * 1e-6
+
+					new_logprobs[decision_model.env.robo_env.peg_idx, decision_model.env.robo_env.peg_idx] = 1.0
+
+					new_logprobs = torch.log(new_logprobs / torch.sum(new_logprobs))
+
+					decision_model.new_obs(action_idx, obs_idx, new_logprobs.cpu().numpy())
+
 					step_counts.append(step_count)
+					prob_diff_list.append(decision_model.prob_diff / step_count)
+
+					print("shape prob difference ", decision_model.prob_diff / step_count)
+
 					continue_bool = False
 					trial_num -=1
-				elif decision_model.env.pos_diverge_bool:
-					pos_diverge_count += 1
-					continue_bool = False
-					trial_num -=1
-				elif decision_model.env.state_diverge_bool:
-					state_diverge_count += 1
-					continue_bool = False
-					trial_num -=1
+
 				else:
-					decision_model.new_obs(action_idx, obs_idxs, obs_logprobs)
-					prob_diff_list.append(decision_model.prob_diff)
+					decision_model.new_obs(action_idx, decision_model.env.obs_idx, decision_model.env.obs_state_logprobs)
+
 			else:
 				continue_bool = False
 				print("\n\n GOT STUCK \n\n")
 
-			if step_count > 20:
-				continue_bool = False
+			# if step_count > 11:
+			# 	continue_bool = False
+			# 	failure_count += 1
+			# 	trial_num -= 1
 
 	print("Mean Number of Steps Per Trial: ", sum(step_counts) / len(step_counts))
+
+	step_counts = np.array(step_counts)
+
+	print("Standard Deviation of Number of Steps Per Trial: ", np.std(step_counts))
 	print("Mean Change in Position Error: ", sum(pos_diff_list) / len(pos_diff_list))
 	print("Mean Correct Prob Change: ", sum(prob_diff_list) / len(prob_diff_list))
 	print("Completion Rate: ", completion_count / num_trials)
-	print("Pos Divergence Rate: ", pos_diverge_count / num_trials)
-	print("State Divergence Rate: ", state_diverge_count / num_trials)
+	print("STD Change in Position Error: ", np.std(np.array(pos_diff_list)))
+	# print("Failure Rate: ", failure_count / num_trials)
+	# print("Pos Divergence Rate: ", pos_diverge_count / num_trials)
+	# print("State Divergence Rate: ", state_diverge_count / num_trials)
 
 		# if not debugging_flag:
 
