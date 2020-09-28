@@ -30,6 +30,7 @@ logging_params:
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
 action_size: 3
+eval: True
 
 info_flow:
   # SAC_Policy: # state observations - baseline-thesis - goood one with state pos reward

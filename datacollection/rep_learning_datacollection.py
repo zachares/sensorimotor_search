@@ -83,9 +83,27 @@ if __name__ == '__main__':
 	# for trial_num in range(num_trials):
 		# env.reset(initialize = False)
 		# env.big_step(env.robo_env.cand_idx)
+	step = 0.04
+	offset = 0.05
+
+	env_config = [
+	["Cross",[0.5 - offset, - (4 + 0.5) * step, 0.82],False],
+	["Snake",[0.5 + offset, - (3 + 0.5) * step, 0.82],False],
+	["3_Square",[0.5 - offset,  - (2 + 0.5) * step, 0.82],False],
+	["2_Rect",[0.5 + offset, - (1 + 0.5) * step, 0.82],False],
+	["S_Shape",[0.5 - offset, - (0 + 0.5) * step, 0.82],False],
+	["U_Shape",[0.5 + offset, (0 + 0.5) * step, 0.82],False],
+	["T_Shape",[0.5 - offset, (1 + 0.5) * step, 0.82],False],
+	["Triangle",[0.5 + offset, (2 + 0.5) * step, 0.82],False],
+	["Key",[0.5 - offset, (3 + 0.5) * step, 0.82],False],
+	["Wind_Mill",[0.5 + offset, (4 + 0.5) * step, 0.82],False]
+	] 
 
 	for trial_num in range(num_trials):
-		env.reset()
+		# if env.done_bool:
+		# 	env_config[env.robo_env.cand_idx][2] = True
+
+		env.reset(env_config = env_config)
 
 		goal = env.gen_initpoint(2)
 
@@ -109,11 +127,11 @@ if __name__ == '__main__':
 			for i in range(cfg['task_params']['horizon']):
 				if env.done_bool:
 					continue
-				noise = np.random.normal(0.0, [noise_scale, noise_scale, noise_scale] , 3)
+				noise = np.random.normal(0.0, [noise_scale, noise_scale, noise_scale] , 3) * 0.0
 				obs = env.robo_env._get_observation()
 				# obs['rel_pos'][2] += 0.000014 * i
 				goal = -200 * obs['rel_pos'][:]
-				goal[2] = 0.0
+				goal[2] = -0.1
 				env.step(goal + 0.5 * noise)
 		else:
 			goal = env.gen_initpoint(2)

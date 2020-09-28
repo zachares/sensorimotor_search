@@ -8,8 +8,7 @@ control_params:
   horizon_bool: False
 
 task_params:
-  max_big_steps: 10
-  constraint_type: 1
+  constraint_type: 0
   shift_bool: 1.0
   horizon: 100
   plus_offset: [ 0, 0, 0.04] # should match number of dimensions in action space
@@ -20,17 +19,18 @@ task_params:
 
 logging_params:
   logging_folder: /scr2/muj_random_20200728/ # /scr2/muj_motion_primitive_20200722/ # 
-  logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
-  collect_vision_bool: 1.0
+  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
+  collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
   camera_name: eye_in_hand
-  num_trials: 3000
+  num_trials: 5000
 
 policy_keys: ['rel_pos', 'contact', 'peg_type'] # ["encoding"] # 
-traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel", "reward", "done", "image", "depth"] # "point_cloud", "depth_meters"] # rgbd:
+traj_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "contact", 'done', 'reward'] #, "image", "depth"] # "point_cloud", "depth_meters"] # rgbd:
 
 use_cuda: True
 action_size: 3
 state_size: 7
+eval: True
