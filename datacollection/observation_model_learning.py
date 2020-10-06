@@ -100,8 +100,8 @@ if __name__ == '__main__':
 			model_dict['policy'] = model_dict['SAC_Policy']
 			cfg['policy_keys'] = cfg['info_flow']['SAC_Policy']['policy_keys']
 			cfg['state_size'] = cfg['info_flow']['SAC_Policy']['state_size'] 
-		else:
-			raise Exception('No policy provided to perform evaluaiton')
+		# else:
+		# 	raise Exception('No policy provided to perform evaluaiton')
 
 		for model_name in cfg['info_flow'].keys():
 			if model_name == 'SAC_Policy':
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 	# prior_samples = env.sensor.likelihood_model.model.p[:].sum().item()
 	# env.sensor.success_params.model.p[:] = 0.0
 
-	num_tools = len(env.robo_env.peg_names)
+	num_tools = 3
 	success_params = np.ones((num_tools, 2))
 	trial_num = 0
 
@@ -145,7 +145,7 @@ if __name__ == '__main__':
 	 # success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
 
 	while trial_num < num_samples:
-		env.reset(initialize=False)
+		env.reset(initialize=False, config_type = '3_small_objects')
 		print("Trial Num ", trial_num + 1, " out of ", num_samples, " trials")
 		cand_idx = env.robo_env.cand_idx
 

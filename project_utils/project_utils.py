@@ -130,6 +130,7 @@ Outer Loop Functions
 def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_model = None, num_each_object_list = None):
 	num_substates = len(substate_names)
 	task_dict = {}
+	# print(num_actions, substate_names, observation_names, loglikelihood_model.shape, num_each_object_list)
 
 	task_dict['tool_names'] = substate_names
 	task_dict['num_tools'] = len(task_dict['tool_names'])

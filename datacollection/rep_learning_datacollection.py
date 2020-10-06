@@ -46,6 +46,7 @@ if __name__ == '__main__':
 	with open(logging_folder + name, 'w') as ymlfile2:
 		yaml.dump(cfg, ymlfile2)
 
+
 	##########################################################
 	### Setting up hardware for loading models
 	###########################################################
@@ -86,68 +87,69 @@ if __name__ == '__main__':
 	step = 0.04
 	offset = 0.05
 
-	env_config = [
-	["Cross",[0.5 - offset, - (4 + 0.5) * step, 0.82],False],
-	["Snake",[0.5 + offset, - (3 + 0.5) * step, 0.82],False],
-	["3_Square",[0.5 - offset,  - (2 + 0.5) * step, 0.82],False],
-	["2_Rect",[0.5 + offset, - (1 + 0.5) * step, 0.82],False],
-	["S_Shape",[0.5 - offset, - (0 + 0.5) * step, 0.82],False],
-	["U_Shape",[0.5 + offset, (0 + 0.5) * step, 0.82],False],
-	["T_Shape",[0.5 - offset, (1 + 0.5) * step, 0.82],False],
-	["Triangle",[0.5 + offset, (2 + 0.5) * step, 0.82],False],
-	["Key",[0.5 - offset, (3 + 0.5) * step, 0.82],False],
-	["Wind_Mill",[0.5 + offset, (4 + 0.5) * step, 0.82],False]
-	] 
+	# env_config = [
+	# ["Cross",[0.5 - offset, - (4 + 0.5) * step, 0.82],False],
+	# ["Snake",[0.5 + offset, - (3 + 0.5) * step, 0.82],False],
+	# ["3_Square",[0.5 - offset,  - (2 + 0.5) * step, 0.82],False],
+	# ["2_Rect",[0.5 + offset, - (1 + 0.5) * step, 0.82],False],
+	# ["S_Shape",[0.5 - offset, - (0 + 0.5) * step, 0.82],False],
+	# ["U_Shape",[0.5 + offset, (0 + 0.5) * step, 0.82],False],
+	# ["T_Shape",[0.5 - offset, (1 + 0.5) * step, 0.82],False],
+	# ["Triangle",[0.5 + offset, (2 + 0.5) * step, 0.82],False],
+	# ["Key",[0.5 - offset, (3 + 0.5) * step, 0.82],False],
+	# ["Wind_Mill",[0.5 + offset, (4 + 0.5) * step, 0.82],False]
+	# ]
 
 	for trial_num in range(num_trials):
 		# if env.done_bool:
 		# 	env_config[env.robo_env.cand_idx][2] = True
 
-		env.reset(env_config = env_config)
+		env.reset()
 
 		goal = env.gen_initpoint(2)
 
 		for i in range(cfg['task_params']['horizon']):
 			noise = np.random.normal(0.0, [noise_scale,noise_scale,noise_scale] , 3)
+			env.step(noise)
+			
+			# mode = random.choice([0,1,2,3])
 
-			mode = random.choice([0,1,2,3])
-
-			if mode == 0: 
-				env.step(noise)
-			elif mode == 1:
-				noise[2] = -abs(noise[2])
-				env.step(noise)
-			elif mode == 2:
-				env.step(goal + noise  * 0.5)
-			elif mode == 3:
-				noise[2] = -abs(noise[2])				
-				env.step(goal + noise * 0.5)
+			# if mode == 0: 
+				
+			# elif mode == 1:
+			# 	noise[2] = -abs(noise[2])
+			# 	env.step(noise)
+			# elif mode == 2:
+			# 	env.step(goal + noise  * 0.5)
+			# elif mode == 3:
+			# 	noise[2] = -abs(noise[2])				
+			# 	env.step(goal + noise * 0.5)
 
 		if random.choice([0,1]) == 1:
 			for i in range(cfg['task_params']['horizon']):
-				if env.done_bool:
-					continue
-				noise = np.random.normal(0.0, [noise_scale, noise_scale, noise_scale] , 3) * 0.0
+				noise = np.random.normal(0.0, [noise_scale, noise_scale, noise_scale] , 3)
 				obs = env.robo_env._get_observation()
 				# obs['rel_pos'][2] += 0.000014 * i
 				goal = -200 * obs['rel_pos'][:]
-				goal[2] = -0.1
+				noise[2] = -abs(noise[2])
 				env.step(goal + 0.5 * noise)
 		else:
 			goal = env.gen_initpoint(2)
 
 			for i in range(cfg['task_params']['horizon']):
 				noise = np.random.normal(0.0, [noise_scale,noise_scale,noise_scale] , 3)
+				noise[2] = -abs(noise[2])
+				env.step(noise)
 
-				mode = random.choice([0,1,2,3])
+				# mode = random.choice([0,1,2,3])
 
-				if mode == 0: 
-					env.step(noise)
-				elif mode == 1:
-					noise[2] = -abs(noise[2])
-					env.step(noise)
-				elif mode == 2:
-					env.step(goal + noise * 0.5)
-				elif mode == 3:
-					noise[2] = -abs(noise[2])				
-					env.step(goal + noise * 0.5)
+				# if mode == 0: 
+				# 	env.step(noise)
+				# elif mode == 1:
+				# 	noise[2] = -abs(noise[2])
+				# 	env.step(noise)
+				# elif mode == 2:
+				# 	env.step(goal + noise * 0.5)
+				# elif mode == 3:
+				# 	noise[2] = -abs(noise[2])				
+				# 	env.step(goal + noise * 0.5)

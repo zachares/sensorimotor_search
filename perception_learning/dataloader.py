@@ -34,9 +34,16 @@ class Custom_DataLoader(Dataset):
         #### Create Filename list of Datasets #####
         ###############################################
         filename_list = []
-        for file in os.listdir(dataset_path):
-            if file.endswith(".h5"): # and len(filename_list) < 20:
-                filename_list.append(dataset_path + file)
+        if type(dataset_path) is list:
+            print("Multi directory dataset")
+            for path in dataset_path:
+                for file in os.listdir(path):
+                    if file.endswith(".h5"): # and len(filename_list) < 20:
+                        filename_list.append(path + file)
+        else:
+            for file in os.listdir(dataset_path):
+                if file.endswith(".h5"): # and len(filename_list) < 20:
+                    filename_list.append(dataset_path + file)
 
         self.device = device
         self.transform = transform
@@ -63,8 +70,8 @@ class Custom_DataLoader(Dataset):
             ##### Project Specific Code Here ##########################
             ###########################################################            
             self.max_length = 0
-            min_length = cfg['custom_params']['min_length']
-            max_length = cfg['custom_params']['max_length']
+            min_length = 20
+            max_length = 100
 
             self.min_length = min_length
             self.max_length = max_length
@@ -82,12 +89,18 @@ class Custom_DataLoader(Dataset):
             self.idx_dict['force_mean'] = np.zeros(6)
             self.idx_dict['force_std'] = np.zeros(6)
             self.count = 0
+            self.num_objects = cfg['dataloading_params']['num_objects']
+            self.idx_dict['num_objects'] = self.num_objects
 
             for filename in filename_list:
                 # print(filename)
                 train_val_bool = np.random.binomial(1, 1 - self.val_ratio, 1) ### 1 is train, 0 is val
                 dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
                 dataset = read_h5(filename)
+
+                if np.array(dataset['peg_idx'])[0] >= self.num_objects or np.array(dataset['hole_idx'])[0] >= self.num_objects:
+                    continue
+
                 # policy = dataset["policy"][-1,0]
 
                 forces = np.array(dataset['force_hi_freq'][:,:,:6])
@@ -226,23 +239,10 @@ class Custom_DataLoader(Dataset):
             elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
 
-                sample['rel_pos_prior_mean'] = 100 * np.random.uniform(low=-0.03, high = 0.03, size = 2)
-                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2)) 
+                sample['rel_pos_prior_mean'] = 100 * (sample[key][-1,:2] - np.array(dataset[key])[0,:2])
+                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =2, size = 2)) 
 
                 sample['final_rel_pos'] = 100 * sample[key][-1,:2]
-
-                r = np.random.uniform(low=0, high = 2, size = num_particles)
-                theta = np.random.uniform(low=0, high = 2 * np.pi, size = num_particles)
-                r_base = np.random.uniform(low=0, high = 2)
-                theta_base = np.random.uniform(low=0, high = 2 * np.pi)
-
-                base_pos = sample['final_rel_pos'] + np.array([r_base * np.cos(theta_base), r_base * np.sin(theta_base)])
-
-                sample['pos_particles'] = np.repeat(np.expand_dims(base_pos, axis = 1), num_particles, axis = 1) +\
-                 np.array([r * np.cos(theta), r * np.sin(theta)])
-
-                sample['pos_particles'] = np.transpose(sample['pos_particles'])
-
                 sample['next_rel_pos'] = 100 * np.array(dataset[key][idx1, :2])
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
@@ -270,12 +270,12 @@ class Custom_DataLoader(Dataset):
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'peg_vector':
-                sample[key] = np.array(dataset[key])
+                sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
                 sample["tool_vector"] = sample[key]
                 sample["tool_idx"] = np.array(sample[key].argmax(0))
 
             elif key == 'hole_vector':
-                sample[key] = np.array(dataset[key])
+                sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
                 sample["state_vector"] = sample[key]
                 sample["state_idx"] = np.array(sample[key].argmax(0))
                 

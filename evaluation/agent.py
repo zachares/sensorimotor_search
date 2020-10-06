@@ -20,38 +20,43 @@ class Joint_POMDP(object):
 		self.device = device
 		self.mode = mode
 		self.horizon = horizon
-		self.success_params = None #success_params
+		self.success_params = success_params
+		# print('\n\n\n', self.success_params, '\n\n\n')
 		
 		self.print_info = print_info
 		self.reset()
 
-	def reset(self):
-		self.env.reset(initialize = False)
+	def reset(self, config_type = '3_small_objects', peg_idx = None):
+		self.env.reset(initialize = False, config_type = config_type, peg_idx = peg_idx)
 
-		if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'loglikelihood_model'):
-			loglikelihood_model = self.env.sensor.loglikelihood_model
-		else:
-			loglikelihood_model = None
+		if not self.env.robo_env.reload:
+			if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'get_loglikelihood_model'):
+				loglikelihood_model = self.env.sensor.get_loglikelihood_model()
+			else:
+				loglikelihood_model = None
 
-		if hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.fit_names):
-			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
-			 self.env.robo_env.fit_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+			if hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.fit_names):
+				self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.fit_names,\
+				 self.env.robo_env.fit_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
 
-		elif hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.hole_names):
-			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
-			 self.env.robo_env.hole_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
-		else:
-			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
-			 self.env.robo_env.hole_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+			elif hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.obs_names):
+				self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+				 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+			else:
+				self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+				 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
 
-		self.gt_dict = self.env.get_gt_dict()
-		self.reset_probs()
+			self.gt_dict = self.env.get_gt_dict()
+
+			self.reset_probs()
+
 		self.step_count = 0
 
-		if self.print_info:
-			self.print_hypothesis()
+		# if self.print_info:
+		# 	self.print_hypothesis()
 		
 	def reset_probs(self):
+		self.completed_tasks = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
 		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
 		self.state_probs = self.state_probs.float().to(self.device)
 		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
@@ -80,6 +85,11 @@ class Joint_POMDP(object):
 					self.corr_state_idx_list[j].append(i)
 
 	def choose_action(self):
+
+		if self.completed_tasks.size()[0] - self.completed_tasks.sum() == 1:
+			print("Single Option ", self.completed_tasks.min(0)[1].item())
+			return self.completed_tasks.min(0)[1].item()
+
 		if self.success_params is None:
 			alphas = (1 / self.action_counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
 		else:
@@ -88,8 +98,20 @@ class Joint_POMDP(object):
 
 		if self.mode == 0: # iterator
 			print("Iterating")
-			print("Index of hole choice: ", self.action_counts.min(0)[1].item())
-			return self.action_counts.min(0)[1].item()
+			weights = (1 / self.action_counts)
+
+		elif self.mode == 1: # sampling prior, no update
+			print("Sampling Vision Prior")
+			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+			uninfo_prior = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
+			state_prior = uninfo_prior.float().to(self.device).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+			prob_fit = (reward_vectors * state_prior * alphas).sum(1)
+
+			weights = (prob_fit * (1 - self.completed_tasks)) / (prob_fit * (1 - self.completed_tasks)).sum()
+
+			action_idx = torch.multinomial(weights, 1)
+
+			return action_idx.squeeze().cpu().item()
 
 		elif self.mode == 2: # with classifier and state estimation
 			print("Greedy")
@@ -128,7 +150,7 @@ class Joint_POMDP(object):
 		else:
 			raise Exception('Mode ', self.mode, ' current unsupported')
 
-		action_idx = weights.max(0)[1].item()
+		action_idx = (weights * (1 - self.completed_tasks)).max(0)[1].item()
 
 		if self.print_info:
 			print("Index of hole choice: ", action_idx)
@@ -148,9 +170,9 @@ class Joint_POMDP(object):
 		
 		state_logprobs = obs_state_logprobs[obs_idx]
 
-		state_posterior_logits = torch.log(state_prior) + state_logprobs[self.task_dict['substate_idxs'][action_idx]] + torch.log(transition_function)
-
-		self.state_probs = multinomial.logits2probs(state_posterior_logits)
+		self.state_probs = F.softmax(torch.log(state_prior) +\
+		 state_logprobs[self.task_dict['substate_idxs'][action_idx]] +\
+		  torch.log(transition_function), dim = 0)
 
 	def new_obs(self, action_idx, obs_idx, obs_state_logprobs):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
@@ -219,6 +241,7 @@ class Joint_POMDP(object):
 		transition_function = 1 - alphas
 
 		state_prior = state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+		state_prior[state_prior != state_prior] = 0.0
 
 		expected_reward = (state_prior * alphas).sum(1)
 
@@ -243,6 +266,7 @@ class Joint_POMDP(object):
 					new_counts = copy.deepcopy(counts)
 					new_counts[act_idx] += 1
 					value[act_idx, obs_idx] = self.POMDP_value_iteration(state_posterior[act_idx, obs_idx], new_counts, horizon = horizon-1).max(0)[0]
+					# print(value[act_idx, obs_idx])
 
 			return (expected_reward + (p_o_given_a * value).sum(1))
 

@@ -13,6 +13,7 @@ task_params:
   horizon: 100
   plus_offset: [ 0, 0, 0.04] # should match number of dimensions in action space
   workspace_dim: 0.02
+  scale: 1.0
   seed: 4321
   selection_mode: 3
   ignore_done: False
@@ -30,9 +31,24 @@ logging_params:
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
 action_size: 3
-eval: True
+policy_keys: [rel_pos_shift]
+state_size: 3
 
 info_flow:
+  # Toy task
+  # StatePosSensor_wConstantUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201004_training_0_w_10objects_regression/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # 3 Small Objects
+  StatePosSensor_wConstantUncertainty:
+    model_folder: /scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/
+    epoch: 5000
+    sensor: True
+    encoder: False
+  
   # SAC_Policy: # state observations - baseline-thesis - goood one with state pos reward
   #   model_folder: /scr2/rl_models/unsupervised_thesis/
   #   policy_keys: [encoding, rel_pos_shift]
@@ -51,22 +67,22 @@ info_flow:
   #   sensor: True
   #   encoder: False
 
-  SAC_Policy: # state observations - baseline-thesis - goood one with state pos reward
-    model_folder: /scr2/rl_models/unsupervised_state_est_reward_only_thesis/
-    policy_keys: [encoding, rel_pos_shift]
-    epoch: 199
-    mode: 4
-    horizon: 3
-    state_size: 73
-    success_params: [0.423, 0.827, 0.846]
-    unconstrained: 0
-  Unsupervised_History_Encoder:
-    model_folder: /scr-ssd/sens_search_logging/models/20200906_training_13_w_L2/
-    epoch: 5000
-    sensor: False
-    encoder: True
-  StatePosSensor_wConstantUncertainty:
-    model_folder: /scr-ssd/sens_search_logging/models/20200910_training_4_w_constantuncertainty/
-    epoch: 5000
-    sensor: True
-    encoder: False
+  # SAC_Policy: # state observations - baseline-thesis - goood one with state pos reward
+  #   model_folder: /scr2/rl_models/unsupervised_state_est_reward_only_thesis/
+  #   policy_keys: [encoding, rel_pos_shift]
+  #   epoch: 199
+  #   mode: 4
+  #   horizon: 3
+  #   state_size: 73
+  #   success_params: [0.423, 0.827, 0.846]
+  #   unconstrained: 0
+  # Unsupervised_History_Encoder:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200906_training_13_w_L2/
+  #   epoch: 5000
+  #   sensor: False
+  #   encoder: True
+  # StatePosSensor_wConstantUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20200910_training_4_w_constantuncertainty/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False

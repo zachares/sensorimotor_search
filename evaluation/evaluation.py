@@ -98,29 +98,19 @@ if __name__ == '__main__':
 			model_dict['policy'] = model_dict['SAC_Policy']
 			cfg['policy_keys'] = cfg['info_flow']['SAC_Policy']['policy_keys']
 			cfg['state_size'] = cfg['info_flow']['SAC_Policy']['state_size'] 
-		else:
-			raise Exception('No policy provided to perform evaluaiton')
+		# else:
+		# 	raise Exception('No policy provided to perform evaluaiton')
 
 		for model_name in cfg['info_flow'].keys():
 			if model_name == 'SAC_Policy':
 				continue
 
+			if 'success_params' in cfg['info_flow'][model_name].keys():
+				success_params = cfg['info_flow'][model_name]['success_params']
+
 			if cfg['info_flow'][model_name]['sensor']:
 				model_dict['sensor'] = model_dict[model_name]
 				print("Sensor: ", model_name)
-
-				if model_name == 'StateSensor_wConstantUncertainty':
-					likelihood_embedding = model_dict['sensor'].ensemble_list[0][-1]
-					likelihood_params = torch.cat([\
-						torch.reshape(likelihood_embedding(pu.toTorch(np.array([0]), device).long()), (1,3,3)),\
-						torch.reshape(likelihood_embedding(pu.toTorch(np.array([1]), device).long()), (1,3,3)),\
-						torch.reshape(likelihood_embedding(pu.toTorch(np.array([2]), device).long()), (1,3,3)),\
-						], dim = 0)
-
-					loglikelihood_matrix = F.log_softmax(likelihood_params, dim = 1)
-				else:
-					loglikelihood_matrix = None
-
 
 			if cfg['info_flow'][model_name]['encoder']:
 				model_dict['encoder'] = model_dict[model_name]
@@ -133,131 +123,186 @@ if __name__ == '__main__':
 	############################################################
 	### Declaring decision model
 	############################################################
-	if cfg['info_flow']['SAC_Policy']['unconstrained'] == 1:
-		decision_model = Separate_POMDP(env, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device,\
-		 success_params = cfg['info_flow']['SAC_Policy']['success_params'], horizon = cfg['info_flow']['SAC_Policy']['horizon'])	
-	else: 
-		decision_model = Joint_POMDP(env, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device,\
-		 success_params = cfg['info_flow']['SAC_Policy']['success_params'], horizon = cfg['info_flow']['SAC_Policy']['horizon'])
-    ##################################################################################
-    #### Logging tool to save scalars, images and models during training#####
-    ##################################################################################
-	# if not debugging_flag:
-	# 	logger = Logger(cfg, debugging_flag, False, run_description)
-	# 	logging_dict = {}
+	# if cfg['info_flow']['SAC_Policy']['unconstrained'] == 1:
+	# 	decision_model = Separate_POMDP(env, mode = cfg['info_flow']['SAC_Policy']['mode'], device = device,\
+	# 	 success_params = cfg['info_flow']['SAC_Policy']['success_params'], horizon = cfg['info_flow']['SAC_Policy']['horizon'])	
+	# else: 
 
-    ############################################################
-    ### Starting tests
-    ###########################################################
+	# if 'SAC_Policy' in cfg['info_flow'].keys() and\
+	#  'success_params' in cfg['info_flow']['SAC_Policy'].keys():
+	# 	success_params = cfg['info_flow']['SAC_Policy']['success_params']
+	# elif 'StatePosSensor_wConstantUncertainty' in cfg['info_flow'].keys() and\
+	#  'success_params' in cfg['info_flow']['StatePosSensor_wConstantUncertainty'].keys():
+	# 	success_params = cfg['info_flow']['StatePosSensor_wConstantUncertainty']['success_params']
+	# elif 'success_params' in cfg.keys():
+	# 	success_params = cfg['success_params']
+	# else:
+	# 	success_params = len(self.robo_env.peg_names) * [0.5]
 
-	step_counts = [10,8,3]
+	mode_results = {}
 
-	step_counts = np.array(step_counts)
+	decision_model = Joint_POMDP(env, mode = 0, device = device,\
+		 success_params = success_params, horizon = 3)
 
-	print("Standard Deviation of Number of Steps Per Trial: ", np.std(step_counts))
+	for mode in range(5):
+		if mode == 3:
+			continue
 
-	step_counts = []
-	pos_diff_list = []
-	prob_diff_list = []
-	failure_count = 0
-	completion_count = 0
-	pos_diverge_count = 0
-	state_diverge_count = 0
-
-	num_trials = 100
-	trial_num = 100
-
-	while trial_num > 0:
-
-		print("\n")
-		print("############################################################")
-		print("######                BEGINNING NEW TRIAL              #####")
-		print("######         Number of Trials Left: ", trial_num, "       #####")
-		print("############################################################")
-		print("\n")
-
+		decision_model.mode = mode
+	    ##################################################################################
+	    #### Logging tool to save scalars, images and models during training#####
+	    ##################################################################################
 		# if not debugging_flag:
-		# 	logging_dict['scalar'] = {}
+		# 	logger = Logger(cfg, debugging_flag, False, run_description)
+		# 	logging_dict = {}
 
-		###########################################################
-		decision_model.reset()
+	    ############################################################
+	    ### Starting tests
+	    ###########################################################
+		total_objects = 5
+		step_counts = [[],[],[],[],[]]
+		pos_diff_list = []
+		prob_diff_list = []
+		failure_count = 0
+		completion_count = 0
+		pos_diverge_count = 0
+		state_diverge_count = 0
 
-		ref_ests = copy.deepcopy(decision_model.env.cand_ests)
-		# decision_model.print_hypothesis()
-		continue_bool = True
-		step_count = 0
-		# a = input("Continue?")
+		num_trials = 2
+		trial_num = 2
 
-		while continue_bool:
-			action_idx = decision_model.choose_action()
-			pos_init = copy.deepcopy(decision_model.env.cand_ests[action_idx][0])
+		while trial_num > 0:
 
-			got_stuck = decision_model.env.big_step(action_idx, ref_ests = ref_ests)
+			print("\n")
+			print("############################################################")
+			print("######                BEGINNING NEW TRIAL              #####")
+			print("######         Number of Trials Left: ", trial_num, "       #####")
+			print("############################################################")
+			print("\n")
 
-			pos_final = decision_model.env.cand_ests[action_idx][0]
+			# if not debugging_flag:
+			# 	logging_dict['scalar'] = {}
 
-			if not decision_model.env.done_bool:				
-				pos_actual = decision_model.env.robo_env.hole_sites[action_idx][-3][:2]
+			###########################################################
+			decision_model.env.robo_env.reload = False
+			decision_model.reset(config_type = '3_small_objects')
+			num_boxes = decision_model.env.robo_env.num_boxes
+			pegs = []
 
-				error_init = np.linalg.norm(pos_init - pos_actual)
-				error_final = np.linalg.norm(pos_final - pos_actual)
+			for i, nb in enumerate(num_boxes):
+				for _ in range(nb):
+					pegs.append(i)
 
-				error_diff = error_final - error_init
-				
-				error_diff_per_step = error_final - error_init
+			random.shuffle(pegs)
+			peg_idx = pegs[-1]
 
-				print("pos error difference ", error_diff_per_step)
-				
-				if not got_stuck:
-					pos_diff_list.append(error_diff_per_step)
+			decision_model.env.robo_env.reload = True
+			decision_model.env.robo_env.prev_cand_idx = None
+			decision_model.reset(config_type = '3_small_objects', peg_idx = peg_idx)
 
-			step_count += 1
+			ref_ests = copy.deepcopy(decision_model.env.cand_ests)
+			num_complete = 0
 
-			# print("Step Count ", step_count)
+			while num_complete < total_objects:	
+				# decision_model.print_hypothesis()
+				continue_bool = True
+				step_count = 0
+				# a = input("Continue?")
 
-			if not got_stuck:
-				if decision_model.env.done_bool:
-					completion_count += 1
+				while continue_bool:
+					action_idx = decision_model.choose_action()
+
+					print("Action IDX ", action_idx)
+
+					pos_init = copy.deepcopy(decision_model.env.cand_ests[action_idx][0])
+
+					got_stuck = decision_model.env.big_step(action_idx, ref_ests = ref_ests)
+
+					pos_final = decision_model.env.cand_ests[action_idx][0]			
 					
-					obs_idx = decision_model.env.robo_env.peg_idx
+					# print("Step Count ", step_count)
 
-					new_logprobs = torch.ones_like(pu.toTorch(decision_model.env.obs_state_logprobs, decision_model.env.device)) * 1e-6
+					if not got_stuck:
+						step_count += 1
 
-					new_logprobs[decision_model.env.robo_env.peg_idx, decision_model.env.robo_env.peg_idx] = 1.0
+						if decision_model.env.done_bool:				
+							obs_idx = decision_model.env.robo_env.peg_idx
 
-					new_logprobs = torch.log(new_logprobs / torch.sum(new_logprobs))
+							new_logprobs = torch.zeros_like(pu.toTorch(decision_model.env.obs_state_logprobs,\
+							 decision_model.env.device))
 
-					decision_model.new_obs(action_idx, obs_idx, new_logprobs.cpu().numpy())
+							new_logprobs[decision_model.env.robo_env.peg_idx, decision_model.env.robo_env.peg_idx] = 1.0
 
-					step_counts.append(step_count)
-					prob_diff_list.append(decision_model.prob_diff / step_count)
+							new_logprobs = torch.log(new_logprobs / torch.sum(new_logprobs))
 
-					print("shape prob difference ", decision_model.prob_diff / step_count)
+							decision_model.new_obs(action_idx, obs_idx, new_logprobs.cpu().numpy())
 
-					continue_bool = False
-					trial_num -=1
+							step_counts[num_complete].append(step_count)
 
-				else:
-					decision_model.new_obs(action_idx, decision_model.env.obs_idx, decision_model.env.obs_state_logprobs)
+							if len(pegs) > 1:
+								prob_diff_list.append(decision_model.prob_diff / step_count)
+								print("shape prob difference ", decision_model.prob_diff / step_count)
 
-			else:
-				continue_bool = False
-				print("\n\n GOT STUCK \n\n")
+							continue_bool = False
 
-			# if step_count > 11:
-			# 	continue_bool = False
-			# 	failure_count += 1
-			# 	trial_num -= 1
+						else:
+							decision_model.new_obs(action_idx, decision_model.env.obs_idx, decision_model.env.obs_state_logprobs)
 
-	print("Mean Number of Steps Per Trial: ", sum(step_counts) / len(step_counts))
+							pos_actual = decision_model.env.robo_env.hole_sites[action_idx][-3][:2]
 
-	step_counts = np.array(step_counts)
+							error_init = np.linalg.norm(pos_init - pos_actual)
+							error_final = np.linalg.norm(pos_final - pos_actual)
 
-	print("Standard Deviation of Number of Steps Per Trial: ", np.std(step_counts))
+							error_diff = error_final - error_init
+							
+							error_diff_per_step = error_init - error_final
+
+							pos_diff_list.append(error_diff_per_step)
+
+							print("initial error - final error ", error_diff_per_step)
+					else:
+						decision_model.env.cand_ests[action_idx][0] += np.random.uniform(low=-0.002, high=0.002, size =  2)
+						decision_model.env.robo_env.hole_sites[action_idx][-1][:2] = decision_model.env.cand_ests[action_idx][0]
+						decision_model.env.robo_env.reload = True
+						decision_model.env.prev_cand_idx = None
+						decision_model.reset(config_type = '3_small_objects', peg_idx = pegs[-1])
+
+						print("\n\n GOT STUCK \n\n")
+
+				if decision_model.env.done_bool and len(pegs) > 1:
+					pegs = pegs[:-1]
+					decision_model.env.robo_env.reload = True
+					decision_model.env.robo_env.prev_cand_idx = action_idx
+					decision_model.reset(config_type = '3_small_objects', peg_idx = pegs[-1])
+					decision_model.completed_tasks[action_idx] = 1.0
+					num_complete += 1
+					decision_model.env.robo_env.random_seed += 1
+
+					# print("State Probs:", decision_model.state_probs.cpu().numpy())
+				elif decision_model.env.done_bool:
+					num_complete += 1
+
+				print("Action IDX Final", action_idx)
+				print(decision_model.completed_tasks)
+
+			trial_num -=1
+
+				# if step_count > 11:
+				# 	continue_bool = False
+				# 	failure_count += 1
+				# 	trial_num -= 1		
+		mode_results[mode] = copy.deepcopy(step_counts)
+
+	for k, v in model_results.items():
+		print("Mode: ", k)
+		for i, counts in enumerate(v):
+			print("Mean Number of Steps Per Trial: ", sum(counts) / len(counts), 'for', str(total_objects - i), ' objects left')
+			counts_array = np.array(counts)
+			print("Standard Deviation of Number of Steps Per Trial: ", np.std(counts_array))
+
 	print("Mean Change in Position Error: ", sum(pos_diff_list) / len(pos_diff_list))
 	print("Mean Correct Prob Change: ", sum(prob_diff_list) / len(prob_diff_list))
-	print("Completion Rate: ", completion_count / num_trials)
-	print("STD Change in Position Error: ", np.std(np.array(pos_diff_list)))
+	# print("Completion Rate: ", completion_count / num_trials)
 	# print("Failure Rate: ", failure_count / num_trials)
 	# print("Pos Divergence Rate: ", pos_diverge_count / num_trials)
 	# print("State Divergence Rate: ", state_diverge_count / num_trials)

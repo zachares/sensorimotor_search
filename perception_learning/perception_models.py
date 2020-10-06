@@ -57,9 +57,9 @@ class History_Encoder(mm.Proto_Macromodel):
         self.model_list = []
         self.ensemble_list = []
 
-        self.num_tools = init_args['num_tools']
-        self.num_states = init_args['num_states']
-        self.num_obs = init_args['num_states']
+        self.num_tools = init_args['num_objects']
+        self.num_states = init_args['num_objects']
+        self.num_obs = init_args['num_objects']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -98,7 +98,7 @@ class History_Encoder(mm.Proto_Macromodel):
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_pos_est" + str(i),\
-            self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+            self.state_size + 2 * self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
@@ -130,7 +130,7 @@ class History_Encoder(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
-        pos_ests = pos_estimator(states_T)
+        pos_ests = pos_estimator(torch.cat([states_T, shape_embed(input_dict['state_idx'].long())], dim = 1))
 
         obs_logits = obs_classifier(states_T)
 
@@ -572,9 +572,9 @@ class Unsupervised_History_Encoder(mm.Proto_Macromodel):
         self.ensemble_list = []
         self.model_name = model_name
 
-        self.num_tools = init_args['num_tools']
-        self.num_states = init_args['num_states']
-        self.num_obs = init_args['num_states']
+        self.num_tools = init_args['num_objects']
+        self.num_states = init_args['num_objects']
+        self.num_obs = init_args['num_objects']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -946,9 +946,10 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         self.ensemble_list = []
         self.model_name = model_name
 
-        self.num_tools = init_args['num_tools']
-        self.num_states = init_args['num_states']
-        self.num_obs = init_args['num_states']
+        self.num_tools = init_args['num_objects']
+        self.num_states = init_args['num_objects']
+        self.num_obs = init_args['num_objects']
+        self.num_objects = init_args['num_objects']
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -993,6 +994,10 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
                 mm.Embedding(model_name + "_pos_est_obs_noise" + str(i),\
                     self.num_tools, 2, device= self.device).to(self.device),\
 
+            #     mm.ResNetFCN(model_name + "_pos_est_obs_noise" + str(i),\
+            # self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+            # uc = self.uc, device = self.device).to(self.device),\
+
                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
             self.state_size + self.tool_dim, self.num_obs, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
@@ -1028,14 +1033,21 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
         pos_ests_obs = pos_estimator(states_T)
 
-        # used to constrain the solution during test time based on prior knowledge
-        if 'reference_pos' in input_dict.keys():
-            distance_norm = (pos_ests_obs - input_dict['reference_pos']).norm(p=2,dim=1).unsqueeze(1).repeat_interleave(2, dim=1)
-
-            pos_ests_obs = torch.where(distance_norm > 2, (2 / distance_norm) * (pos_ests_obs - input_dict['reference_pos']) +\
-             input_dict['reference_pos'], pos_ests_obs)
-
+        # pos_ests_obs_noise = obs_noise_estimator(states_T).pow(2) + 1e-2
         pos_ests_obs_noise = obs_noise_estimator(input_dict['tool_idx'].long()).pow(2) + 1e-2
+
+        # used to constrain the solution during test time based on prior knowledge
+        # if 'reference_pos' in input_dict.keys():
+        #     distance_norm = (pos_ests_obs - input_dict['reference_pos']).norm(p=2,dim=1).unsqueeze(1).repeat_interleave(2, dim=1)
+
+        #     pos_ests_obs = torch.where(distance_norm > 2, (2 / distance_norm) * (pos_ests_obs - input_dict['reference_pos']) +\
+        #      input_dict['reference_pos'], pos_ests_obs)
+
+        # pos_ests_obs = pos_estimator(torch.cat([states_T, shape_embed(input_dict['state_idx'].long())], dim = 1))
+        # pos_ests_obs_state_noise = torch.reshape(obs_noise_estimator(input_dict['tool_idx'].long()).pow(2) + 1e-2,\
+        #  (input_dict['batch_size'], self.num_states, 2))
+
+        # pos_ests_obs_noise = pos_ests_obs_state_noise[torch.arange(input_dict['batch_size']), input_dict['state_idx']]
 
         obs_logits = obs_classifier(states_T)
 
@@ -1098,6 +1110,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
             self.test_time_process_inputs(input_dict, T)
             self.process_inputs(input_dict)
             self.set_uc(False)
+            # input_dict['state_idx'] = input_dict['tool_idx']
 
             pos_ests_mean, pos_ests_obs_noise, obs_logits, obs_logprobs, obs_state_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
@@ -1114,12 +1127,13 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
             self.test_time_process_inputs(input_dict, T)
             self.process_inputs(input_dict)
             self.set_uc(False)
+            # input_dict['state_idx'] = input_dict['tool_idx']
 
             pos_ests_mean, pos_ests_obs_noise, obs_logits, obs_logprobs, obs_state_logprobs, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
             obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
 
-            return int(obs_idx.item()), obs_state_logprobs.squeeze().cpu().numpy()
+            return int(obs_idx.item()), obs_state_logprobs[:,:,:self.num_objects].squeeze().cpu().numpy()
 
     def get_loglikelihood_model(self):
         with torch.no_grad():
@@ -1154,6 +1168,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         input_dict["action"] = input_dict["action"][:, :-1].repeat_interleave(T, 0)
         input_dict["rel_proprio"] = input_dict['rel_proprio'].repeat_interleave(T, 0)
         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
+        input_dict['state_idx'] = input_dict['hole_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
 
         if 'rel_pos_init' in input_dict.keys():

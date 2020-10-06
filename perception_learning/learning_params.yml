@@ -1,10 +1,17 @@
-dataset_path: /scr2/muj_random_20200728/
+dataset_path: /scr2/muj_random_3_objects_new_20201003/
+#/scr2/muj_random_3_objects_20201001/
+  #/scr2/muj_random_10_objects_20200931/
+  #[ /scr2/muj_random_10_objects_20200928/, /scr2/muj_random_10_objects_20200930/ ]
+# /scr2/muj_random_20200728/
   #/scr2/muj_motion_primitive_20200722/
 
 dataloading_params:
   num_workers: 6
   batch_size: 128
-  idx_dict_path: /scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/val_train_split.pkl
+  idx_dict_path: /scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/val_train_split.pkl
+    #/scr-ssd/sens_search_logging/runs/20201001_training_0_w_10objects_regression/val_train_split.pkl
+  num_objects: 3
+    #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/val_train_split.pkl
     #/scr-ssd/sens_search_logging/models/20200801_training_2_rl_policy/val_train_split.pkl
 
 training_params:
@@ -21,7 +28,7 @@ training_params:
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_notes: "_w_constantuncertainty"
+  run_notes: "_w_3smallobjects"
 
 dataset_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "hole_sites", 'done'] #, 'image', 'depth']
 
@@ -144,9 +151,7 @@ info_flow:
   #   model_folder: ''
   #   epoch: 0
   #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
+  #     num_objects: 4
   #     action_size: 3
   #     proprio_size: 12
   #     force_size: [6, 50]
@@ -158,6 +163,8 @@ info_flow:
   #     force_hi_freq: dataset
   #     contact: dataset
   #     tool_idx: dataset
+  #     state_idx: dataset
+  #     include_label: dataset
   #     padding_mask: dataset
   #     epoch: dataset
   #   outputs:
@@ -315,9 +322,7 @@ info_flow:
   #   model_folder: ''
   #   epoch: 0
   #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
+  #     num_objects: 3
   #     action_size: 3
   #     proprio_size: 12
   #     force_size: [6, 50]
@@ -524,10 +529,7 @@ info_flow:
     model_folder: ''
     epoch: 0 #5000
     init_args:
-      num_tools: 3
-      num_states: 3
-      num_obs: 2
-      num_options: 2
+      num_objects: 3
       action_size: 3
       proprio_size: 12
       force_size: [6, 50]
@@ -542,6 +544,7 @@ info_flow:
       force_hi_freq: dataset
       contact: dataset
       tool_idx: dataset
+      state_idx: dataset
       padding_mask: dataset
       epoch: dataset
     outputs:
@@ -574,11 +577,11 @@ info_flow:
         evals:
           Multinomial_Accuracy:
             logging_name: obs_classifier_accuracy
-      obs_logprobs_inputs:
-        losses:
-          Neg_Multinomial_Entropy:
-           # weight: 0.25
-            logging_name: ent_max_mult
+      # obs_logprobs_inputs:
+      #   losses:
+      #     Neg_Multinomial_Entropy:
+      #      # weight: 0.25
+      #       logging_name: ent_max_mult
       state_logits:
         inputs:
           state_idx: dataset

@@ -12,11 +12,12 @@ task_params:
   horizon: 100
   plus_offset: [ 0, 0, 0.02] # should match number of dimensions in action space
   workspace_dim: 0.02
+  scale: 1.0
   seed: 4321
   ignore_done: True
 
 logging_params:
-  logging_folder: /scr2/rl_models/unsupervised_state_est_reward_only_thesis/ # wconstantuncertainty_thesis # baseline_thesis
+  logging_folder: /scr2/rl_models/unsupervised_thesis/ # wconstantuncertainty_thesis # baseline_thesis
   logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
@@ -65,12 +66,12 @@ info_flow:
   #   encoder: True
 
   Unsupervised_History_Encoder:
-    model_folder: /scr-ssd/sens_search_logging/models/20200906_training_13_w_L2/
+    model_folder: /scr-ssd/sens_search_logging/models/20201002_training_4_w_10objects_regression/
     epoch: 5000
     sensor: False
     encoder: True
   StatePosSensor_wConstantUncertainty:
-    model_folder: /scr-ssd/sens_search_logging/models/20200910_training_4_w_constantuncertainty/
+    model_folder: /scr-ssd/sens_search_logging/models/20201002_training_4_w_10objects_regression/
     epoch: 5000
     sensor: True
     encoder: False
