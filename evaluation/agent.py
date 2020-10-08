@@ -23,10 +23,11 @@ class Joint_POMDP(object):
 		self.success_params = success_params
 		# print('\n\n\n', self.success_params, '\n\n\n')
 		
-		self.print_info = print_info
+		self.print_info = False
 		self.reset()
+		self.print_info = print_info
 
-	def reset(self, config_type = '3_small_objects', peg_idx = None):
+	def reset(self, config_type = '3_small_objects_fit', peg_idx = None):
 		self.env.reset(initialize = False, config_type = config_type, peg_idx = peg_idx)
 
 		if not self.env.robo_env.reload:
@@ -35,16 +36,9 @@ class Joint_POMDP(object):
 			else:
 				loglikelihood_model = None
 
-			if hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.fit_names):
-				self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.fit_names,\
-				 self.env.robo_env.fit_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
-
-			elif hasattr(self.env, 'sensor') and self.env.sensor.num_obs == len(self.env.robo_env.obs_names):
-				self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
-				 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
-			else:
-				self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
-				 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes, loglikelihood_model = loglikelihood_model)
+			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+				 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes,\
+				  loglikelihood_model = loglikelihood_model)
 
 			self.gt_dict = self.env.get_gt_dict()
 
@@ -62,6 +56,7 @@ class Joint_POMDP(object):
 		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
 		self.corr_action_idx_list = []
 		self.corr_state_idx_list = OrderedDict()
+		self.states = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
 
 		for j in range(self.task_dict['num_actions']):
 			if self.env.robo_env.hole_sites[j][3] == 0:
@@ -102,16 +97,27 @@ class Joint_POMDP(object):
 
 		elif self.mode == 1: # sampling prior, no update
 			print("Sampling Vision Prior")
-			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
-			uninfo_prior = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
-			state_prior = uninfo_prior.float().to(self.device).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
-			prob_fit = (reward_vectors * state_prior * alphas).sum(1)
+			# reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+			# uninfo_prior = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
+			# state_prior = uninfo_prior.float().to(self.device).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+			# prob_fit = (reward_vectors * state_prior * alphas).sum(1)
 
-			weights = (prob_fit * (1 - self.completed_tasks)) / (prob_fit * (1 - self.completed_tasks)).sum()
+			# weights = ((prob_fit * (1 - self.completed_tasks)) / (prob_fit * (1 - self.completed_tasks)).sum()).cpu().numpy()
 
-			action_idx = torch.multinomial(weights, 1)
+			# print("prob weights: ", weights)
 
-			return action_idx.squeeze().cpu().item()
+			# action_idx = np.argmax(np.random.multinomial(1, weights / np.sum(weights), size = 1))
+			possible_actions = []
+			for i in range(self.task_dict['num_actions']):
+				if self.completed_tasks[i] == 0:
+					possible_actions.append(i)
+
+			print('Possible Actions: ', possible_actions)
+			action_idx = random.choice(possible_actions)
+
+			print('Index: ', action_idx)
+
+			return action_idx
 
 		elif self.mode == 2: # with classifier and state estimation
 			print("Greedy")
@@ -122,23 +128,23 @@ class Joint_POMDP(object):
 			weights = prob_fit
 
 		elif self.mode == 3: # with classifier and state estimation
-			print("Explore")
-			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
-			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
-			prob_fit = (reward_vectors * state_prior * alphas).sum(1)			
+			print("Regression")
+			print("States: ", self.states.cpu().numpy())
 
-			beta_vectors = pu.toTorch(self.task_dict['beta_vectors'], self.device)
+			weights = torch.where(self.states == 0, torch.ones_like(self.states), torch.zeros_like(self.states)) * (1 - self.completed_tasks)
 
-			state_probs = self.state_probs.unsqueeze(0).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'], 0)\
-			.repeat_interleave(self.task_dict['num_substates'], 1)
+			if torch.sum(weights) == 0:
+				possible_actions = []
+				for i in range(self.task_dict['num_actions']):
+					if self.completed_tasks[i] == 0:
+						possible_actions.append(i)
 
-			substate_probs = (beta_vectors * state_probs).sum(-1)
-			substate_entropy = (-substate_probs * torch.log(substate_probs)).sum(-1)
+				print('Possible Actions: ', possible_actions)
+				action_idx = random.choice(possible_actions)
 
-			weights = prob_fit + 2 * substate_entropy
+				print('Index: ', action_idx)
 
-			print("Prob Fit: ", prob_fit)
-			print("Entropy Bonus: ", 2 * substate_entropy)
+				return action_idx			
 
 		elif self.mode == 4:
 			print("POMDP with horizon - ",  self.horizon)
@@ -149,6 +155,9 @@ class Joint_POMDP(object):
 
 		else:
 			raise Exception('Mode ', self.mode, ' current unsupported')
+
+		if (weights * (1 - self.completed_tasks)).sum() == 0:
+			weights = torch.ones_like(self.completed_tasks)
 
 		action_idx = (weights * (1 - self.completed_tasks)).max(0)[1].item()
 
@@ -181,12 +190,13 @@ class Joint_POMDP(object):
 		
 		self.action_counts[action_idx] += 1
 
-		if hasattr(self.env, 'sensor'):
+		self.states[action_idx] = obs_idx
+
+		if obs_state_logprobs is not None:
 			for i in range(self.task_dict['num_obs']):
 				state_logprobs = obs_state_logprobs[i]
 				self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, i] = state_logprobs[self.task_dict['substate_idxs'][action_idx]]	
 
-		if obs_state_logprobs is not None:
 			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_state_logprobs, self.device))
 
 			if action_idx in self.corr_action_idx_list:

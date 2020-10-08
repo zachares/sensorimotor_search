@@ -1,4 +1,5 @@
-dataset_path: /scr2/muj_random_3_objects_new_20201003/
+dataset_path: /scr2/muj_random_3_objects_new_02_control_range_fit_focused_20201006/
+  #/scr2/muj_random_3_objects_new_20201003/
 #/scr2/muj_random_3_objects_20201001/
   #/scr2/muj_random_10_objects_20200931/
   #[ /scr2/muj_random_10_objects_20200928/, /scr2/muj_random_10_objects_20200930/ ]
@@ -8,7 +9,8 @@ dataset_path: /scr2/muj_random_3_objects_new_20201003/
 dataloading_params:
   num_workers: 6
   batch_size: 128
-  idx_dict_path: /scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/val_train_split.pkl
+  idx_dict_path: /scr-ssd/sens_search_logging/runs/20201007_training_2_w_3smallobjects_fit_w_entropy/val_train_split.pkl
+    #/scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/val_train_split.pkl
     #/scr-ssd/sens_search_logging/runs/20201001_training_0_w_10objects_regression/val_train_split.pkl
   num_objects: 3
     #/scr-ssd/sens_search_logging/models/20200802_training_2_rl_policy/val_train_split.pkl
@@ -28,7 +30,7 @@ training_params:
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_notes: "_w_3smallobjects"
+  run_notes: "_w_3smallobjects_fit_w_entropy"
 
 dataset_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "hole_sites", 'done'] #, 'image', 'depth']
 
@@ -146,50 +148,50 @@ info_flow:
   #       evals:
   #         Multinomial_Accuracy:
   #           logging_name: state_classifier_accuracy
-  # History_Encoder:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0
-  #   init_args:
-  #     num_objects: 4
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     include_label: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         final_rel_pos: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Force
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
+  History_Encoder:
+    train: 1
+    model_folder: ''
+    epoch: 0
+    init_args:
+      num_objects: 4
+      action_size: 3
+      proprio_size: 12
+      force_size: [6, 50]
+      dropout_prob: 0.5
+      min_length: 20
+    inputs:
+      rel_proprio: dataset
+      action: dataset
+      force_hi_freq: dataset
+      contact: dataset
+      tool_idx: dataset
+      state_idx: dataset
+      include_label: dataset
+      padding_mask: dataset
+      epoch: dataset
+    outputs:
+      pos_est:
+        inputs:
+          final_rel_pos: dataset
+        losses:
+          L2:
+            weight: 5
+            logging_name: Position_Estimate
+        evals:
+          Continuous_Error:
+            logging_name:  Pos_Err_Force
+      obs_logits:
+        inputs:
+          fit_idx: dataset
+        losses: 
+          Multinomial_NLL:
+            logging_name: Obs_Shape_Class
+      obs_inputs:
+        inputs:
+          fit_idx: dataset
+        evals:
+          Multinomial_Accuracy:
+            logging_name: obs_classifier_accuracy
   # Variational_History_Encoder:
   #   train: 1
   #   model_folder: ''
@@ -567,21 +569,21 @@ info_flow:
             logging_name: Position_Estimate
       obs_logits:
         inputs:
-          state_idx: dataset
+          fit_idx: dataset
         losses: 
           Multinomial_NLL:
             logging_name: Obs_Shape_Class
       obs_inputs:
         inputs:
-          state_idx: dataset
+          fit_idx: dataset
         evals:
           Multinomial_Accuracy:
             logging_name: obs_classifier_accuracy
-      # obs_logprobs_inputs:
-      #   losses:
-      #     Neg_Multinomial_Entropy:
-      #      # weight: 0.25
-      #       logging_name: ent_max_mult
+      obs_logprobs_inputs:
+        losses:
+          Neg_Multinomial_Entropy:
+           # weight: 0.25
+            logging_name: ent_max_mult
       state_logits:
         inputs:
           state_idx: dataset

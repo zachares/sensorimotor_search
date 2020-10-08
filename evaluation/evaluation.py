@@ -23,6 +23,9 @@ from robosuite.wrappers import SensSearchWrapper
 import rlkit
 from rlkit.torch import pytorch_util as ptu
 
+import matplotlib.pyplot as plt
+from collections import OrderedDict
+
 if __name__ == '__main__':
 	###################################################
 	### Loading run parameters from yaml file
@@ -112,6 +115,10 @@ if __name__ == '__main__':
 				model_dict['sensor'] = model_dict[model_name]
 				print("Sensor: ", model_name)
 
+			if cfg['info_flow'][model_name]['regression_sensor']:
+				model_dict['regression_sensor'] = model_dict[model_name]
+				print("Regression Sensor", model_name)
+
 			if cfg['info_flow'][model_name]['encoder']:
 				model_dict['encoder'] = model_dict[model_name]
 				print("Encoder: ", model_name)
@@ -139,14 +146,15 @@ if __name__ == '__main__':
 	# else:
 	# 	success_params = len(self.robo_env.peg_names) * [0.5]
 
-	mode_results = {}
-
+	mode_results = OrderedDict()
 	decision_model = Joint_POMDP(env, mode = 0, device = device,\
 		 success_params = success_params, horizon = 3)
 
 	for mode in range(5):
-		if mode == 3:
-			continue
+		# if mode == 3:
+		# 	decision_model.env.sensor = model_dict['regression_sensor']
+		# else:
+		# 	decision_model.env.sensor = model_dict['sensor']
 
 		decision_model.mode = mode
 	    ##################################################################################
@@ -168,8 +176,8 @@ if __name__ == '__main__':
 		pos_diverge_count = 0
 		state_diverge_count = 0
 
-		num_trials = 2
-		trial_num = 2
+		num_trials = 20
+		trial_num = 20
 
 		while trial_num > 0:
 
@@ -185,7 +193,8 @@ if __name__ == '__main__':
 
 			###########################################################
 			decision_model.env.robo_env.reload = False
-			decision_model.reset(config_type = '3_small_objects')
+			decision_model.env.robo_env.random_seed = 0
+			decision_model.reset(config_type = '3_small_objects_fit')
 			num_boxes = decision_model.env.robo_env.num_boxes
 			pegs = []
 
@@ -193,7 +202,7 @@ if __name__ == '__main__':
 				for _ in range(nb):
 					pegs.append(i)
 
-			random.shuffle(pegs)
+			np.random.shuffle(pegs)
 			peg_idx = pegs[-1]
 
 			decision_model.env.robo_env.reload = True
@@ -212,8 +221,6 @@ if __name__ == '__main__':
 				while continue_bool:
 					action_idx = decision_model.choose_action()
 
-					print("Action IDX ", action_idx)
-
 					pos_init = copy.deepcopy(decision_model.env.cand_ests[action_idx][0])
 
 					got_stuck = decision_model.env.big_step(action_idx, ref_ests = ref_ests)
@@ -226,22 +233,25 @@ if __name__ == '__main__':
 						step_count += 1
 
 						if decision_model.env.done_bool:				
-							obs_idx = decision_model.env.robo_env.peg_idx
+							obs_idx = 0
 
-							new_logprobs = torch.zeros_like(pu.toTorch(decision_model.env.obs_state_logprobs,\
-							 decision_model.env.device))
+							if decision_model.env.obs_state_logprobs is not None:
+								new_logprobs = torch.zeros_like(pu.toTorch(decision_model.env.obs_state_logprobs,\
+								 decision_model.env.device))
 
-							new_logprobs[decision_model.env.robo_env.peg_idx, decision_model.env.robo_env.peg_idx] = 1.0
+								new_logprobs[0, decision_model.env.robo_env.peg_idx] = 1.0
 
-							new_logprobs = torch.log(new_logprobs / torch.sum(new_logprobs))
+								new_logprobs = torch.log(new_logprobs / torch.sum(new_logprobs))
 
-							decision_model.new_obs(action_idx, obs_idx, new_logprobs.cpu().numpy())
+								decision_model.new_obs(action_idx, obs_idx, new_logprobs.cpu().numpy())
 
-							step_counts[num_complete].append(step_count)
+								step_counts[num_complete].append(step_count)
 
-							if len(pegs) > 1:
-								prob_diff_list.append(decision_model.prob_diff / step_count)
-								print("shape prob difference ", decision_model.prob_diff / step_count)
+								if len(pegs) > 1:
+									prob_diff_list.append(decision_model.prob_diff / step_count)
+									print("shape prob difference ", decision_model.prob_diff / step_count)
+							else:
+								decision_model.new_obs(action_idx, obs_idx, None)
 
 							continue_bool = False
 
@@ -257,7 +267,8 @@ if __name__ == '__main__':
 							
 							error_diff_per_step = error_init - error_final
 
-							pos_diff_list.append(error_diff_per_step)
+							if mode != 3:
+								pos_diff_list.append(error_diff_per_step)
 
 							print("initial error - final error ", error_diff_per_step)
 					else:
@@ -270,7 +281,13 @@ if __name__ == '__main__':
 						print("\n\n GOT STUCK \n\n")
 
 				if decision_model.env.done_bool and len(pegs) > 1:
+					prev_peg = pegs[-1]
 					pegs = pegs[:-1]
+					current_peg = pegs[-1]
+
+					if current_peg != prev_peg:
+						decision_model.states = 1 - decision_model.states
+
 					decision_model.env.robo_env.reload = True
 					decision_model.env.robo_env.prev_cand_idx = action_idx
 					decision_model.reset(config_type = '3_small_objects', peg_idx = pegs[-1])
@@ -293,7 +310,7 @@ if __name__ == '__main__':
 				# 	trial_num -= 1		
 		mode_results[mode] = copy.deepcopy(step_counts)
 
-	for k, v in model_results.items():
+	for k, v in mode_results.items():
 		print("Mode: ", k)
 		for i, counts in enumerate(v):
 			print("Mean Number of Steps Per Trial: ", sum(counts) / len(counts), 'for', str(total_objects - i), ' objects left')
@@ -302,20 +319,77 @@ if __name__ == '__main__':
 
 	print("Mean Change in Position Error: ", sum(pos_diff_list) / len(pos_diff_list))
 	print("Mean Correct Prob Change: ", sum(prob_diff_list) / len(prob_diff_list))
-	# print("Completion Rate: ", completion_count / num_trials)
-	# print("Failure Rate: ", failure_count / num_trials)
-	# print("Pos Divergence Rate: ", pos_diverge_count / num_trials)
-	# print("State Divergence Rate: ", state_diverge_count / num_trials)
 
-		# if not debugging_flag:
+	def get_mode_name(mode):
+		if mode == 0:
+			return 'iterator'
+		elif mode == 1:
+			return 'vision prior sampling'
+		elif mode == 2:
+			return 'greedy'
+		elif mode == 3:
+			return 'regression'
+		elif mode == 4:
+			return 'POMDP'
+		else:
+			raise Exception('unsupported decision making mode')
 
-		# 	decision_model.calc_metrics()
-		# 	# logging_dict['scalar']["Number of Steps"] = num_steps
-		# 	logging_dict['scalar']["Probability of Correct Configuration" ] = decision_model.curr_state_prob
-		# 	logging_dict['scalar']["Probability of Correct Fit" ] = decision_model.curr_fit_prob
-		# 	logging_dict['scalar']['Entropy of State Distribution'] = decision_model.curr_state_entropy
-		# 	logging_dict['scalar']['Entropy of Fit Distribution'] = decision_model.curr_fit_entropy
-		# 	# logging_dict['scalar']["Insertion"] = done_bool * 1.0
-		# 	# logging_dict['scalar']["Intentional Insertion"] = decision_model.insert_bool
+	# Create lists for the plot
+	mode_names = [ get_mode_name(mode) for mode in mode_results.keys() ]
+	mode_names += ['Total Number of Steps for Consecutive Task']
+	
+	fig, axes = plt.subplots(2, 3)
 
-		# 	logger.save_scalars(logging_dict, trial_num, 'evaluation/')
+	mode_pos = np.arange(len(mode_names) - 1)
+
+	axes_idx = 0
+
+	step_totals = [[],[]]
+
+	for key, step_counts in mode_results.items():
+		total_counts = np.zeros(num_trials)
+		mode_means = []
+		mode_stds = []
+		x_labels = []
+		x_pos = np.arange(total_objects)
+
+		for i, counts in enumerate(step_counts):
+			total_counts += np.array(counts)
+			mode_means.append(sum(counts) / len(counts))
+			mode_stds.append(np.std(np.array(counts)))
+			x_labels.append(str(total_objects - i))
+
+		step_totals[0].append(np.mean(total_counts))
+		step_totals[1].append(np.std(total_counts))
+
+		x_idx = axes_idx % 2
+		y_idx = axes_idx // 2
+
+		axes[x_idx, y_idx].bar(x_pos, mode_means, yerr=mode_stds, align='center', alpha=0.5, ecolor='black', capsize=10)
+		axes[x_idx, y_idx].set_ylabel("Average Number of Outer Loop Steps to Completion")
+		axes[x_idx, y_idx].set_xticks(x_pos)
+		axes[x_idx, y_idx].set_xticklabels(x_labels)
+		axes[x_idx, y_idx].set_xlabel("Number of Objects Left in the Robot's workspace")
+		axes[x_idx, y_idx].set_title(mode_names[axes_idx])
+		axes[x_idx, y_idx].yaxis.grid(True)
+
+		axes_idx += 1
+
+	print(step_totals[0])
+	print(mode_pos)
+	print(step_totals[1])		
+
+	x_idx = axes_idx % 2
+	
+	y_idx = axes_idx // 2
+
+	axes[x_idx, y_idx].bar(mode_pos, step_totals[0], yerr=step_totals[1], align='center', alpha=0.5, ecolor='black', capsize=10)
+	axes[x_idx, y_idx].set_ylabel("Average Number of Outer Loop Steps to Completion")
+	axes[x_idx, y_idx].set_xticks(mode_pos)
+	axes[x_idx, y_idx].set_xticklabels(mode_names[:-1])
+	axes[x_idx, y_idx].set_title(mode_names[axes_idx])
+	axes[x_idx, y_idx].yaxis.grid(True)
+
+	# plt.tight_layout()
+	plt.savefig('5_objects_3_object_types.png')
+	plt.show()

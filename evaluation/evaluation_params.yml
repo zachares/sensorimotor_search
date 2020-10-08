@@ -23,7 +23,7 @@ task_params:
 logging_params:
   logging_folder: /scr2/muj_motion_primitive_20200722/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
   logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
-  display_bool: 1.0 # 1 if display should be on, 0 if display should be off
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
@@ -41,12 +41,27 @@ state_size: 3
 
 info_flow:
 
+  # StatePosSensor_wConstantUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+  #   success_params: [0.404, 0.384, 0.346]
+
   StatePosSensor_wConstantUncertainty:
-    model_folder: /scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/
+    model_folder: /scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/
     epoch: 5000
     sensor: True
+    regression_sensor: False
     encoder: False
     success_params: [0.404, 0.384, 0.346]
+  History_Encoder:
+    model_folder: /scr-ssd/sens_search_logging/models/20201007_training_4_w_3smallobjects_fit_w_entropy/
+    epoch: 5000
+    sensor: False
+    regression_sensor: True
+    encoder: False
+
   
   # StatePosSensor_wConstantUncertainty:
   #   model_folder: /scr-ssd/sens_search_logging/models/20201005_training_2_w_3smallobjects/

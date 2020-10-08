@@ -56,10 +56,11 @@ class History_Encoder(mm.Proto_Macromodel):
         self.device = device
         self.model_list = []
         self.ensemble_list = []
+        self.model_name = model_name
 
         self.num_tools = init_args['num_objects']
         self.num_states = init_args['num_objects']
-        self.num_obs = init_args['num_objects']
+        self.num_obs = 2
 
         self.action_size = init_args['action_size']
         self.force_size = init_args['force_size']
@@ -146,26 +147,42 @@ class History_Encoder(mm.Proto_Macromodel):
             'obs_inputs': multinomial.logits2inputs(obs_logits),
         }      
 
-    def get_encoding(self, input_dict):
-        with torch.no_grad():
-            self.eval()
-            ### need self uc to be off
-            # prev_time = time.time()          
-            T = 1
-            self.test_time_process_inputs(input_dict, T)
-            self.process_inputs(input_dict)
-            self.set_uc(False)
-
-            pos_ests_obs, obs_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
-
-            return enc
-
     def set_uc(self, uc_bool):
         for model in self.ensemble_list[0]:
             if hasattr(model, 'set_uc'):
                 model.set_uc(uc_bool)
             elif hasattr(model, 'uc'):
                 model.uc = uc_bool
+
+    def pos_params(self, input_dict):
+        with torch.no_grad():
+            self.eval()
+            # prev_time = time.time()
+            ### Method 1 #### without uncertainty estimation
+            T = 1
+            self.test_time_process_inputs(input_dict, T)
+            self.process_inputs(input_dict)
+            self.set_uc(False)
+
+            pos_ests, obs_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+            return 0.01 * pos_ests.squeeze().cpu().numpy(), None
+
+    def type_params(self, input_dict):
+        with torch.no_grad():
+            self.eval()
+            # prev_time = time.time()
+            ### Method 1 #### without uncertainty estimation
+            T = 1
+            self.test_time_process_inputs(input_dict, T)
+            self.process_inputs(input_dict)
+            self.set_uc(False)
+
+            pos_ests, obs_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
+
+            obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
+
+            return int(obs_idx.item()), None
 
     def process_inputs(self, input_dict):
 
@@ -190,6 +207,7 @@ class History_Encoder(mm.Proto_Macromodel):
         input_dict["action"] = input_dict["action"][:, :-1].repeat_interleave(T, 0)
         input_dict["rel_proprio"] = input_dict['rel_proprio'].repeat_interleave(T, 0)
         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
+        input_dict['state_idx'] = input_dict['hole_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0) 
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
 
 class Variational_History_Encoder(mm.Proto_Macromodel):
@@ -948,7 +966,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
         self.num_tools = init_args['num_objects']
         self.num_states = init_args['num_objects']
-        self.num_obs = init_args['num_objects']
+        self.num_obs = 2
         self.num_objects = init_args['num_objects']
 
         self.action_size = init_args['action_size']
@@ -1133,7 +1151,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
             obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
 
-            return int(obs_idx.item()), obs_state_logprobs[:,:,:self.num_objects].squeeze().cpu().numpy()
+            return int(obs_idx.item()), obs_state_logprobs.squeeze().cpu().numpy()
 
     def get_loglikelihood_model(self):
         with torch.no_grad():

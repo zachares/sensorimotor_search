@@ -98,8 +98,8 @@ class Custom_DataLoader(Dataset):
                 dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
                 dataset = read_h5(filename)
 
-                if np.array(dataset['peg_idx'])[0] >= self.num_objects or np.array(dataset['hole_idx'])[0] >= self.num_objects:
-                    continue
+                # if np.array(dataset['peg_idx'])[0] >= self.num_objects or np.array(dataset['hole_idx'])[0] >= self.num_objects:
+                #     continue
 
                 # policy = dataset["policy"][-1,0]
 
@@ -239,8 +239,11 @@ class Custom_DataLoader(Dataset):
             elif key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
 
-                sample['rel_pos_prior_mean'] = 100 * (sample[key][-1,:2] - np.array(dataset[key])[0,:2])
-                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =2, size = 2)) 
+                # sample['rel_pos_prior_mean'] = 100 * (sample[key][-1,:2] - np.array(dataset[key])[0,:2])
+                # sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =2, size = 2)) 
+
+                sample['rel_pos_prior_mean'] = 100 * np.random.uniform(low=-0.03, high = 0.03, size = 2)
+                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2)) 
 
                 sample['final_rel_pos'] = 100 * sample[key][-1,:2]
                 sample['next_rel_pos'] = 100 * np.array(dataset[key][idx1, :2])
@@ -282,21 +285,21 @@ class Custom_DataLoader(Dataset):
                 sample["state_prior"] = np.random.uniform(low=0, high=1, size = sample[key].shape[0])
                 sample['state_prior'] = sample['state_prior'] / np.sum(sample['state_prior'])
 
-                sample['type_particles_idx'] = np.random.randint(sample[key].shape[0], size = num_particles)
+                # sample['type_particles_idx'] = np.random.randint(sample[key].shape[0], size = num_particles)
 
-                sample['weights'] = np.random.uniform(low=0, high=1, size = num_particles)
-                sample['weights_particles'] = sample['weights'] / np.sum(sample['weights'])
+                # sample['weights'] = np.random.uniform(low=0, high=1, size = num_particles)
+                # sample['weights_particles'] = sample['weights'] / np.sum(sample['weights'])
 
             #     if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
             #         sample['done_mask'] = np.zeros((sample[key].size))
             #     else:
             #         sample['done_mask'] = np.ones((sample[key].size))
 
-            # elif key == 'fit_vector':
-            #     sample[key] = np.array(dataset[key])
-            #     sample["obs_vector"] = sample[key]
-            #     sample["fit_idx"] = np.array(sample[key].argmax(0))
-            #     sample["obs_idx"] = np.array(sample[key].argmax(0))
+            elif key == 'fit_vector':
+                sample[key] = np.array(dataset[key])
+                sample["obs_vector"] = sample[key]
+                sample["fit_idx"] = np.array(sample[key].argmax(0))
+                # sample["obs_idx"] = np.array(sample[key].argmax(0))
                 
                 # if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
                 #     sample['done_mask'] = np.zeros((sample[key].size))
