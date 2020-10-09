@@ -14,12 +14,19 @@ import itertools
 sys.path.insert(0, "../robosuite/")
 
 from datacollection_util import *
+import argparse
 
 import robosuite
 import robosuite.utils.transform_utils as T
 from robosuite.wrappers import IKWrapper
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--noise', default=0.0, type=float)
+    parser.add_argument('--num_traj', default=20, type=int)
+
+    args = parser.parse_args()
 
     peg_types = ["Square"]
 
@@ -54,17 +61,15 @@ if __name__ == '__main__':
 
     print("Robot operating with control frequency: ", ctrl_freq)
     env = robosuite.make("PandaPegInsertion", 
-    has_renderer=display_bool, ignore_done=True,\
+    has_renderer=display_bool, ignore_done=True,
     use_camera_obs= not display_bool, 
     has_offscreen_renderer=not display_bool, 
-    gripper_visualization=True, 
-    control_freq=ctrl_freq,\
-    gripper_type ="SquarePegwForce", 
+    gripper_type ="SquarePegwForce",
     controller='position', 
     camera_depth=True,
     camera_width=128,
-    camera_height=128
-     )
+    camera_height=128,
+    placement_initializer=0.01,)
 
     # env.viewer.set_camera(camera_id=2)
 
@@ -99,7 +104,7 @@ if __name__ == '__main__':
     def append_x(l, item, times):
         for i in range(times):
             l.append(item)
-    append_x(noise_list, 0.0, 50)
+    append_x(noise_list, args.noise, args.num_traj)
     # append_x(noise_list, 0.1, 20)
 
 
@@ -117,7 +122,7 @@ if __name__ == '__main__':
         if display_bool: 
             env.viewer.set_camera(camera_id=3)
 
-        top_goal = hole_poses[hole_idx][0]
+        top_goal = env.top_goal
 
         hole_vector = np.zeros(len(peg_types))
         peg_vector = np.zeros(len(peg_types))
@@ -221,7 +226,7 @@ if __name__ == '__main__':
                         dataset.create_dataset(key, data= key_array[:1000], chunks = chunk_size)
 
 
-                dataset.close()
+                    dataset.close()
 
                 print("Saving to file: ", file_name)
                 break

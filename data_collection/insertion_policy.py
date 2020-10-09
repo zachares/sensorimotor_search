@@ -57,13 +57,14 @@ if __name__ == '__main__':
 	has_renderer= display_bool, ignore_done=True,\
 	use_camera_obs= not display_bool, 
 	has_offscreen_renderer=not display_bool, 
-	gripper_visualization=True, 
-	control_freq=ctrl_freq,\
-	gripper_type ="SquarePegwForce", 
+	gripper_visualization=False,
+	gripper_type ="SquarePegwForce",
 	controller='position', 
 	camera_depth=True,
 	camera_width=128,
-	camera_height=128,)
+	camera_height=128,
+	placement_initializer=0.01,
+						 )
 
 	# env.viewer.set_camera(camera_id=2)
 
@@ -98,10 +99,11 @@ if __name__ == '__main__':
 	def append_x(l, item, times):
 		for i in range(times):
 			l.append(item)
-	append_x(noise_list, 0.4, 5)
-	append_x(noise_list, 0.5, 5)
-	append_x(noise_list, 0, 5)
-	append_x(noise_list, 0.05, 5)
+	append_x(noise_list, 0.075, 10)
+	append_x(noise_list, 0.1, 10)
+	append_x(noise_list, 0.05, 60)
+	append_x(noise_list, 0, 60)
+
 	# append_x(noise_list, 0.1, 25)
 	# append_x(noise_list, 0.2, 20)
 	# append_x(noise_list, 0.3, 10)
@@ -121,7 +123,7 @@ if __name__ == '__main__':
 		if display_bool: 
 			env.viewer.set_camera(camera_id=3)
 
-		top_goal = hole_poses[hole_idx][0]
+		top_goal = env.top_goal
 
 		hole_vector = np.zeros(len(peg_types))
 		peg_vector = np.zeros(len(peg_types))

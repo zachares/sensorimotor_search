@@ -1,6 +1,6 @@
 datacollection_params:
   seed: 1234
-  logging_folder: "/juno/group/cross_modal_temp/mujoco_dataset/new_peg_data/"
+  logging_folder: "/juno/group/cross_modal_temp/mujoco_dataset/100820_peg_data/"
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   workspace_dim: 0.04
