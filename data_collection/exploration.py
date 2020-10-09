@@ -77,8 +77,10 @@ if __name__ == '__main__':
     tol_ang = 100 #this is so high since we are only doing position control
 
     ori_action = np.array([np.pi, 0, np.pi])
-    plus_offset = np.array([0, 0, 0.07, 0,0,0])
+    plus_offset = np.array([0, 0, -0.05, 0,0,0])
     peg_idx = 0
+
+    # todo: check plus offset-- this might be the issue why points are small
 
     hole_poses = []
     for idx, peg_type in enumerate(peg_types):
@@ -110,6 +112,9 @@ if __name__ == '__main__':
 
     # print(noise_list)
     option_file_num = 0
+    env.reset()
+    starting_location = np.zeros(6)
+    starting_location[:3] = env.ee_pose[:3]
 
     for noise in noise_list:
         peg_type = "Square"
@@ -118,8 +123,7 @@ if __name__ == '__main__':
 
         gripper_type = peg_type + "PegwForce" 
 
-        env.reset()
-        if display_bool: 
+        if display_bool:
             env.viewer.set_camera(camera_id=3)
 
         top_goal = env.top_goal
@@ -155,25 +159,38 @@ if __name__ == '__main__':
         goal_noise[:3] = np.random.normal(0.0, 1.0, 3) *0.02
         points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]) + goal_noise, 0, "init_point"))
         
-        for i in range(10): 
+        for i in range(20):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
             points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
         
-        for i in range(10):
+        for i in range(20):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
             points_list.append((top_goal + goal_noise, 1, "init_point"))
 
-        for i in range(10): 
+        for i in range(20):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
+            points_list.append((starting_location + goal_noise, 1, "init_point"))
         
-        for i in range(10):
+        for i in range(20):
+            goal_noise = np.zeros(6)
+
+            goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
+            points_list.append((top_goal + goal_noise + np.array([0, 0, -0.01, 0,0,0]), 1, "init_point"))
+
+
+        for i in range(20):
+            goal_noise = np.zeros(6)
+
+            goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
+            points_list.append((starting_location + goal_noise, 1, "init_point"))
+
+        for i in range(20):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
@@ -204,9 +221,10 @@ if __name__ == '__main__':
                                                 fixed_params, points_list, point_idx, 
                                                 obs, obs_dict, noise_std=noise)
 
-            # print("points: ", len(obs_dict['proprio']))
-            if len(obs_dict['proprio']) >1000: 
+            print("points: ", len(obs_dict['proprio']))
+            if len(obs_dict['proprio']) > 1000:
                 if logging_data_bool == 1:
+                    print("saving")
                     file_num += 1
                     option_file_num += 1
                     # print("On ", file_num, " of ", len(macro_actions) * len(peg_hole_options), " trajectories")
@@ -228,7 +246,9 @@ if __name__ == '__main__':
 
                     dataset.close()
 
-                print("Saving to file: ", file_name)
+                    print("Saving to file: ", file_name)
+                env.reset()
+
                 break
 
     print("Finished Data Collection")
