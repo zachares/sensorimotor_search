@@ -212,6 +212,7 @@ class Custom_DataLoader(Dataset):
         padded = max_length - idx1 + idx0 + 1
         unpadded = idx1 - idx0 - 1
         sample = {}
+        sample['input_length'] = np.array(unpadded)
 
         num_particles = 100
         # pixel_shift = np.random.choice(range(-10,11), 2)
@@ -273,12 +274,17 @@ class Custom_DataLoader(Dataset):
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'peg_vector':
-                sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
+                sample[key] = np.array(dataset[key])[:3]
                 sample["tool_vector"] = sample[key]
                 sample["tool_idx"] = np.array(sample[key].argmax(0))
 
+                tool_list = list(range(3))
+                tool_list.remove(sample[key].argmax(0))
+
+                sample['new_tool_idx'] = np.array(random.choice(tool_list))
+
             elif key == 'hole_vector':
-                sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
+                sample[key] = np.array(dataset[key])[:3]
                 sample["state_vector"] = sample[key]
                 sample["state_idx"] = np.array(sample[key].argmax(0))
                 
@@ -305,6 +311,11 @@ class Custom_DataLoader(Dataset):
                 #     sample['done_mask'] = np.zeros((sample[key].size))
                 # else:
                 #     sample['done_mask'] = np.ones((sample[key].size))
+
+        if sample['new_tool_idx'] == sample['state_idx']:
+            sample['new_fit_idx'] = np.array(0)
+        else:
+            sample['new_fit_idx'] = np.array(1)
 
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
         # sample["pol_idx"] = np.array(dataset['policy'][-1,0])

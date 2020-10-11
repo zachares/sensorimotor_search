@@ -19,14 +19,14 @@ task_params:
   ignore_done: False
 
 logging_params:
-  logging_folder: /scr2/muj_random_3_objects_new_02_control_range_fit_focused_20201006/ #/scr2/muj_random_3_objects_20201001/ #/scr2/muj_random_10_objects_20201001/ # /scr2/muj_motion_primitive_20200722/ # 
+  logging_folder: /scr2/muj_random_4_objects_new_uniform_20201008/ #/scr2/muj_random_3_objects_20201001/ #/scr2/muj_random_10_objects_20201001/ # /scr2/muj_motion_primitive_20200722/ # 
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
   camera_name: eye_in_hand
-  num_trials: 3000
+  num_trials: 575
 
 policy_keys: ['rel_pos', 'contact', 'peg_type'] # ["encoding"] # 
 traj_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "joint_pos", "joint_vel", "contact", 'done', 'reward'] #, "image", "depth"] # "point_cloud", "depth_meters"] # rgbd:

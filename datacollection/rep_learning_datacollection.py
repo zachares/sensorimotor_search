@@ -107,7 +107,7 @@ if __name__ == '__main__':
 			env.mode = 0
 		# if env.done_bool:
 		# 	env_config[env.robo_env.cand_idx][2] = True
-		env.reset(config_type = '3_small_objects_fit')
+		env.reset(config_type = '4_small_objects_fit')  #, peg_idx = 3)
 
 		for i in range(cfg['task_params']['horizon']):
 			if env.done_bool:

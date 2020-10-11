@@ -30,176 +30,17 @@ training_params:
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_notes: "_w_3smallobjects_fit_w_entropy"
+  run_notes: "_w_3smallobjects_fit_voting"
 
 dataset_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "hole_sites", 'done'] #, 'image', 'depth']
 
 info_flow:
-  # StatePos_ComboFilter:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0 #5000
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     pos_particles: dataset
-  #     type_particles_idx: dataset
-  #     weights_particles: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         final_rel_pos: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Posterior
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
-  # StatePos_DualFilter:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0 #5000
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     pos_particles: dataset
-  #     state_prior: dataset
-  #     weights_particles: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         final_rel_pos: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Posterior
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  #     obs_logprobs_inputs:
-  #       losses:
-  #         Neg_Multinomial_Entropy:
-  #          # weight: 0.25
-  #           logging_name: ent_max_mult
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
-  History_Encoder:
-    train: 1
-    model_folder: ''
-    epoch: 0
-    init_args:
-      num_objects: 4
-      action_size: 3
-      proprio_size: 12
-      force_size: [6, 50]
-      dropout_prob: 0.5
-      min_length: 20
-    inputs:
-      rel_proprio: dataset
-      action: dataset
-      force_hi_freq: dataset
-      contact: dataset
-      tool_idx: dataset
-      state_idx: dataset
-      include_label: dataset
-      padding_mask: dataset
-      epoch: dataset
-    outputs:
-      pos_est:
-        inputs:
-          final_rel_pos: dataset
-        losses:
-          L2:
-            weight: 5
-            logging_name: Position_Estimate
-        evals:
-          Continuous_Error:
-            logging_name:  Pos_Err_Force
-      obs_logits:
-        inputs:
-          fit_idx: dataset
-        losses: 
-          Multinomial_NLL:
-            logging_name: Obs_Shape_Class
-      obs_inputs:
-        inputs:
-          fit_idx: dataset
-        evals:
-          Multinomial_Accuracy:
-            logging_name: obs_classifier_accuracy
-  # Variational_History_Encoder:
+  # History_Encoder:
   #   train: 1
   #   model_folder: ''
   #   epoch: 0
   #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
+  #     num_objects: 4
   #     action_size: 3
   #     proprio_size: 12
   #     force_size: [6, 50]
@@ -207,276 +48,12 @@ info_flow:
   #     min_length: 20
   #   inputs:
   #     rel_proprio: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         final_rel_pos: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Force
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  #     enc_params:
-  #       inputs:
-  #         prior_params: Variational_History_Encoder
-  #       losses:
-  #         Gaussian_KL:
-  #           weight: 0.0001
-  #           logging_name: ELBO_loss
-  # Selfsupervised_History_Encoder:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     proprio: dataset
-  #     proprio_unpaired: dataset
-  #     final_action: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     force_hi_freq_unpaired: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_pred:
-  #       inputs:
-  #         next_pos_change: dataset
-  #       losses:
-  #         L2:
-  #           weight: 0.1
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err
-  #     force_pred:
-  #       inputs:
-  #         next_force: dataset
-  #       losses:
-  #         L2:
-  #           weight: 0.1
-  #           logging_name: Force_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Force_Err
-  #     contact_pred:
-  #       inputs:
-  #         next_contact_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Contact_Prediction
-  #     contact_inputs:
-  #       inputs:
-  #         next_contact_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: Contact_Prediction_accuracy
-  #     paired_class:
-  #       inputs:
-  #         paired_idx: Selfsupervised_History_Encoder
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Pairing_Prediction
-  #     paired_inputs:
-  #       inputs:
-  #         paired_idx: Selfsupervised_History_Encoder
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: pairing_accuracy
-  #     enc_params:
-  #       inputs:
-  #         prior_params: Selfsupervised_History_Encoder
-  #       losses:
-  #         Gaussian_KL:
-  #           weight: 0.0001
-  #           logging_name: ELBO_loss
-  # Unsupervised_History_Encoder:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0
-  #   init_args:
-  #     num_objects: 3
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     proprio: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         final_pos_change: dataset
-  #       losses:
-  #         L2:
-  #           weight: 0.1
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err
-  #     force_est:
-  #       inputs:
-  #         final_force: dataset
-  #       losses:
-  #         L2:
-  #           weight: 0.1
-  #           logging_name: Force_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Force_Err
-  #     contact_class:
-  #       inputs:
-  #         final_contact_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Contact_Prediction
-  #     contact_inputs:
-  #       inputs:
-  #         final_contact_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: Contact_Prediction_accuracy
-  #     enc_params:
-  #       inputs:
-  #         prior_params: Unsupervised_History_Encoder
-  #       losses:
-  #         Gaussian_KL:
-  #           weight: 0.0001
-  #           logging_name: ELBO_loss
-  # History_Encoder_wUncertainty:
-  #   train: 1
-  #   model_folder: '' # /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
-  #   epoch: 0 #5000
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     rel_pos_prior_mean: dataset
-  #     rel_pos_prior_var: dataset
-  #     rel_pos_final: dataset
-  #     state_prior: dataset
   #     action: dataset
   #     force_hi_freq: dataset
   #     contact: dataset
   #     tool_idx: dataset
   #     state_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         rel_pos_final: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Posterior
-  #     # pos_est_params:
-  #     #   inputs:
-  #     #     rel_pos_final: dataset
-  #     #   losses:
-  #     #     Gaussian_NLL:
-  #     #       weight: 0.1
-  #     #       logging_name: Position_Estimate
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  #     obs_logprobs_inputs:
-  #       losses:
-  #         Neg_Multinomial_Entropy:
-  #          # weight: 0.25
-  #           logging_name: ent_max_mult
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
-  # StatePosSensor_wUncertainty:
-  #   train: 1
-  #   model_folder: '' # /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
-  #   epoch: 0 #5000
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     rel_pos_prior_mean: dataset
-  #     rel_pos_prior_var: dataset
-  #     rel_pos_final: dataset
-  #     state_prior: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
+  #     include_label: dataset
   #     padding_mask: dataset
   #     epoch: dataset
   #   outputs:
@@ -489,7 +66,7 @@ info_flow:
   #       #     logging_name: Position_Estimate
   #       evals:
   #         Continuous_Error:
-  #           logging_name:  Pos_Err_Posterior
+  #           logging_name:  Pos_Err_Force
   #     pos_est_params:
   #       inputs:
   #         final_rel_pos: dataset
@@ -499,33 +76,16 @@ info_flow:
   #           logging_name: Position_Estimate
   #     obs_logits:
   #       inputs:
-  #         state_idx: dataset
+  #         fit_idx: dataset
   #       losses: 
   #         Multinomial_NLL:
   #           logging_name: Obs_Shape_Class
   #     obs_inputs:
   #       inputs:
-  #         state_idx: dataset
+  #         fit_idx: dataset
   #       evals:
   #         Multinomial_Accuracy:
   #           logging_name: obs_classifier_accuracy
-  #     obs_logprobs_inputs:
-  #       losses:
-  #         Neg_Multinomial_Entropy:
-  #          # weight: 0.25
-  #           logging_name: ent_max_mult
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
   StatePosSensor_wConstantUncertainty:
     train: 1
     model_folder: ''
@@ -546,359 +106,70 @@ info_flow:
       force_hi_freq: dataset
       contact: dataset
       tool_idx: dataset
+      fit_idx: dataset
+      new_tool_idx: dataset
+      new_fit_idx: dataset
       state_idx: dataset
       padding_mask: dataset
+      input_length: dataset
       epoch: dataset
     outputs:
-      pos_est:
-        inputs:
-          final_rel_pos: dataset
-        # losses:
-        #   L2:
-        #     weight: 5
-        #     logging_name: Position_Estimate
-        evals:
-          Continuous_Error:
-            logging_name:  Pos_Err_Posterior
-      pos_est_params:
-        inputs:
-          final_rel_pos: dataset
+      # pos_est:
+      #   inputs:
+      #     final_rel_pos: dataset
+      #   # losses:
+      #   #   L2:
+      #   #     weight: 5
+      #   #     logging_name: Position_Estimate
+      #   evals:
+      #     Continuous_Error:
+      #       logging_name:  Pos_Err_Posterior
+      # pos_est_params:
+      #   inputs:
+      #     final_rel_pos: dataset
+      #   losses:
+      #     Gaussian_NLL:
+      #       weight: 0.1
+      #       logging_name: Position_Estimate
+      vote_logits:
+        inputs: 
+          vote_idx: StatePosSensor_wConstantUncertainty
         losses:
-          Gaussian_NLL:
-            weight: 0.1
-            logging_name: Position_Estimate
-      obs_logits:
-        inputs:
-          fit_idx: dataset
-        losses: 
           Multinomial_NLL:
-            logging_name: Obs_Shape_Class
-      obs_inputs:
-        inputs:
-          fit_idx: dataset
+            logging_name: Voting_Classifier
+      vote_inputs:
+        inputs: 
+          vote_idx: StatePosSensor_wConstantUncertainty
         evals:
           Multinomial_Accuracy:
-            logging_name: obs_classifier_accuracy
-      obs_logprobs_inputs:
-        losses:
-          Neg_Multinomial_Entropy:
-           # weight: 0.25
-            logging_name: ent_max_mult
-      state_logits:
-        inputs:
-          state_idx: dataset
-        losses: 
-          Multinomial_NLL:
-            logging_name: State_Shape_Class
-      state_inputs:
-        inputs:
-          state_idx: dataset
-        evals:
-          Multinomial_Accuracy:
-            logging_name: state_classifier_accuracy
-  # PosSensor_wUncertainty:
-  #   train: 1
-  #   model_folder: '' # /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
-  #   epoch: 0 #5000
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     rel_pos_prior_mean: dataset
-  #     rel_pos_prior_var: dataset
-  #     rel_pos_final: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         rel_pos_final: dataset
-  #       # losses:
-  #       #   L2:
-  #       #     weight: 5
-  #       #     logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Posterior
-  #     pos_est_params:
-  #       inputs:
-  #         rel_pos_final: dataset
-  #       losses:
-  #         Gaussian_NLL:
-  #           weight: 0.1
-  #           logging_name: Position_Estimate
-  # History_Encoder_wConstantUncertainty:
-  #   train: 1
-  #   model_folder: '' # /scr-ssd/sens_search_logging/models/20200815_training_50_rl_policy/
-  #   epoch: 0 #5000
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     rel_pos_prior_mean: dataset
-  #     rel_pos_prior_var: dataset
-  #     rel_pos_final: dataset
-  #     state_prior: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         rel_pos_final: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Posterior
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  #     obs_logprobs_inputs:
-  #       losses:
-  #         Neg_Multinomial_Entropy:
-  #          # weight: 0.25
-  #           logging_name: ent_max_mult
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
-  # History_Encoder_Baseline:
-  #   train: 1
-  #   model_folder: '' # /scr-ssd/sens_search_logging/models/20200815_training_5_rl_policy/ 
-  #   epoch: 0
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     state_prior: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         rel_pos_final: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Force
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  # StateSensor_wUncertainty:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     state_prior: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  #     obs_logprobs_inputs:
-  #       losses:
-  #         Neg_Multinomial_Entropy:
-  #          # weight: 0.25
-  #           logging_name: ent_max_mult
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
-  # StateSensor_wConstantUncertainty:
-  #   train: 1
-  #   model_folder: ''
-  #   epoch: 0
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     num_options: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     state_prior: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     obs_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
-  #     obs_logprobs_inputs:
-  #       losses:
-  #         Neg_Multinomial_Entropy:
-  #          # weight: 0.25
-  #           logging_name: ent_max_mult
-  #     state_logits:
-  #       inputs:
-  #         state_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           logging_name: State_Shape_Class
-  #     state_inputs:
-  #       inputs:
-  #         state_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: state_classifier_accuracy
-  # History_Encoder_Unsupervised:
-  #   train: 1
-  #   model_folder: '' # /scr-ssd/sens_search_logging/models/20200815_training_5_rl_policy/ 
-  #   epoch: 0
-  #   init_args:
-  #     num_tools: 3
-  #     num_states: 3
-  #     num_obs: 2
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     proprio: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         pos_final: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err
-  #     force_est:
-  #       inputs:
-  #         force_final: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Force_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Force_Err
+            logging_name: Vote_Classifier_Accuracy
+      # obs_logits:
+      #   inputs:
+      #     fit_idx: dataset
+      #   losses: 
+      #     Multinomial_NLL:
+      #       logging_name: Obs_Shape_Class
+      # obs_inputs:
+      #   inputs:
+      #     fit_idx: dataset
+      #   evals:
+      #     Multinomial_Accuracy:
+      #       logging_name: obs_classifier_accuracy
+      # obs_logprobs_inputs:
+      #   losses:
+      #     Neg_Multinomial_Entropy:
+      #      # weight: 0.25
+      #       logging_name: ent_max_mult
+      # state_logits:
+      #   inputs:
+      #     state_idx: dataset
+      #   losses: 
+      #     Multinomial_NLL:
+      #       logging_name: State_Shape_Class
+      # state_inputs:
+      #   inputs:
+      #     state_idx: dataset
+      #   evals:
+      #     Multinomial_Accuracy:
+      #       logging_name: state_classifier_accuracy
+ 

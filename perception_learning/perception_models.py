@@ -94,7 +94,7 @@ class History_Encoder(mm.Proto_Macromodel):
 
                 mm.Transformer_Comparer(model_name + "_sequential_process" + str(i),\
           self.state_size, self.num_tl, dropout_prob = self.dropout_prob, uc = self.uc, device = self.device).to(self.device),\
-                
+
                 mm.Embedding(model_name + "_shape_embed" + str(i),\
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
@@ -123,9 +123,9 @@ class History_Encoder(mm.Proto_Macromodel):
         states_t = torch.cat([frc_encs, input_dict['sensor_inputs']], dim = 2).transpose(0,1)
 
         if "padding_mask" in input_dict.keys():
-            seq_enc = seq_processor(states_t, padding_mask = input_dict["padding_mask"]).max(0)[0]
+            seq_enc = seq_processor(states_t, padding_mask = input_dict["padding_mask"])
         else:
-            seq_enc = seq_processor(states_t).max(0)[0]
+            seq_enc = seq_processor(states_t)
 
         tool_embed = shape_embed(input_dict['tool_idx'].long()) 
 
@@ -143,6 +143,7 @@ class History_Encoder(mm.Proto_Macromodel):
         
         return {
             'pos_est': pos_ests,
+            'pos_est_params': (pos_ests, 1 / 0.3 * torch.ones_like(pos_ests)),
             'obs_logits': obs_logits,
             'obs_inputs': multinomial.logits2inputs(obs_logits),
         }      
@@ -1001,7 +1002,13 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
                 mm.Transformer_Comparer(model_name + "_sequential_process" + str(i),\
           self.state_size, self.num_tl, dropout_prob = self.dropout_prob, uc = self.uc, device = self.device).to(self.device),\
-                
+
+          #       mm.LSTM_Comparer(model_name + "_sequential_process" + str(i),\
+          # self.state_size, self.num_tl, dropout_prob = self.dropout_prob, dropout = True, device = self.device).to(self.device),\
+
+                # mm.CONV2DN(model_name + "_sequential_process" + str(i),(1,100, self.state_size), (self.state_size,1,1),\
+                #  batchnorm = True, dropout = True, dropout_prob = self.dropout_prob, uc = self.uc, device = self.device).to(self.device),\
+
                 mm.Embedding(model_name + "_shape_embed" + str(i),\
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
@@ -1022,7 +1029,18 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
                 mm.Embedding(model_name + "_obs_likelihood" + str(i),\
                     self.num_tools, self.num_obs * self.num_states, device= self.device).to(self.device),\
+
+
             ))
+
+        self.voting_function = mm.Transformer_Comparer(model_name + "_voting_function",\
+          self.state_size + self.tool_dim, 2, dropout_prob = self.dropout_prob, nhead = 7, uc = self.uc, device = self.device).to(self.device)
+
+        self.reference_embeds = mm.Embedding(model_name + "_reference_vectors",\
+                    self.num_tools, self.state_size + self.tool_dim, device= self.device).to(self.device)
+
+        self.model_list.append(self.reference_embeds)
+        self.model_list.append(self.voting_function)
 
         for model_tuple in self.ensemble_list:
             for model in model_tuple:
@@ -1030,7 +1048,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
     def get_outputs(self, input_dict, model_tuple, final_idx = None):
         frc_enc, seq_processor, shape_embed, pos_estimator, obs_noise_estimator,\
-         obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
+        obs_classifier, obs_likelihood = model_tuple #origin_cov = model_tuple # spatial_processor,
 
         ##### Calculating Series Encoding
         frc_encs_reshaped = self.flatten(frc_enc(input_dict["force_reshaped"]))
@@ -1038,13 +1056,26 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         frc_encs = torch.reshape(frc_encs_reshaped,\
          (input_dict['batch_size'], input_dict['sequence_size'], self.frc_enc_size))
 
-        states_t = torch.cat([frc_encs, input_dict['sensor_inputs']], dim = 2).transpose(0,1)
+        states_t = torch.cat([frc_encs, input_dict['sensor_inputs']], dim = 2)
 
-        if "padding_mask" in input_dict.keys():
-            seq_enc = seq_processor(states_t, padding_mask = input_dict["padding_mask"]).max(0)[0]
+        if 'trans_comparer' in seq_processor.model_name: # Transformer Padded
+            if "padding_mask" in input_dict.keys():
+                seq_enc = seq_processor(states_t.transpose(0,1), padding_mask = input_dict["padding_mask"])
+            else:
+                seq_enc = seq_processor(states_t.transpose(0,1))
+
+        elif 'lstm_comparer' in seq_processor.model_name: # Bi-direcitonal LSTM Padded
+            if 'input_length' in input_dict.keys():
+                seq_enc = seq_processor(states_t, input_lengths = input_dict['input_length'])
+            else:
+                seq_enc = seq_processor(states_t)
+
+        elif 'cnn' in seq_processor.model_name: # CNN
+            seq_enc = self.flatten(seq_processor(states_t.unsqueeze(1)))
+
         else:
-            seq_enc = seq_processor(states_t).max(0)[0]
-
+            raise Exception('Unsupported Encoder Type')
+            
         tool_embed = shape_embed(input_dict['tool_idx'].long()) 
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
@@ -1076,6 +1107,15 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits, dim = 1).max(1)[1]]
 
         return pos_ests_obs, pos_ests_obs_noise, obs_logits, state_logprobs, obs_state_logprobs, states_T
+                    
+    def change_tool(self, encs, tool_idxs):
+        frc_enc, seq_processor, shape_embed, pos_estimator, obs_noise_estimator,\
+        obs_classifier, obs_likelihood = self.ensemble_list[0] #origin_cov = model_tuple # spatial_processor,
+
+        tool_embeds = shape_embed(tool_idxs)
+        new_encs = encs.clone()
+        new_encs[:, self.state_size:] = tool_embeds
+        return new_encs
 
     def forward(self, input_dict):
         self.process_inputs(input_dict)
@@ -1093,6 +1133,151 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
 
+        num_cand = random.choice([2,3,4,5,6,7,8])
+
+        # idxs0 = torch.arange(input_dict['batch_size'])
+
+        enc_repeated = enc.unsqueeze(1).repeat_interleave(num_cand, dim = 1)
+
+        fit_idxs = (input_dict['fit_idx'] == 0).nonzero().squeeze()
+        not_fit_idxs = (input_dict['fit_idx'] == 1).nonzero().squeeze()
+
+        f_length = fit_idxs.size(0)
+        nf_length = not_fit_idxs.size(0)
+
+        assert f_length > 0
+
+        assert nf_length > 0
+
+        if f_length > nf_length:
+            f_length = f_length
+            nf_length = nf_length
+
+            f_nf_idxs = fit_idxs[torch.randperm(f_length)]
+            f_nf_idxs = f_nf_idxs[:nf_length]
+
+            # print('Fit Indices ', fit_idxs.size())
+
+            # print('Not Fit Indices ', not_fit_idxs.size())
+            # print('Shuffled Fit Indices ', f_nf_idxs.size())
+
+            nf_f_idxs = fit_idxs.clone()
+
+            iterations = int(f_length / nf_length) + 1
+
+            for k in range(iterations):
+                if k < (iterations - 1):
+                    nf_f_idxs[(k * nf_length):((k + 1) * nf_length)] = not_fit_idxs[torch.randperm(nf_length)]
+                else:
+                    extra_length = nf_f_idxs[k * nf_length:].size(0)
+                    extra_labels = not_fit_idxs[torch.randperm(nf_length)]
+                    nf_f_idxs[-extra_length:] = extra_labels[:extra_length]
+
+            # print("Difference ", f_length - nf_length)
+            # print("Shuffled Not Fit Indices", nf_f_idxs[:nf_length].size())
+            # print("Additional indices not fit ", extra_idxs.size())
+
+        elif f_length < nf_length:
+            nf_f_idxs = not_fit_idxs[torch.randperm(nf_length)]
+            nf_f_idxs = nf_f_idxs[:f_length]
+
+            f_nf_idxs = not_fit_idxs.clone()
+
+            iterations = int(nf_length / f_length) + 1
+
+            for k in range(iterations):
+                if k < (iterations - 1):
+                    f_nf_idxs[(k * f_length):((k + 1) * f_length)] = fit_idxs[torch.randperm(f_length)]
+                else:
+                    extra_length = f_nf_idxs[k * f_length:].size(0)
+                    extra_labels = fit_idxs[torch.randperm(f_length)]
+                    f_nf_idxs[-extra_length:] = extra_labels[:extra_length]
+
+            # print("Difference ", nf_length - f_length)
+
+            # print(f_length)
+            # print(extra_length)
+            # print(extra_labels[:extra_length].size())
+            # print(f_nf_idxs[f_length:].size())
+
+        else:
+            f_nf_idxs = fit_idxs[torch.randperm(f_length)]
+            nf_f_idxs = not_fit_idxs[torch.randperm(nf_length)]
+
+        idx_list = list(range(num_cand))
+
+        random.shuffle(idx_list)
+
+        reference_vectors = self.reference_embeds(input_dict['tool_idx']).unsqueeze(1).repeat_interleave(num_cand, dim = 1)
+
+        mask = F.dropout(torch.ones((input_dict['batch_size'], num_cand)).float().to(self.device), p = 0.2)
+        mask = torch.where(mask == 0, torch.zeros_like(mask), torch.ones_like(mask))
+
+        # random_votes = F.dropout(torch.ones((input_dict['batch_size'], num_cand)).float().to(self.device), p = 0.5)
+        # random_votes = torch.where(random_votes == 0, torch.zeros_like(random_votes), torch.ones_like(random_votes))
+
+        # random_votes = torch.where(mask == 0, random_votes, torch.zeros_like(mask))
+
+        voting_labels = torch.zeros((input_dict['batch_size'], num_cand)).long().to(self.device)
+
+        for i, j in enumerate(idx_list):
+            if i == 0:
+                continue
+            elif i == 1:
+                enc_to_shuffle = enc_repeated[:,j]
+                enc_shuffled = enc_to_shuffle.clone()
+                enc_shuffled[fit_idxs] = enc_to_shuffle[nf_f_idxs]
+                enc_shuffled[not_fit_idxs] = enc_to_shuffle[f_nf_idxs]
+
+                enc_repeated[:,j] = enc_shuffled
+
+                voting_labels_to_shuffle = voting_labels[:,i]
+                voting_labels_shuffled = voting_labels_to_shuffle.clone()
+                voting_labels_shuffled[fit_idxs] = input_dict['fit_idx'][nf_f_idxs]
+                voting_labels_shuffled[not_fit_idxs] = input_dict['fit_idx'][f_nf_idxs]
+
+                voting_labels[:,j] = voting_labels_shuffled
+
+            else:
+                shuffle_idxs = torch.randperm(input_dict['batch_size'])
+
+                if random.choice([0,1]) == 1:
+                    # print('Before: ', enc_repeated[:, i])
+                    enc_to_shuffle = enc_repeated[:,j]
+                    enc_shuffled = enc_to_shuffle[shuffle_idxs]
+                    enc_repeated[:,j] = enc_shuffled
+                    # print("Set: ", enc_shuffled )
+                    # print("After: ", enc_repeated[:, i])
+                    voting_labels[:,j] = input_dict['fit_idx'][shuffle_idxs]
+                else:
+                    enc_to_shuffle = self.change_tool(enc_repeated[:,j], input_dict['new_tool_idx'])
+                    enc_shuffled = enc_to_shuffle[shuffle_idxs]
+                    enc_repeated[:,j] = enc_shuffled          
+                    voting_labels[:,j] = input_dict['new_fit_idx'][shuffle_idxs]
+
+        # voting_labels = voting_labels * mask + (1 - mask) * random_votes
+
+        mask_exp = mask.unsqueeze(2).repeat_interleave(self.state_size + self.tool_dim, dim = 2)
+
+        enc_comparison = enc_repeated * mask_exp + (1 - mask_exp) * reference_vectors
+
+        voting_probs = F.softmax(self.voting_function(enc_comparison.transpose(0,1),\
+         max_bool = False).max(2)[0].transpose(0,1), dim = 1)
+
+        # print(voting_labels)
+
+        not_fit_probs = torch.where(voting_labels == 1, voting_probs, torch.zeros_like(voting_probs)).sum(1).unsqueeze(1) + 0.01
+        fit_probs = torch.where(voting_labels == 0, voting_probs, torch.zeros_like(voting_probs)).sum(1).unsqueeze(1) + 0.01
+
+        # print(not_fit_probs)
+        # print(fit_probs)
+
+        vote_logits = torch.log(torch.cat([fit_probs, not_fit_probs], dim = 1))
+
+        # print(vote_logits)
+
+        vote_labels = torch.zeros(input_dict['batch_size']).to(self.device).long()
+
         # print(state_logits_unc[:10])
         # print(input_dict['done_mask'][:10])
         # print(state_logits[:10])
@@ -1105,6 +1290,9 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         return {
             'pos_est': pos_post,
             'pos_est_params': (pos_post, 1 / pos_post_var),
+            'vote_logits': vote_logits,
+            'vote_inputs': multinomial.logits2inputs(vote_logits),
+            'vote_idx': vote_labels,
             'obs_logits': obs_logits,
             'obs_inputs': multinomial.logits2inputs(obs_logits),
             'state_logits': state_logits,

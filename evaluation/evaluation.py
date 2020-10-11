@@ -150,7 +150,10 @@ if __name__ == '__main__':
 	decision_model = Joint_POMDP(env, mode = 0, device = device,\
 		 success_params = success_params, horizon = 3)
 
-	for mode in range(5):
+	mode_list = [0,1,2,3,4]
+	mode_list = [2,3,4]
+
+	for mode in mode_list:
 		# if mode == 3:
 		# 	decision_model.env.sensor = model_dict['regression_sensor']
 		# else:
@@ -167,7 +170,7 @@ if __name__ == '__main__':
 	    ############################################################
 	    ### Starting tests
 	    ###########################################################
-		total_objects = 5
+		
 		step_counts = [[],[],[],[],[]]
 		pos_diff_list = []
 		prob_diff_list = []
@@ -196,13 +199,16 @@ if __name__ == '__main__':
 			decision_model.env.robo_env.random_seed = 0
 			decision_model.reset(config_type = '3_small_objects_fit')
 			num_boxes = decision_model.env.robo_env.num_boxes
+			total_objects = sum(num_boxes)
 			pegs = []
 
 			for i, nb in enumerate(num_boxes):
 				for _ in range(nb):
 					pegs.append(i)
 
+			print(pegs)
 			np.random.shuffle(pegs)
+			print(pegs)
 			peg_idx = pegs[-1]
 
 			decision_model.env.robo_env.reload = True

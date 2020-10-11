@@ -134,17 +134,20 @@ class Joint_POMDP(object):
 			weights = torch.where(self.states == 0, torch.ones_like(self.states), torch.zeros_like(self.states)) * (1 - self.completed_tasks)
 
 			if torch.sum(weights) == 0:
-				possible_actions = []
-				for i in range(self.task_dict['num_actions']):
-					if self.completed_tasks[i] == 0:
-						possible_actions.append(i)
+				print("Iterating")
+				weights = (1 / self.action_counts)
+				
+				# possible_actions = []
+				# for i in range(self.task_dict['num_actions']):
+				# 	if self.completed_tasks[i] == 0:
+				# 		possible_actions.append(i)
 
-				print('Possible Actions: ', possible_actions)
-				action_idx = random.choice(possible_actions)
+				# print('Possible Actions: ', possible_actions)
+				# action_idx = random.choice(possible_actions)
 
-				print('Index: ', action_idx)
+				# print('Index: ', action_idx)
 
-				return action_idx			
+				# return action_idx			
 
 		elif self.mode == 4:
 			print("POMDP with horizon - ",  self.horizon)
