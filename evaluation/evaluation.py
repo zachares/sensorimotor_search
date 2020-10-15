@@ -113,11 +113,15 @@ if __name__ == '__main__':
 
 			if cfg['info_flow'][model_name]['sensor']:
 				model_dict['sensor'] = model_dict[model_name]
+				model_dict['sensor'].success_params = cfg['info_flow'][model_name]['success_params']
+				model_dict['sensor'].radius = cfg['info_flow'][model_name]['radius']
 				print("Sensor: ", model_name)
 
 			if cfg['info_flow'][model_name]['regression_sensor']:
 				model_dict['regression_sensor'] = model_dict[model_name]
-				print("Regression Sensor", model_name)
+				model_dict['regression_sensor'].success_params = cfg['info_flow'][model_name]['success_params']
+				model_dict['regression_sensor'].radius = cfg['info_flow'][model_name]['radius']
+				print("Regression Sensor: ", model_name)
 
 			if cfg['info_flow'][model_name]['encoder']:
 				model_dict['encoder'] = model_dict[model_name]
@@ -151,13 +155,17 @@ if __name__ == '__main__':
 		 success_params = success_params, horizon = 3)
 
 	mode_list = [0,1,2,3,4]
-	mode_list = [2,3,4]
+	mode_list = [3,2]
 
 	for mode in mode_list:
-		# if mode == 3:
-		# 	decision_model.env.sensor = model_dict['regression_sensor']
-		# else:
-		# 	decision_model.env.sensor = model_dict['sensor']
+		if mode == 3:
+			decision_model.env.sensor = model_dict['regression_sensor']
+			decision_model.success_params = model_dict['regression_sensor'].success_params
+			decision_model.env.spiral_policy.rt = model_dict['regression_sensor'].radius
+		else:
+			decision_model.env.sensor = model_dict['sensor']
+			decision_model.success_params = model_dict['sensor'].success_params
+			decision_model.env.spiral_policy.rt = model_dict['sensor'].radius
 
 		decision_model.mode = mode
 	    ##################################################################################
@@ -180,7 +188,9 @@ if __name__ == '__main__':
 		state_diverge_count = 0
 
 		num_trials = 20
-		trial_num = 20
+		trial_num = num_trials
+		decision_model.env.robo_env.random_seed = 0
+		decision_model.env.eval_idx = 0
 
 		while trial_num > 0:
 
@@ -196,7 +206,7 @@ if __name__ == '__main__':
 
 			###########################################################
 			decision_model.env.robo_env.reload = False
-			decision_model.env.robo_env.random_seed = 0
+
 			decision_model.reset(config_type = '3_small_objects_fit')
 			num_boxes = decision_model.env.robo_env.num_boxes
 			total_objects = sum(num_boxes)
@@ -206,14 +216,11 @@ if __name__ == '__main__':
 				for _ in range(nb):
 					pegs.append(i)
 
-			print(pegs)
 			np.random.shuffle(pegs)
-			print(pegs)
-			peg_idx = pegs[-1]
 
 			decision_model.env.robo_env.reload = True
 			decision_model.env.robo_env.prev_cand_idx = None
-			decision_model.reset(config_type = '3_small_objects', peg_idx = peg_idx)
+			decision_model.reset(config_type = '3_small_objects_fit', peg_idx = pegs[-1])
 
 			ref_ests = copy.deepcopy(decision_model.env.cand_ests)
 			num_complete = 0
@@ -240,6 +247,7 @@ if __name__ == '__main__':
 
 						if decision_model.env.done_bool:				
 							obs_idx = 0
+							step_counts[num_complete].append(step_count)
 
 							if decision_model.env.obs_state_logprobs is not None:
 								new_logprobs = torch.zeros_like(pu.toTorch(decision_model.env.obs_state_logprobs,\
@@ -251,13 +259,12 @@ if __name__ == '__main__':
 
 								decision_model.new_obs(action_idx, obs_idx, new_logprobs.cpu().numpy())
 
-								step_counts[num_complete].append(step_count)
-
 								if len(pegs) > 1:
 									prob_diff_list.append(decision_model.prob_diff / step_count)
 									print("shape prob difference ", decision_model.prob_diff / step_count)
-							else:
-								decision_model.new_obs(action_idx, obs_idx, None)
+							# else:
+							# 	obs_idx = 0
+							# 	decision_model.new_obs(action_idx, obs_idx, None)
 
 							continue_bool = False
 
@@ -268,8 +275,6 @@ if __name__ == '__main__':
 
 							error_init = np.linalg.norm(pos_init - pos_actual)
 							error_final = np.linalg.norm(pos_final - pos_actual)
-
-							error_diff = error_final - error_init
 							
 							error_diff_per_step = error_init - error_final
 
@@ -277,44 +282,45 @@ if __name__ == '__main__':
 								pos_diff_list.append(error_diff_per_step)
 
 							print("initial error - final error ", error_diff_per_step)
+
+							decision_model.env.robo_env.reload = True
+							decision_model.env.robo_env.prev_cand_idx = None
+							decision_model.reset(config_type = '3_small_objects_fit', peg_idx = pegs[-1])
 					else:
 						decision_model.env.cand_ests[action_idx][0] += np.random.uniform(low=-0.002, high=0.002, size =  2)
 						decision_model.env.robo_env.hole_sites[action_idx][-1][:2] = decision_model.env.cand_ests[action_idx][0]
 						decision_model.env.robo_env.reload = True
-						decision_model.env.prev_cand_idx = None
-						decision_model.reset(config_type = '3_small_objects', peg_idx = pegs[-1])
+						decision_model.env.robo_env.prev_cand_idx = None
+						decision_model.reset(config_type = '3_small_objects_fit', peg_idx = pegs[-1])
 
 						print("\n\n GOT STUCK \n\n")
 
 				if decision_model.env.done_bool and len(pegs) > 1:
-					prev_peg = pegs[-1]
 					pegs = pegs[:-1]
-					current_peg = pegs[-1]
-
-					if current_peg != prev_peg:
-						decision_model.states = 1 - decision_model.states
-
 					decision_model.env.robo_env.reload = True
 					decision_model.env.robo_env.prev_cand_idx = action_idx
-					decision_model.reset(config_type = '3_small_objects', peg_idx = pegs[-1])
+					decision_model.reset(config_type = '3_small_objects_fit', peg_idx = pegs[-1])
 					decision_model.completed_tasks[action_idx] = 1.0
 					num_complete += 1
-					decision_model.env.robo_env.random_seed += 1
+					
 
 					# print("State Probs:", decision_model.state_probs.cpu().numpy())
 				elif decision_model.env.done_bool:
 					num_complete += 1
 
 				print("Action IDX Final", action_idx)
-				print(decision_model.completed_tasks)
+				print(decision_model.completed_tasks.cpu().numpy())
 
 			trial_num -=1
 
 				# if step_count > 11:
 				# 	continue_bool = False
 				# 	failure_count += 1
-				# 	trial_num -= 1		
+				# 	trial_num -= 1
+
+		print("Happened")
 		mode_results[mode] = copy.deepcopy(step_counts)
+		print(mode_results[mode])
 
 	for k, v in mode_results.items():
 		print("Mode: ", k)
@@ -332,9 +338,9 @@ if __name__ == '__main__':
 		elif mode == 1:
 			return 'vision prior sampling'
 		elif mode == 2:
-			return 'greedy'
+			return 'Greedy Belief-based' # greedy
 		elif mode == 3:
-			return 'regression'
+			return 'Greedy Point Estimate'
 		elif mode == 4:
 			return 'POMDP'
 		else:

@@ -30,33 +30,28 @@ class Joint_POMDP(object):
 	def reset(self, config_type = '3_small_objects_fit', peg_idx = None):
 		self.env.reset(initialize = False, config_type = config_type, peg_idx = peg_idx)
 
+		if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'get_loglikelihood_model') and self.mode != 0:
+			print("GOT LIKELIHOOD MODEL")
+			loglikelihood_model = self.env.sensor.get_loglikelihood_model()
+		else:
+			loglikelihood_model = None
+
+		self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+			 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes,\
+			  loglikelihood_model = loglikelihood_model)
+
+		self.gt_dict = self.env.get_gt_dict()
+
 		if not self.env.robo_env.reload:
-			if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'get_loglikelihood_model'):
-				loglikelihood_model = self.env.sensor.get_loglikelihood_model()
-			else:
-				loglikelihood_model = None
-
-			self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
-				 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes,\
-				  loglikelihood_model = loglikelihood_model)
-
-			self.gt_dict = self.env.get_gt_dict()
-
 			self.reset_probs()
 
 		self.step_count = 0
 
 		# if self.print_info:
 		# 	self.print_hypothesis()
-		
-	def reset_probs(self):
-		self.completed_tasks = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
-		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
-		self.state_probs = self.state_probs.float().to(self.device)
-		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
 		self.corr_action_idx_list = []
 		self.corr_state_idx_list = OrderedDict()
-		self.states = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
+
 
 		for j in range(self.task_dict['num_actions']):
 			if self.env.robo_env.hole_sites[j][3] == 0:
@@ -78,22 +73,36 @@ class Joint_POMDP(object):
 
 				if substate_idx == self.env.robo_env.peg_idx:
 					self.corr_state_idx_list[j].append(i)
+		
+	def reset_probs(self):
+		self.completed_tasks = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
+		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
+		self.state_probs = self.state_probs.float().to(self.device)
+		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
+		self.states = torch.zeros((self.task_dict['num_tools'], self.task_dict['num_actions'])).float().to(self.device)
 
 	def choose_action(self):
+
+		# print("Completed Tasks: ", self.completed_tasks)
 
 		if self.completed_tasks.size()[0] - self.completed_tasks.sum() == 1:
 			print("Single Option ", self.completed_tasks.min(0)[1].item())
 			return self.completed_tasks.min(0)[1].item()
 
-		if self.success_params is None:
-			alphas = (1 / self.action_counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
-		else:
-			alpha = self.success_params[self.env.get_goal()]
-			alphas = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * alpha
+		# if self.success_params is None:
+		# 	alphas = (1 / self.action_counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
+		# else:
+		print("Success Params", self.success_params[self.env.get_goal()])
+		alpha = self.success_params[self.env.get_goal()]
+		alphas = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * alpha
 
 		if self.mode == 0: # iterator
-			print("Iterating")
-			weights = (1 / self.action_counts)
+			print("Greedy with failure only")
+			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
+			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
+			prob_fit = (reward_vectors * state_prior * alphas).sum(1)
+
+			weights = prob_fit
 
 		elif self.mode == 1: # sampling prior, no update
 			print("Sampling Vision Prior")
@@ -112,7 +121,7 @@ class Joint_POMDP(object):
 				if self.completed_tasks[i] == 0:
 					possible_actions.append(i)
 
-			print('Possible Actions: ', possible_actions)
+			# print('Possible Actions: ', possible_actions)
 			action_idx = random.choice(possible_actions)
 
 			print('Index: ', action_idx)
@@ -129,13 +138,14 @@ class Joint_POMDP(object):
 
 		elif self.mode == 3: # with classifier and state estimation
 			print("Regression")
-			print("States: ", self.states.cpu().numpy())
+			print("States: ", self.states[self.env.get_goal()].cpu().numpy())
+			states = self.states[self.env.get_goal()]
 
-			weights = torch.where(self.states == 0, torch.ones_like(self.states), torch.zeros_like(self.states)) * (1 - self.completed_tasks)
+			weights = torch.where(states == 0, torch.ones_like(states), torch.zeros_like(states))
 
-			if torch.sum(weights) == 0:
-				print("Iterating")
-				weights = (1 / self.action_counts)
+			# if torch.sum(weights) == 0:
+			# 	print("Iterating")
+			# 	weights = (1 / self.action_counts) * (1 - self.completed_tasks)
 				
 				# possible_actions = []
 				# for i in range(self.task_dict['num_actions']):
@@ -159,17 +169,38 @@ class Joint_POMDP(object):
 		else:
 			raise Exception('Mode ', self.mode, ' current unsupported')
 
-		if (weights * (1 - self.completed_tasks)).sum() == 0:
-			weights = torch.ones_like(self.completed_tasks)
+		weights = weights * (1 - self.completed_tasks)
 
-		action_idx = (weights * (1 - self.completed_tasks)).max(0)[1].item()
+		max_value = 0
+		max_idxs = []
+
+		for i in range(weights.size(0)):
+			weight = weights[i].item()
+			if weight > max_value:
+				max_idxs = [i]
+				max_value = weight
+
+			elif weight == max_value:
+				max_idxs.append(i)
+
+		if len(max_idxs) > 1:
+			# print("Tie")
+			weights = ((1 / self.action_counts) * (1 - self.completed_tasks))[max_idxs]
+			# print(max_idxs)
+			max_idx = weights.max(0)[1].item()
+			# print(max_idx)
+			action_idx = max_idxs[max_idx]
+			# print(action_idx)
+
+		else:
+			action_idx = max_idxs[0]
 
 		if self.print_info:
 			print("Index of hole choice: ", action_idx)
 
 		return action_idx  
 
-	def update_state_probs(self, action_idx, obs_idx, obs_state_logprobs):
+	def update_state_probs(self, action_idx, obs_idx, obs_state_logprobs = None, obs_substate_logprobs = None):
 		if self.success_params is None:
 			prob_success = (1 / self.action_counts[action_idx])
 		else:
@@ -180,11 +211,18 @@ class Joint_POMDP(object):
 
 		state_prior = self.state_probs.clone()
 		
-		state_logprobs = obs_state_logprobs[obs_idx]
+		assert (obs_state_logprobs is not None) or (obs_substate_logprobs is not None)
 
-		self.state_probs = F.softmax(torch.log(state_prior) +\
-		 state_logprobs[self.task_dict['substate_idxs'][action_idx]] +\
-		  torch.log(transition_function), dim = 0)
+		if obs_state_logprobs is not None:
+			state_logprobs = obs_state_logprobs[obs_idx]
+			self.state_probs = F.softmax(torch.log(state_prior) +\
+			 state_logprobs[self.task_dict['substate_idxs'][action_idx]] +\
+			  torch.log(transition_function), dim = 0)
+		else:
+			substate_logprobs = obs_substate_logprobs[obs_idx]
+			self.state_probs = F.softmax(torch.log(state_prior) +\
+			 substate_logprobs +\
+			  torch.log(transition_function), dim = 0)
 
 	def new_obs(self, action_idx, obs_idx, obs_state_logprobs):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
@@ -193,16 +231,29 @@ class Joint_POMDP(object):
 		
 		self.action_counts[action_idx] += 1
 
-		self.states[action_idx] = obs_idx
+		if obs_idx == 0: # classified as fit
+			self.states[self.env.get_goal(),  action_idx] = 0
+			for i in range(self.task_dict['num_tools']):
+				if i == self.env.get_goal():
+					continue
+
+				self.states[i, action_idx] = 1
+		else:
+			self.states[self.env.get_goal(),  action_idx] = obs_idx
 
 		if obs_state_logprobs is not None:
-			for i in range(self.task_dict['num_obs']):
-				state_logprobs = obs_state_logprobs[i]
-				self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, i] = state_logprobs[self.task_dict['substate_idxs'][action_idx]]	
+			print("Received likelihood model")
+			if self.mode != 0:
+				for i in range(self.task_dict['num_obs']):
+					state_logprobs = obs_state_logprobs[i]
+					self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, i] = state_logprobs[self.task_dict['substate_idxs'][action_idx]]	
 
-			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_state_logprobs, self.device))
+				self.update_state_probs(action_idx, obs_idx, obs_state_logprobs = pu.toTorch(obs_state_logprobs, self.device))
+			else:
+				self.update_state_probs(action_idx, obs_idx, obs_substate_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx], self.device))
 
 			if action_idx in self.corr_action_idx_list:
+				print("Calculated prob_diff")
 				sum_events = 0
 				count = 0
 

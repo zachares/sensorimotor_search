@@ -17,7 +17,7 @@ dataloading_params:
     #/scr-ssd/sens_search_logging/models/20200801_training_2_rl_policy/val_train_split.pkl
 
 training_params:
-  seed: 4321
+  seed: 6
   regularization_weight: 0.00001
   lrn_rate: 0.0001
   beta1: 0.9
@@ -30,17 +30,17 @@ training_params:
 
 logging_params:
   logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_notes: "_w_3smallobjects_fit_voting"
+  run_notes: "_w_3smallobjects_fit_point_estimate"
 
 dataset_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "hole_sites", 'done'] #, 'image', 'depth']
 
 info_flow:
   # History_Encoder:
   #   train: 1
-  #   model_folder: ''
-  #   epoch: 0
+  #   model_folder: '' 
+  #   epoch: 0 
   #   init_args:
-  #     num_objects: 4
+  #     num_objects: 3
   #     action_size: 3
   #     proprio_size: 12
   #     force_size: [6, 50]
@@ -50,11 +50,60 @@ info_flow:
   #     rel_proprio: dataset
   #     action: dataset
   #     force_hi_freq: dataset
+  #     rel_pos_estimate: dataset
   #     contact: dataset
   #     tool_idx: dataset
   #     state_idx: dataset
   #     include_label: dataset
   #     padding_mask: dataset
+  #     epoch: dataset
+  #   outputs:
+  #     pos_est:
+  #       inputs:
+  #         final_rel_pos: dataset
+  #       losses:
+  #         L2:
+  #           weight: 5
+  #           logging_name: Position_Estimate
+  #       evals:
+  #         Continuous_Error:
+  #           logging_name:  Pos_Err_Force
+  #     obs_logits:
+  #       inputs:
+  #         fit_idx: dataset
+  #       losses: 
+  #         Multinomial_NLL:
+  #           weight: 5
+  #           logging_name: Obs_Shape_Class
+  #     obs_inputs:
+  #       inputs:
+  #         fit_idx: dataset
+  #       evals:
+  #         Multinomial_Accuracy:
+  #           logging_name: obs_classifier_accuracy
+  # StatePosSensor_wConstantUncertainty:
+  #   train: 1
+  #   model_folder: ''
+  #   epoch: 0
+  #   init_args:
+  #     num_objects: 3
+  #     action_size: 3
+  #     proprio_size: 12
+  #     force_size: [6, 50]
+  #     dropout_prob: 0.5
+  #     min_length: 20
+  #   inputs:
+  #     rel_proprio: dataset
+  #     rel_pos_prior_mean: dataset
+  #     rel_pos_prior_var: dataset
+  #     rel_pos_estimate: dataset
+  #     state_prior: dataset
+  #     action: dataset
+  #     force_hi_freq: dataset
+  #     contact: dataset
+  #     tool_idx: dataset
+  #     padding_mask: dataset
+  #     input_length: dataset
   #     epoch: dataset
   #   outputs:
   #     pos_est:
@@ -66,7 +115,7 @@ info_flow:
   #       #     logging_name: Position_Estimate
   #       evals:
   #         Continuous_Error:
-  #           logging_name:  Pos_Err_Force
+  #           logging_name:  Pos_Err_Posterior
   #     pos_est_params:
   #       inputs:
   #         final_rel_pos: dataset
@@ -77,8 +126,9 @@ info_flow:
   #     obs_logits:
   #       inputs:
   #         fit_idx: dataset
-  #       losses: 
+  #       losses:
   #         Multinomial_NLL:
+  #           weight: 50
   #           logging_name: Obs_Shape_Class
   #     obs_inputs:
   #       inputs:
@@ -86,7 +136,24 @@ info_flow:
   #       evals:
   #         Multinomial_Accuracy:
   #           logging_name: obs_classifier_accuracy
-  StatePosSensor_wConstantUncertainty:
+  #     obs_logprobs_inputs:
+  #       losses:
+  #         Neg_Multinomial_Entropy:
+  #          # weight: 0.25
+  #           logging_name: ent_max_mult
+  #     state_logits:
+  #       inputs:
+  #         state_idx: dataset
+  #       losses: 
+  #         Multinomial_NLL:
+  #           logging_name: State_Shape_Class
+  #     state_inputs:
+  #       inputs:
+  #         state_idx: dataset
+  #       evals:
+  #         Multinomial_Accuracy:
+  #           logging_name: state_classifier_accuracy
+   Voting_Policy:
     train: 1
     model_folder: ''
     epoch: 0 #5000
@@ -99,9 +166,6 @@ info_flow:
       min_length: 20
     inputs:
       rel_proprio: dataset
-      rel_pos_prior_mean: dataset
-      rel_pos_prior_var: dataset
-      state_prior: dataset
       action: dataset
       force_hi_freq: dataset
       contact: dataset
@@ -109,67 +173,19 @@ info_flow:
       fit_idx: dataset
       new_tool_idx: dataset
       new_fit_idx: dataset
-      state_idx: dataset
       padding_mask: dataset
-      input_length: dataset
       epoch: dataset
     outputs:
-      # pos_est:
-      #   inputs:
-      #     final_rel_pos: dataset
-      #   # losses:
-      #   #   L2:
-      #   #     weight: 5
-      #   #     logging_name: Position_Estimate
-      #   evals:
-      #     Continuous_Error:
-      #       logging_name:  Pos_Err_Posterior
-      # pos_est_params:
-      #   inputs:
-      #     final_rel_pos: dataset
-      #   losses:
-      #     Gaussian_NLL:
-      #       weight: 0.1
-      #       logging_name: Position_Estimate
       vote_logits:
-        inputs: 
-          vote_idx: StatePosSensor_wConstantUncertainty
+        inputs:
+          vote_idx: Voting_Policy
         losses:
           Multinomial_NLL:
+            weight: 10
             logging_name: Voting_Classifier
       vote_inputs:
         inputs: 
-          vote_idx: StatePosSensor_wConstantUncertainty
+          vote_idx: Voting_Policy
         evals:
           Multinomial_Accuracy:
             logging_name: Vote_Classifier_Accuracy
-      # obs_logits:
-      #   inputs:
-      #     fit_idx: dataset
-      #   losses: 
-      #     Multinomial_NLL:
-      #       logging_name: Obs_Shape_Class
-      # obs_inputs:
-      #   inputs:
-      #     fit_idx: dataset
-      #   evals:
-      #     Multinomial_Accuracy:
-      #       logging_name: obs_classifier_accuracy
-      # obs_logprobs_inputs:
-      #   losses:
-      #     Neg_Multinomial_Entropy:
-      #      # weight: 0.25
-      #       logging_name: ent_max_mult
-      # state_logits:
-      #   inputs:
-      #     state_idx: dataset
-      #   losses: 
-      #     Multinomial_NLL:
-      #       logging_name: State_Shape_Class
-      # state_inputs:
-      #   inputs:
-      #     state_idx: dataset
-      #   evals:
-      #     Multinomial_Accuracy:
-      #       logging_name: state_classifier_accuracy
- 

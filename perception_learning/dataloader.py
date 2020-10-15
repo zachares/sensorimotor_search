@@ -211,10 +211,10 @@ class Custom_DataLoader(Dataset):
 
         padded = max_length - idx1 + idx0 + 1
         unpadded = idx1 - idx0 - 1
+
         sample = {}
         sample['input_length'] = np.array(unpadded)
 
-        num_particles = 100
         # pixel_shift = np.random.choice(range(-10,11), 2)
 
         for key in self.dataset_keys:
@@ -244,9 +244,12 @@ class Custom_DataLoader(Dataset):
                 # sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =2, size = 2)) 
 
                 sample['rel_pos_prior_mean'] = 100 * np.random.uniform(low=-0.03, high = 0.03, size = 2)
-                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2)) 
+                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2))
 
                 sample['final_rel_pos'] = 100 * sample[key][-1,:2]
+
+                sample['rel_pos_estimate'] = 100 * (sample[key][-1,:2] - sample[key][0,:2])
+
                 sample['next_rel_pos'] = 100 * np.array(dataset[key][idx1, :2])
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
@@ -274,17 +277,19 @@ class Custom_DataLoader(Dataset):
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 
             elif key == 'peg_vector':
-                sample[key] = np.array(dataset[key])[:3]
+                # print("peg vector: ", np.array(dataset[key]))
+                sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
                 sample["tool_vector"] = sample[key]
                 sample["tool_idx"] = np.array(sample[key].argmax(0))
 
-                tool_list = list(range(3))
+                tool_list = list(range(self.idx_dict['num_objects']))
                 tool_list.remove(sample[key].argmax(0))
 
                 sample['new_tool_idx'] = np.array(random.choice(tool_list))
 
             elif key == 'hole_vector':
-                sample[key] = np.array(dataset[key])[:3]
+                # print("hole vector: ", np.array(dataset[key]))
+                sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
                 sample["state_vector"] = sample[key]
                 sample["state_idx"] = np.array(sample[key].argmax(0))
                 
@@ -303,6 +308,7 @@ class Custom_DataLoader(Dataset):
 
             elif key == 'fit_vector':
                 sample[key] = np.array(dataset[key])
+                # print("Fit Vector: ", sample[key])
                 sample["obs_vector"] = sample[key]
                 sample["fit_idx"] = np.array(sample[key].argmax(0))
                 # sample["obs_idx"] = np.array(sample[key].argmax(0))

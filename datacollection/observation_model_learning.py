@@ -131,42 +131,83 @@ if __name__ == '__main__':
 	else:
 		raise Exception('sensor must be provided to estimate observation model')
 
-	env = SensSearchWrapper(robo_env, cfg, selection_mode = 0, **model_dict)
+	env = SensSearchWrapper(robo_env, cfg, selection_mode = 2, **model_dict)
 
 	# env.sensor.likelihood_model.model.p[:] = 3.0
 	# prior_samples = env.sensor.likelihood_model.model.p[:].sum().item()
 	# env.sensor.success_params.model.p[:] = 0.0
 
+	test_success = cfg['test_success']
 	num_tools = 3
-	success_params = np.ones((num_tools, 2))
+
+	if test_success: # testing policy effectiveness
+		print("TESTING POLICY")
+		env.mode = 0
+		num_samples = num_tools * 50
+		success_params = np.ones((num_tools, 2))
+
+	else: # testing network accuracy
+		print("TESTING PERCEPTION NETWORKS")
+		env.mode = 2
+		classification_accuracy = np.zeros(2)
+		position_estimation = []
+		num_samples = 100
+
 	trial_num = 0
 
 	# print("Success Params: ", success_params,\
 	 # success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
 
 	while trial_num < num_samples:
-		env.reset(initialize=False, config_type = '3_small_objects')
+		env.reset(initialize=False, config_type = '3_small_objects_fit')
+
+		action_idx = env.robo_env.cand_idx
+		substate_idx = env.robo_env.hole_idx
+		tool_idx = env.robo_env.tool_idx
+		pos_init = copy.deepcopy(env.cand_ests[action_idx][0])
+
 		print("Trial Num ", trial_num + 1, " out of ", num_samples, " trials")
 		cand_idx = env.robo_env.cand_idx
 
-		if env.big_step(cand_idx):
+		if env.big_step(cand_idx) or (env.done_bool and not test_success):
 			continue
 		else:
 			trial_num += 1
 
-		# substate_idx = env.robo_env.hole_sites[cand_idx][2]
-		tool_idx = env.robo_env.tool_idx
+		if test_success:
+			if env.done_bool:
+				success_params[tool_idx,1] += 1
+			else:
+				success_params[tool_idx,0] += 1
+
+		else:
+			pos_final = env.cand_ests[action_idx][0]	
+
+			pos_actual = env.robo_env.hole_sites[action_idx][-3][:2]
+
+			error_init = np.linalg.norm(pos_init - pos_actual)
+			error_final = np.linalg.norm(pos_final - pos_actual)
+			
+			error_diff_per_step = error_init - error_final
+
+			print("Error Change: ", error_diff_per_step)
+
+			position_estimation.append(error_diff_per_step)
+
+			if (env.obs_idx == 0 and env.robo_env.peg_idx == env.robo_env.hole_idx) or\
+				(env.obs_idx == 1 and env.robo_env.peg_idx != env.robo_env.hole_idx):
+				print("Correct Classification")
+				classification_accuracy[0] += 1
+
+			else:
+				print("Incorrect Classification")
+				classification_accuracy[1] += 1
+
 
 		# print("Observation: ", env.robo_env.hole_names[obs_idxs[1]], " Ground Truth: ", env.robo_env.hole_sites[cand_idx][0])
 		
 		# ll_idxs = tuple([tool_idx, substate_idx] + list(obs_idxs))
 		# success_idxs = (tool_idx, obs_idxs[0])
-
-		# if tool_idx == substate_idx:
-		if env.done_bool:
-			success_params[tool_idx,1] += 1
-		else:
-			success_params[tool_idx,0] += 1
 
 		# env.sensor.likelihood_model.model.p[ll_idxs] += 1
 		# print(env.sensor.likelihood_model())
@@ -177,8 +218,14 @@ if __name__ == '__main__':
 	# print(env.sensor.success_params())
 	# env.sensor.save(9999, env.sensor.loading_folder)
 
-	print("Success Params: ", success_params,\
-	 success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
+	if test_success:
+		print("Success Params: ", success_params,\
+		 success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
+	else:
+		position_estimation = np.array(position_estimation)
+		print("Classification Accuracy: ", classification_accuracy / sum(classification_accuracy))
+		print("Mean Position Change: ", np.mean(position_estimation))
+		print("STD Position Change: ", np.std(position_estimation))
 
 
 

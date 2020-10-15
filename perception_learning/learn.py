@@ -16,6 +16,17 @@ def project_main():
 
 	device = torch.device("cuda" if use_cuda else "cpu")
 
+	seed = cfg['training_params']['seed']
+
+	random.seed(seed)
+	np.random.seed(seed)
+
+	if use_cuda:
+		torch.cuda.manual_seed(seed)
+		torch.manual_seed(seed)
+	else:
+		torch.manual_seed(seed)
+
 	data_loader, val_data_loader = sl.init_dataloader(cfg, Custom_DataLoader, device)
 	ref_model_dict = pm.get_ref_model_dict()
 	model_dict = sl.declare_models(ref_model_dict, cfg, device)

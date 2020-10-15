@@ -26,13 +26,14 @@ logging_params:
   image_size: 32
   collect_depth: 1.0
   camera_name: insertion
-  num_samples: 150
+  num_samples: 100
 
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
 action_size: 3
 policy_keys: [rel_pos_shift]
 state_size: 3
+test_success: False
 
 info_flow:
   # Toy task
@@ -43,11 +44,38 @@ info_flow:
   #   encoder: False
 
   # 3 Small Objects
-  StatePosSensor_wConstantUncertainty:
-    model_folder: /scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/
+  # StatePosSensor_wConstantUncertainty: # transformer
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/ # /scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # 3 Small Objects
+  StatePosSensor_wConstantUncertainty: # transformer f(x,z) + x
+    model_folder: /scr-ssd/sens_search_logging/models/20201014_training_3_w_3smallobjects_fit_point_estimate/ # /scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/ # /scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/
     epoch: 5000
     sensor: True
     encoder: False
+
+  # StatePosSensor_wConstantUncertainty: # cnn
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201009_training_19_w_3smallobjects_fit_w_entropy_cnn/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # StatePosSensor_wConstantUncertainty: # lstm
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201009_training_23_w_3smallobjects_fit_w_entropy_lstm/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # History_Encoder: # transformer
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201013_training_51_w_3smallobjects_fit_point_estimate/ #/scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+####################################
   
   # SAC_Policy: # state observations - baseline-thesis - goood one with state pos reward
   #   model_folder: /scr2/rl_models/unsupervised_thesis/
