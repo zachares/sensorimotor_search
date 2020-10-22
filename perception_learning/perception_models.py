@@ -73,7 +73,7 @@ class History_Encoder(mm.Proto_Macromodel):
         self.force_std = torch.from_numpy(np.array(init_args['force_std'])).to(self.device).float()
 
         self.frc_enc_size = 48
-        self.tool_dim = 6
+        self.tool_dim = 64
 
         self.state_size = self.frc_enc_size + self.proprio_size + self.action_size + self.contact_size
 
@@ -83,6 +83,12 @@ class History_Encoder(mm.Proto_Macromodel):
         self.num_cl = 3
         self.flatten = nn.Flatten()
         self.uc = False
+        self.pos_input = self.state_size + self.tool_dim + init_args['residual_dims']
+
+        if init_args['residual_dims'] > 0:
+            residual_string = '_residual'
+        else:
+            residual_string = ''
 
         for i in range(self.num_ensembles):
             self.ensemble_list.append((\
@@ -97,8 +103,8 @@ class History_Encoder(mm.Proto_Macromodel):
                 mm.Embedding(model_name + "_shape_embed" + str(i),\
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
-                mm.ResNetFCN(model_name + "_pos_est" + str(i),\
-            self.state_size + self.tool_dim + 2, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+                mm.ResNetFCN(model_name + "_pos_est" + residual_string + str(i),\
+            self.pos_input, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
                 mm.ResNetFCN(model_name + "_obs_class" + str(i),\
@@ -132,7 +138,10 @@ class History_Encoder(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
-        pos_ests = pos_estimator(torch.cat([states_T, input_dict['rel_pos_estimate']], dim = 1)) + input_dict['rel_pos_estimate']
+        if self.pos_input == (self.state_size + self.tool_dim):
+            pos_ests = pos_estimator(states_T)
+        else:
+            pos_ests = pos_estimator(torch.cat([states_T, input_dict['rel_pos_prior_mean']], dim = 1)) + input_dict['rel_pos_prior_mean']
 
         obs_logits = obs_classifier(states_T)
 
@@ -167,7 +176,7 @@ class History_Encoder(mm.Proto_Macromodel):
 
             pos_ests, obs_logits, enc = self.get_outputs(input_dict, self.ensemble_list[0])
 
-            return 0.01 * pos_ests.squeeze().cpu().numpy(), None
+            return pos_ests.squeeze().cpu().numpy(), None
 
     def type_params(self, input_dict):
         with torch.no_grad():
@@ -211,8 +220,7 @@ class History_Encoder(mm.Proto_Macromodel):
         input_dict['state_idx'] = input_dict['hole_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0) 
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
 
-        if 'rel_pos_estimate' in input_dict.keys():
-            input_dict['rel_pos_estimate'] = 100 * input_dict['rel_pos_estimate'].unsqueeze(0).repeat_interleave(T,0)
+        input_dict['rel_pos_prior_mean'] = 100 * (input_dict['rel_proprio'][:,-1,:2] - input_dict['rel_proprio'][:,0,:2]).repeat_interleave(T,0)
 
 class Variational_History_Encoder(mm.Proto_Macromodel):
     def __init__(self, model_name, init_args, device = None):
@@ -985,7 +993,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         self.force_std = torch.from_numpy(np.array(init_args['force_std'])).to(self.device).float()
 
         self.frc_enc_size = 48
-        self.tool_dim = 6
+        self.tool_dim = 64
 
         self.state_size = self.frc_enc_size + self.proprio_size + self.action_size + self.contact_size
 
@@ -995,6 +1003,22 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         self.num_cl = 3
         self.flatten = nn.Flatten()
         self.uc = False
+        self.pos_input = self.state_size + self.tool_dim + init_args['residual_dims']
+
+        if init_args['residual_dims'] > 0:
+            residual_string = '_residual'
+        else:
+            residual_string = ''
+
+        if False: #init_args['general_fit']:
+            self.general_fit = True
+            self.classifier = mm.Transformer_Comparer(model_name + "_obs_class",\
+          2 * self.state_size, 2, dropout_prob = self.dropout_prob, uc = self.uc, device = self.device).to(self.device)
+        else:
+            self.general_fit = False
+            self.classifier = mm.ResNetFCN(model_name + "_obs_class" + str(0),\
+            self.state_size + self.tool_dim, self.num_obs, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+            uc = self.uc, device = self.device).to(self.device)
 
         for i in range(self.num_ensembles):
             self.ensemble_list.append((\
@@ -1015,8 +1039,8 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
                 mm.Embedding(model_name + "_shape_embed" + str(i),\
                          self.num_tools, self.tool_dim, device= self.device).to(self.device),\
 
-                mm.ResNetFCN(model_name + "_pos_est" + str(i),\
-            self.state_size + self.tool_dim + 2, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
+                mm.ResNetFCN(model_name + "_pos_est" + residual_string + str(i),\
+            self.pos_input, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             uc = self.uc, device = self.device).to(self.device),\
 
                 mm.Embedding(model_name + "_pos_est_obs_noise" + str(i),\
@@ -1026,9 +1050,7 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
             # self.state_size + self.tool_dim, 2, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
             # uc = self.uc, device = self.device).to(self.device),\
 
-                mm.ResNetFCN(model_name + "_obs_class" + str(i),\
-            self.state_size + self.tool_dim, self.num_obs, self.num_cl, dropout = True, dropout_prob = self.dropout_prob, \
-            uc = self.uc, device = self.device).to(self.device),\
+                self.classifier,\
 
                 mm.Embedding(model_name + "_obs_likelihood" + str(i),\
                     self.num_tools, self.num_obs * self.num_states, device= self.device).to(self.device),\
@@ -1077,17 +1099,19 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
         states_T = torch.cat([seq_enc, tool_embed], dim = 1)
 
-        # pos_ests_obs = pos_estimator(states_T)
-        pos_ests_obs = pos_estimator(torch.cat([states_T, input_dict['rel_pos_estimate']], dim = 1)) + input_dict['rel_pos_estimate']
+        if self.pos_input == (self.state_size + self.tool_dim):
+            pos_ests_obs = pos_estimator(states_T)
+        else:
+            pos_ests_obs = pos_estimator(torch.cat([states_T, input_dict['rel_pos_prior_mean']], dim = 1)) + input_dict['rel_pos_prior_mean']
 
         # pos_ests_obs_noise = obs_noise_estimator(states_T).pow(2) + 1e-2
         pos_ests_obs_noise = obs_noise_estimator(input_dict['tool_idx'].long()).pow(2) + 1e-2
 
-        # used to constrain the solution during test time based on prior knowledge
+        #used to constrain the solution during test time based on prior knowledge
         # if 'reference_pos' in input_dict.keys():
         #     distance_norm = (pos_ests_obs - input_dict['reference_pos']).norm(p=2,dim=1).unsqueeze(1).repeat_interleave(2, dim=1)
 
-        #     pos_ests_obs = torch.where(distance_norm > 2, (2 / distance_norm) * (pos_ests_obs - input_dict['reference_pos']) +\
+        #     pos_ests_obs = torch.where(distance_norm > 2.2, (2.2 / distance_norm) * (pos_ests_obs - input_dict['reference_pos']) +\
         #      input_dict['reference_pos'], pos_ests_obs)
 
         # pos_ests_obs = pos_estimator(torch.cat([states_T, shape_embed(input_dict['state_idx'].long())], dim = 1))
@@ -1096,7 +1120,30 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
         # pos_ests_obs_noise = pos_ests_obs_state_noise[torch.arange(input_dict['batch_size']), input_dict['state_idx']]
 
-        obs_logits = obs_classifier(states_T)
+        if self.general_fit:
+            seq_enc_exp = seq_enc.unsqueeze(1).repeat_interleave(self.num_tools, dim = 1)
+
+            all_tool_idxs = torch.arange(self.num_tools).long().to(self.device).\
+                unsqueeze(0).unsqueeze(2).repeat((input_dict['batch_size'], 1, self.state_size))
+
+            all_tool_embeds = shape_embed(all_tool_idxs)
+
+            tool_object_pairings = torch.cat([seq_enc_exp, all_tool_embeds], dim = 2)
+
+            obs_logits_exp = obs_classifier(tool_object_pairings.transpose(0,1)).transpose(0,1)
+
+            obs_logits_exp = 1 / ((obs_logits_exp[:,:,:self.state_size] -\
+             obs_logits_exp[:,:,self.state_size:]).norm(p=2,dim=2) + 1e-2)
+
+            obs_logits = torch.zeros_like(obs_probs_exp[:,:2])
+
+            batch_idxs = torch.arange(input_dict['batch_idx'])
+
+            obs_logits[batch_idxs,0] = obs_logits_exp[batch_idxs, input_dict['tool_idx']]
+            obs_logits[batch_idxs,1] = obs_logits.sum(1) - obs_logits_exp[batch_idxs, input_dict['tool_idx']]
+
+        else:
+            obs_logits = obs_classifier(states_T)
 
         # likelihood network
         obs_state_logits = torch.reshape(obs_likelihood(input_dict['tool_idx'].long()), (input_dict['batch_size'], self.num_obs, self.num_states))
@@ -1113,11 +1160,11 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
         prior_noise = input_dict['rel_pos_prior_var']
 
-        y = pos_ests_mean - input_dict['rel_pos_estimate'] # input_dict['rel_pos_prior_mean']
+        y = pos_ests_mean - input_dict['rel_pos_prior_mean']
         S = prior_noise + pos_ests_obs_noise
         K = prior_noise / S
 
-        pos_post = input_dict['rel_pos_estimate'] + K * y # input_dict['rel_pos_prior_mean'] + K * y
+        pos_post = input_dict['rel_pos_prior_mean'] + K * y
         pos_post_var = (1 - K) * prior_noise
 
         state_logits = torch.log(input_dict['state_prior']) + obs_logprobs
@@ -1154,8 +1201,9 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
 
             # obs_idx = F.softmax(obs_logits, dim = 1).max(1)[1]
 
-            print("Pos Est", pos_ests_mean.squeeze().cpu().numpy())
-            return 0.01 * pos_ests_mean.squeeze().cpu().numpy(), 0.0001 * pos_ests_obs_noise.squeeze().cpu().numpy()
+            print("Pos Est", (0.01 * pos_ests_mean - input_dict['rel_proprio'][0,-1,:2]).norm(p=2).item())
+            print("Uncertainty ", pos_ests_obs_noise.squeeze().cpu().numpy())
+            return pos_ests_mean.squeeze().cpu().numpy(), pos_ests_obs_noise.squeeze().cpu().numpy()
 
     def type_params(self, input_dict):
         with torch.no_grad():
@@ -1210,9 +1258,8 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         input_dict['state_idx'] = input_dict['hole_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
 
+        input_dict['rel_pos_prior_mean'] = 100 * (input_dict['rel_proprio'][:,-1,:2] - input_dict['rel_proprio'][:,0,:2]).repeat_interleave(T,0)
 
-        if 'rel_pos_estimate' in input_dict.keys():
-            input_dict['rel_pos_estimate'] = 100 * input_dict['rel_pos_estimate'].unsqueeze(0).repeat_interleave(T,0)
 
 class Voting_Policy(mm.Proto_Macromodel):
     def __init__(self, model_name, init_args, device = None):

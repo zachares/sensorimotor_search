@@ -1,4 +1,4 @@
-dataset_path: /scr2/muj_random_3_objects_new_02_control_range_fit_focused_20201006/
+dataset_path: /scr2/muj_random_3_objects_new_02_control_range_fit_focused_20201016/
   #/scr2/muj_random_3_objects_new_20201003/
 #/scr2/muj_random_3_objects_20201001/
   #/scr2/muj_random_10_objects_20200931/
@@ -9,7 +9,7 @@ dataset_path: /scr2/muj_random_3_objects_new_02_control_range_fit_focused_202010
 dataloading_params:
   num_workers: 6
   batch_size: 128
-  idx_dict_path: /scr-ssd/sens_search_logging/runs/20201007_training_2_w_3smallobjects_fit_w_entropy/val_train_split.pkl
+  idx_dict_path: #/scr-ssd/sens_search_logging/runs/20201007_training_2_w_3smallobjects_fit_w_entropy/val_train_split.pkl
     #/scr-ssd/sens_search_logging/models/20201004_training_1_w_10objects_regression/val_train_split.pkl
     #/scr-ssd/sens_search_logging/runs/20201001_training_0_w_10objects_regression/val_train_split.pkl
   num_objects: 3
@@ -35,52 +35,53 @@ logging_params:
 dataset_keys: ["force_hi_freq", "action", "proprio", "rel_proprio", "contact", "peg_vector", "hole_vector", "fit_vector", "hole_sites", 'done'] #, 'image', 'depth']
 
 info_flow:
-  # History_Encoder:
-  #   train: 1
-  #   model_folder: '' 
-  #   epoch: 0 
-  #   init_args:
-  #     num_objects: 3
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #   inputs:
-  #     rel_proprio: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     rel_pos_estimate: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     include_label: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         final_rel_pos: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Force
-  #     obs_logits:
-  #       inputs:
-  #         fit_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           weight: 5
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         fit_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
+  History_Encoder:
+    train: 1
+    model_folder: '' 
+    epoch: 0 
+    init_args:
+      num_objects: 3
+      action_size: 3
+      proprio_size: 12
+      force_size: [6, 50]
+      dropout_prob: 0.5
+      min_length: 20
+      residual_dims: 2
+    inputs:
+      rel_proprio: dataset
+      action: dataset
+      force_hi_freq: dataset
+      rel_pos_prior_mean: dataset
+      contact: dataset
+      tool_idx: dataset
+      state_idx: dataset
+      include_label: dataset
+      padding_mask: dataset
+      epoch: dataset
+    outputs:
+      pos_est:
+        inputs:
+          final_rel_pos: dataset
+        losses:
+          L2:
+            weight: 5
+            logging_name: Position_Estimate
+        evals:
+          Continuous_Error:
+            logging_name:  Pos_Err_Force
+      obs_logits:
+        inputs:
+          fit_idx: dataset
+        losses: 
+          Multinomial_NLL:
+            weight: 5
+            logging_name: Obs_Shape_Class
+      obs_inputs:
+        inputs:
+          fit_idx: dataset
+        evals:
+          Multinomial_Accuracy:
+            logging_name: obs_classifier_accuracy
   # StatePosSensor_wConstantUncertainty:
   #   train: 1
   #   model_folder: ''
@@ -91,12 +92,14 @@ info_flow:
   #     proprio_size: 12
   #     force_size: [6, 50]
   #     dropout_prob: 0.5
+  #     residual_dims: 0
   #     min_length: 20
   #   inputs:
   #     rel_proprio: dataset
   #     rel_pos_prior_mean: dataset
   #     rel_pos_prior_var: dataset
   #     rel_pos_estimate: dataset
+  #     reference_pos: dataset
   #     state_prior: dataset
   #     action: dataset
   #     force_hi_freq: dataset
@@ -128,7 +131,7 @@ info_flow:
   #         fit_idx: dataset
   #       losses:
   #         Multinomial_NLL:
-  #           weight: 50
+  #           weight: 10
   #           logging_name: Obs_Shape_Class
   #     obs_inputs:
   #       inputs:
@@ -153,39 +156,39 @@ info_flow:
   #       evals:
   #         Multinomial_Accuracy:
   #           logging_name: state_classifier_accuracy
-   Voting_Policy:
-    train: 1
-    model_folder: ''
-    epoch: 0 #5000
-    init_args:
-      num_objects: 3
-      action_size: 3
-      proprio_size: 12
-      force_size: [6, 50]
-      dropout_prob: 0.5
-      min_length: 20
-    inputs:
-      rel_proprio: dataset
-      action: dataset
-      force_hi_freq: dataset
-      contact: dataset
-      tool_idx: dataset
-      fit_idx: dataset
-      new_tool_idx: dataset
-      new_fit_idx: dataset
-      padding_mask: dataset
-      epoch: dataset
-    outputs:
-      vote_logits:
-        inputs:
-          vote_idx: Voting_Policy
-        losses:
-          Multinomial_NLL:
-            weight: 10
-            logging_name: Voting_Classifier
-      vote_inputs:
-        inputs: 
-          vote_idx: Voting_Policy
-        evals:
-          Multinomial_Accuracy:
-            logging_name: Vote_Classifier_Accuracy
+   # Voting_Policy:
+   #  train: 1
+   #  model_folder: ''
+   #  epoch: 0 #5000
+   #  init_args:
+   #    num_objects: 3
+   #    action_size: 3
+   #    proprio_size: 12
+   #    force_size: [6, 50]
+   #    dropout_prob: 0.5
+   #    min_length: 20
+   #  inputs:
+   #    rel_proprio: dataset
+   #    action: dataset
+   #    force_hi_freq: dataset
+   #    contact: dataset
+   #    tool_idx: dataset
+   #    fit_idx: dataset
+   #    new_tool_idx: dataset
+   #    new_fit_idx: dataset
+   #    padding_mask: dataset
+   #    epoch: dataset
+   #  outputs:
+   #    vote_logits:
+   #      inputs:
+   #        vote_idx: Voting_Policy
+   #      losses:
+   #        Multinomial_NLL:
+   #          weight: 10
+   #          logging_name: Voting_Classifier
+   #    vote_inputs:
+   #      inputs: 
+   #        vote_idx: Voting_Policy
+   #      evals:
+   #        Multinomial_Accuracy:
+   #          logging_name: Vote_Classifier_Accuracy

@@ -34,8 +34,59 @@ action_size: 3
 policy_keys: [rel_pos_shift]
 state_size: 3
 test_success: False
+eval: True
 
 info_flow:
+  # belief based without residual with uninformative prior
+  StatePosSensor_wConstantUncertainty: 
+    model_folder: /scr-ssd/sens_search_logging/models/20201020_training_0_w_3smallobjects_fit_point_estimate/
+    epoch: 5000
+    sensor: True
+    encoder: False
+
+  # # belief based with residual with uninformative prior
+  # StatePosSensor_wConstantUncertainty: 
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201020_training_2_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # # belief based with residual with informative prior
+  # StatePosSensor_wConstantUncertainty: 
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201020_training_10_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # # belief based without residual with informative prior
+  # StatePosSensor_wConstantUncertainty: 
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201021_training_0_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # # point estimate based without residual - final
+  # History_Encoder: # transformer
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201020_training_3_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # # point estimate based with residual with uninformative prior
+  # History_Encoder: # transformer
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201020_training_5_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+
+  # # point estimate based with residual with informative prior
+  # History_Encoder: # transformer
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201021_training_1_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
+    
+#############################################################
   # Toy task
   # StatePosSensor_wConstantUncertainty:
   #   model_folder: /scr-ssd/sens_search_logging/models/20201004_training_0_w_10objects_regression/
@@ -50,12 +101,12 @@ info_flow:
   #   sensor: True
   #   encoder: False
 
-  # 3 Small Objects
-  StatePosSensor_wConstantUncertainty: # transformer f(x,z) + x
-    model_folder: /scr-ssd/sens_search_logging/models/20201014_training_3_w_3smallobjects_fit_point_estimate/ # /scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/ # /scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/
-    epoch: 5000
-    sensor: True
-    encoder: False
+  # # 3 Small Objects
+  # StatePosSensor_wConstantUncertainty: # transformer f(x,z) + x
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201019_training_102_w_3smallobjects_fit_point_estimate/ #/scr-ssd/sens_search_logging/models/20201014_training_3_w_3smallobjects_fit_point_estimate/ # /scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/ # /scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/
+  #   epoch: 5000
+  #   sensor: True
+  #   encoder: False
 
   # StatePosSensor_wConstantUncertainty: # cnn
   #   model_folder: /scr-ssd/sens_search_logging/models/20201009_training_19_w_3smallobjects_fit_w_entropy_cnn/

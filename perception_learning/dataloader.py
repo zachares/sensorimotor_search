@@ -243,14 +243,16 @@ class Custom_DataLoader(Dataset):
                 # sample['rel_pos_prior_mean'] = 100 * (sample[key][-1,:2] - np.array(dataset[key])[0,:2])
                 # sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =2, size = 2)) 
 
-                sample['rel_pos_prior_mean'] = 100 * np.random.uniform(low=-0.03, high = 0.03, size = 2)
-                sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =3, size = 2))
+                sample['rel_pos_prior_mean'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][0,:2]) #np.random.uniform(low=-0.03, high = 0.03, size = 2)
+                sample['rel_pos_prior_var'] = np.ones(2) #np.square(np.random.uniform(low=1e-1, high =3, size = 2))
 
                 sample['final_rel_pos'] = 100 * sample[key][-1,:2]
 
-                sample['rel_pos_estimate'] = 100 * (sample[key][-1,:2] - sample[key][0,:2])
+                sample['rel_pos_estimate'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][0,:2]) #100 * np.random.uniform(low=-0.03, high = 0.03, size = 2) #(sample[key][-1,:2] - sample[key][0,:2])
 
                 sample['next_rel_pos'] = 100 * np.array(dataset[key][idx1, :2])
+
+                sample['reference_pos'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][0,:2])
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
 

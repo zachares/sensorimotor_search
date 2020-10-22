@@ -129,7 +129,8 @@ if __name__ == '__main__':
 				print("Encoder: ", model_name)
 
 	else:
-		raise Exception('sensor must be provided to estimate observation model')
+		model_dict = {}
+		# raise Exception('sensor must be provided to estimate observation model')
 
 	env = SensSearchWrapper(robo_env, cfg, selection_mode = 2, **model_dict)
 
@@ -154,34 +155,52 @@ if __name__ == '__main__':
 		num_samples = 100
 
 	trial_num = 0
+	num_attempts = 3
 
 	# print("Success Params: ", success_params,\
 	 # success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
 
 	while trial_num < num_samples:
+		print("Trial Num ", trial_num + 1, " out of ", num_samples, " trials")
+		env.robo_env.reload = False
 		env.reset(initialize=False, config_type = '3_small_objects_fit')
-
 		action_idx = env.robo_env.cand_idx
 		substate_idx = env.robo_env.hole_idx
 		tool_idx = env.robo_env.tool_idx
-		pos_init = copy.deepcopy(env.cand_ests[action_idx][0])
+		pos_init = copy.deepcopy(env.robo_env.hole_sites[action_idx][-1][:2])
 
-		print("Trial Num ", trial_num + 1, " out of ", num_samples, " trials")
-		cand_idx = env.robo_env.cand_idx
+		for attempt in range(num_attempts):
+			if env.done_bool:
+				continue
 
-		if env.big_step(cand_idx) or (env.done_bool and not test_success):
-			continue
-		else:
-			trial_num += 1
+			pos_temp_init = copy.deepcopy(env.robo_env.hole_sites[action_idx][-1][:2])
 
-		if test_success:
+			got_stuck = env.big_step(action_idx)
+
+			pos_final = env.robo_env.hole_sites[action_idx][-1][:2]	
+
+			pos_actual = env.robo_env.hole_sites[action_idx][-3][:2]
+
+			error_init = np.linalg.norm(pos_temp_init - pos_actual)
+			error_final = np.linalg.norm(pos_final - pos_actual)
+			
+			error_diff_per_step = error_init - error_final
+
+			print("Error Change: ", error_diff_per_step)
+
+			env.robo_env.reload = True
+			env.reset(initialize=False, config_type = '3_small_objects_fit')
+
+		if test_success and not got_stuck:
 			if env.done_bool:
 				success_params[tool_idx,1] += 1
 			else:
 				success_params[tool_idx,0] += 1
 
-		else:
-			pos_final = env.cand_ests[action_idx][0]	
+			trial_num += 1
+
+		elif not env.done_bool and not got_stuck:
+			pos_final = env.robo_env.hole_sites[action_idx][-1][:2]	
 
 			pos_actual = env.robo_env.hole_sites[action_idx][-3][:2]
 
@@ -202,6 +221,8 @@ if __name__ == '__main__':
 			else:
 				print("Incorrect Classification")
 				classification_accuracy[1] += 1
+
+			trial_num += 1
 
 
 		# print("Observation: ", env.robo_env.hole_names[obs_idxs[1]], " Ground Truth: ", env.robo_env.hole_sites[cand_idx][0])
