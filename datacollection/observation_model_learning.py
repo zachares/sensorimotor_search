@@ -25,6 +25,11 @@ from rlkit.torch import pytorch_util as ptu
 import perception_learning as pl
 import utils_sl as sl
 
+import pickle
+
+import datetime
+import time
+
 if __name__ == '__main__':
 	###################################################
 	### Loading run parameters from yaml file
@@ -42,15 +47,41 @@ if __name__ == '__main__':
 	seed = cfg['task_params']['seed']
 	ctrl_freq = cfg['control_params']['control_freq']
 	noise_scale  = 0.5
+	test_success = cfg['test_success']
 	cfg['task_params']['noise_scale'] = noise_scale
 	logging_folder = cfg["logging_params"]["logging_folder"]
 	num_samples = cfg['logging_params']['num_samples']
+	
+	t_now = time.time()
+	date = datetime.datetime.fromtimestamp(t_now).strftime('%Y%m%d')
+	results_folder = date + '_' + cfg['logging_params']['experiment_name'] + '/'
+
+	if test_success: # testing policy effectiveness
+		experiment_type_folder = 'success_rate/'
+
+		print("TESTING POLICY")
+		env_mode = 0
+		num_samples = num_tools * 50
+		success_params = np.ones((num_tools, 2))
+
+	else: # testing network accuracy
+		experiment_type_folder = 'perception_accuracy/'
+		print("TESTING PERCEPTION NETWORKS")
+		env_mode = 2
+		classification_accuracy = np.zeros(2)
+		position_estimation = []
+		num_samples = 100
+
+	logging_path = logging_folder + experiment_type_folder + results_folder
+
+	if os.path.isdir(logging_path) == False:
+		os.mkdir(logging_path)
 
 	name = "estimate_observation_params.yml"
 
-	print("Saving ", name, " to: ", logging_folder + name)
+	print("Saving ", name, " to: ", logging_path + name)
 
-	with open(logging_folder + name, 'w') as ymlfile2:
+	with open(logging_path + name, 'w') as ymlfile2:
 		yaml.dump(cfg, ymlfile2)
 
 	##########################################################
@@ -58,8 +89,6 @@ if __name__ == '__main__':
 	###########################################################
 	use_cuda = cfg['use_cuda']
 	device = torch.device("cuda:0" if use_cuda else "cpu")
-	random.seed(seed)
-	np.random.seed(seed)
 	ptu.set_gpu_mode(use_cuda, gpu_id=0)
 	ptu.set_device(0)
 
@@ -132,36 +161,25 @@ if __name__ == '__main__':
 		model_dict = {}
 		# raise Exception('sensor must be provided to estimate observation model')
 
-	env = SensSearchWrapper(robo_env, cfg, selection_mode = 2, **model_dict)
+	if 'sensor' in model_dict.keys():
+		model_dict['sensor'].save(9999, logging_path)
+
+	env = SensSearchWrapper(robo_env, cfg, selection_mode = env_mode, **model_dict)
 
 	# env.sensor.likelihood_model.model.p[:] = 3.0
 	# prior_samples = env.sensor.likelihood_model.model.p[:].sum().item()
 	# env.sensor.success_params.model.p[:] = 0.0
 
-	test_success = cfg['test_success']
 	num_tools = 3
-
-	if test_success: # testing policy effectiveness
-		print("TESTING POLICY")
-		env.mode = 0
-		num_samples = num_tools * 50
-		success_params = np.ones((num_tools, 2))
-
-	else: # testing network accuracy
-		print("TESTING PERCEPTION NETWORKS")
-		env.mode = 2
-		classification_accuracy = np.zeros(2)
-		position_estimation = []
-		num_samples = 100
-
 	trial_num = 0
-	num_attempts = 3
+	num_attempts = cfg['num_attempts']
 
 	# print("Success Params: ", success_params,\
 	 # success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
 
 	while trial_num < num_samples:
 		print("Trial Num ", trial_num + 1, " out of ", num_samples, " trials")
+		env.mode = env_mode
 		env.robo_env.reload = False
 		env.reset(initialize=False, config_type = '3_small_objects_fit')
 		action_idx = env.robo_env.cand_idx
@@ -169,13 +187,17 @@ if __name__ == '__main__':
 		tool_idx = env.robo_env.tool_idx
 		pos_init = copy.deepcopy(env.robo_env.hole_sites[action_idx][-1][:2])
 
+		attempt_count = 0
+
 		for attempt in range(num_attempts):
-			if env.done_bool:
-				continue
+			attempt_count += 1
 
 			pos_temp_init = copy.deepcopy(env.robo_env.hole_sites[action_idx][-1][:2])
 
 			got_stuck = env.big_step(action_idx)
+
+			if env.done_bool:
+				break
 
 			pos_final = env.robo_env.hole_sites[action_idx][-1][:2]	
 
@@ -199,7 +221,8 @@ if __name__ == '__main__':
 
 			trial_num += 1
 
-		elif not env.done_bool and not got_stuck:
+		elif not got_stuck and (attempt_count > 1 or (num_attempts == 1 and not env.done_bool)):
+			print("Happened")
 			pos_final = env.robo_env.hole_sites[action_idx][-1][:2]	
 
 			pos_actual = env.robo_env.hole_sites[action_idx][-3][:2]
@@ -239,14 +262,30 @@ if __name__ == '__main__':
 	# print(env.sensor.success_params())
 	# env.sensor.save(9999, env.sensor.loading_folder)
 
+	results_dict = {}
+
 	if test_success:
 		print("Success Params: ", success_params,\
 		 success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1))
+
+		results_dict['success_params'] = copy.deepcopy(success_params)
+		results_dict['Success_Results'] = success_params / np.repeat(np.expand_dims(np.sum(success_params, axis = 1), axis = 1), 2, axis = 1)
 	else:
 		position_estimation = np.array(position_estimation)
 		print("Classification Accuracy: ", classification_accuracy / sum(classification_accuracy))
 		print("Mean Position Change: ", np.mean(position_estimation))
 		print("STD Position Change: ", np.std(position_estimation))
+
+		results_dict['position_estimation'] =  copy.deepcopy(position_estimation)
+		results_dict['classification_accuracy'] = copy.deepcopy(classification_accuracy)
+		results_dict['Classification_Accuracy_Results'] = classification_accuracy / sum(classification_accuracy)
+		results_dict['Mean Position Change Results'] = np.mean(position_estimation)
+		results_dict['STD Position Change Results'] = np.std(position_estimation)
+
+	print("Saving results_dict to: ", logging_path + "results_dict.pkl")
+	with open(logging_path + "results_dict.pkl", 'wb') as f:
+		pickle.dump(results_dict, f, pickle.HIGHEST_PROTOCOL)
+
 
 
 

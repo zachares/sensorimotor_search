@@ -94,22 +94,22 @@ if __name__ == '__main__':
 	# plt.savefig('5_objects_3_object_types.png')
 	# plt.show()
 
-
+#####################################################################
 	fig, axes = plt.subplots(1, 2)
 	axes_idx = 0
 
 	names = ['transformer', 'cnn', 'lstm']
 	name_pos = np.arange(len(names))
-	mean_pos_change = [0.0047, 0.0014, 0.0019]
-	std_pos_change = [0.0041, 0.0013, 0.0015]
-	classification_accuracy = [0.66, 0.48, 0.45]
+	mean_pos_change = [2.80, 2.48, 3.32]
+	std_pos_change = [5.73, 5.30, 5.76]
+	classification_accuracy = [0.71, 0.65, 0.74]
 
 	axes[0].bar(name_pos,mean_pos_change, yerr=std_pos_change, align='center', alpha=0.5, ecolor='black',capsize=10)
 	axes[0].set_ylabel("Average Decrease in Position Error Per Step")
 	axes[0].set_xticks(name_pos)
 	axes[0].set_xticklabels(names)
 	axes[0].set_title('Position Estimation Performance')
-	axes[0].set_ylim(0, 0.01)
+	axes[0].set_ylim(-5, 10)
 	axes[0].yaxis.grid(True)
 
 	axes[1].bar(name_pos, classification_accuracy, align='center', alpha=0.5, ecolor='black',capsize=10)
@@ -122,3 +122,50 @@ if __name__ == '__main__':
 
 	plt.savefig('architecture_performance.png')
 	plt.show()
+
+	# names = ['Vision Prior\nwithout Sampling', 'Vision Prior\nwith Sampling', 'Belief Based Position\nEstimation with Residual']
+	# name_pos = np.arange(len(names))
+	# success_rate = [0.39, 0.49, 0.85]
+	# # std_pos_change = [0.0041, 0.0013, 0.0015]
+	# # classification_accuracy = [0.66, 0.48, 0.45]
+
+	# plt.bar(name_pos, success_rate, align='center', alpha=0.5, ecolor='black',capsize=10)
+	# plt.title("Success Rate after 5 attempts with a Matching Object")
+	# plt.ylabel("Success Rate after 5 Attempts")
+	# plt.xlabel("Method")
+	# plt.xticks(name_pos, names)
+	# # axes[0].set_title('Position Estimation Performance')
+	# plt.ylim(0, 1.0)
+	# plt.grid(True)
+
+	# plt.savefig('Prior_vs_Posterior.png')
+	# plt.show()
+
+	# fig, axes = plt.subplots(1, 2)
+	# axes_idx = 0
+
+	# names = ['Point Estimate Based\nwithout Residual', 'Point Estimate Based\nwith Residual',\
+	#  'Belief Based\nwithout Residual', 'Belief Based\nwith Residual']
+	# name_pos = np.arange(len(names))
+	# mean_pos_change = [-5.1 , 2.68, -2.2, 3.87]
+	# std_pos_change = [ 9.45, 6.75, 7.5, 6.36]
+	# classification_accuracy = [ 0.55, 0.64, 0.58, 0.77]
+
+	# axes[0].bar(name_pos,mean_pos_change, yerr=std_pos_change, align='center', alpha=0.5, ecolor='black',capsize=10)
+	# axes[0].set_ylabel("Average Decrease in Position Error Per Step (mm)")
+	# axes[0].set_xticks(name_pos)
+	# axes[0].set_xticklabels(names)
+	# axes[0].set_title('Position Estimation Performance')
+	# axes[0].set_ylim(-15, 15)
+	# axes[0].yaxis.grid(True)
+
+	# axes[1].bar(name_pos, classification_accuracy, align='center', alpha=0.5, ecolor='black',capsize=10)
+	# axes[1].set_ylabel("Classification Accuracy")
+	# axes[1].set_xticks(name_pos)
+	# axes[1].set_xticklabels(names)
+	# axes[1].set_title('Object Type Estimation Performance')
+	# axes[1].yaxis.grid(True)
+	# axes[1].set_ylim(0,1.0)
+
+	# plt.savefig('architecture_performance.png')
+	# plt.show()

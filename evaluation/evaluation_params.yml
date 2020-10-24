@@ -41,22 +41,30 @@ state_size: 3
 
 info_flow:
   StatePosSensor_wConstantUncertainty:
-    model_folder: /scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/ #/scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/
+    model_folder: /scr-ssd/sens_search_logging/models/20201020_training_10_w_3smallobjects_fit_point_estimate/ #/scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/
     epoch: 5000
     sensor: True
     regression_sensor: False
     encoder: False
-    success_params: [0.404, 0.250, 0.384] # variable radius # [0.404, 0.384, 0.346] # radius 0.01 # [0.307, 0.269, 365] # radius 0.02
-    radius: 0.01
+    success_params: [0.365, 0.404, 0.364] # radius 1.5cm # [0.404, 0.384, 0.346] # radius 0.01 # [0.307, 0.269, 365] # radius 0.02
 
-  History_Encoder:
-    model_folder: /scr-ssd/sens_search_logging/models/20201013_training_51_w_3smallobjects_fit_point_estimate/
-    epoch: 5000
-    sensor: False
-    regression_sensor: True
-    encoder: False
-    success_params:  [0.404, 0.250, 0.384] # variable radius # [0.307, 0.269, 365] # radius 0.02 #
-    radius: 0.02
+  # StatePosSensor_wConstantUncertainty:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201007_training_5_w_3smallobjects_fit_w_entropy/ #/scr-ssd/sens_search_logging/models/20201007_training_3_w_3smallobjects_fit_w_entropy/
+  #   epoch: 5000
+  #   sensor: True
+  #   regression_sensor: False
+  #   encoder: False
+  #   success_params: [0.404, 0.250, 0.384] # variable radius # [0.404, 0.384, 0.346] # radius 0.01 # [0.307, 0.269, 365] # radius 0.02
+  #   radius: 0.01
+
+  # History_Encoder:
+  #   model_folder: /scr-ssd/sens_search_logging/models/20201013_training_51_w_3smallobjects_fit_point_estimate/
+  #   epoch: 5000
+  #   sensor: False
+  #   regression_sensor: True
+  #   encoder: False
+  #   success_params:  [0.404, 0.250, 0.384] # variable radius # [0.307, 0.269, 365] # radius 0.02 #
+  #   radius: 0.02
 
 
   # History_Encoder:

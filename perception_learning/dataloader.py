@@ -284,11 +284,6 @@ class Custom_DataLoader(Dataset):
                 sample["tool_vector"] = sample[key]
                 sample["tool_idx"] = np.array(sample[key].argmax(0))
 
-                tool_list = list(range(self.idx_dict['num_objects']))
-                tool_list.remove(sample[key].argmax(0))
-
-                sample['new_tool_idx'] = np.array(random.choice(tool_list))
-
             elif key == 'hole_vector':
                 # print("hole vector: ", np.array(dataset[key]))
                 sample[key] = np.array(dataset[key])[:self.idx_dict['num_objects']]
@@ -319,6 +314,14 @@ class Custom_DataLoader(Dataset):
                 #     sample['done_mask'] = np.zeros((sample[key].size))
                 # else:
                 #     sample['done_mask'] = np.ones((sample[key].size))
+
+        if sample['tool_idx'] == sample['state_idx']:
+            tool_list = list(range(self.idx_dict['num_objects']))
+            tool_list.remove(sample["tool_vector"].argmax(0))
+
+            sample['new_tool_idx'] = np.array(random.choice(tool_list))
+        else:
+            sample['new_tool_idx'] = sample['state_idx']
 
         if sample['new_tool_idx'] == sample['state_idx']:
             sample['new_fit_idx'] = np.array(0)
