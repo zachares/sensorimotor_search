@@ -25,6 +25,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--noise', default=0.0, type=float)
     parser.add_argument('--num_traj', default=20, type=int)
+    parser.add_argument('--freespace', action="store_true")
 
     args = parser.parse_args()
 
@@ -69,7 +70,8 @@ if __name__ == '__main__':
     camera_depth=True,
     camera_width=128,
     camera_height=128,
-    placement_initializer=0.01,)
+    placement_initializer=0.01,
+    pos_limits=0.075)
 
     # env.viewer.set_camera(camera_id=2)
 
@@ -77,7 +79,7 @@ if __name__ == '__main__':
     tol_ang = 100 #this is so high since we are only doing position control
 
     ori_action = np.array([np.pi, 0, np.pi])
-    plus_offset = np.array([0, 0, -0.05, 0,0,0])
+    plus_offset = np.array([0, 0, 0.05, 0,0,0])
     peg_idx = 0
 
     # todo: check plus offset-- this might be the issue why points are small
@@ -116,6 +118,7 @@ if __name__ == '__main__':
     starting_location = np.zeros(6)
     starting_location[:3] = env.ee_pose[:3]
 
+
     for noise in noise_list:
         peg_type = "Square"
         hole_type = "Square"
@@ -144,58 +147,67 @@ if __name__ == '__main__':
         # init_point = np.concatenate([macro_action[:3] + top_goal[:3], ori_action])
         # final_point = np.concatenate([macro_action[6:] + top_goal[:3], ori_action])
 
+        if args.freespace:
+            for i in range(4):
+                current_location = starting_location + goal_noise
+
+                for i in range(5):
+                    current_location[2] = np.clip(current_location[2], top_goal[2] - 0.01, 10)
+                    points_list.append((current_location + goal_noise, 0, "init_point"))
+
+                    goal_noise = np.zeros(6)
+
+                    goal_noise[:3] = np.random.normal(0.0, 1.0, 3) *0.05
+
+                    current_location += goal_noise
+
         points_list.append((top_goal + plus_offset + goal_noise, 0, "top plus"))
         points_list.append((top_goal + np.array([0, 0, 0.04, 0,0,0]) + goal_noise, 0, "top"))
         goal_noise[:3] = np.random.normal(0.0, 1.0, 3) *0.01
-
-
+        #
+        #
         points_list.append((top_goal + np.array([0, 0, 0.03, 0,0,0]) + goal_noise, 0, "top"))
-        goal_noise[:3] = np.random.normal(0.0, 1.0, 3) *0.01
+        goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.01
 
         points_list.append((top_goal+ np.array([0, 0, 0.02, 0,0,0]) + goal_noise, 0, "init_point"))
-        goal_noise[:3] = np.random.normal(0.0, 1.0, 3) *0.01
+        goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.01
 
         points_list.append((top_goal+ np.array([0, 0, 0.02, 0,0,0]) + goal_noise, 0, "init_point"))
-        goal_noise[:3] = np.random.normal(0.0, 1.0, 3) *0.02
+        goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
         points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]) + goal_noise, 0, "init_point"))
-        
-        for i in range(20):
+        #
+        #
+        for i in range(5):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
-        
-        for i in range(20):
+            points_list.append((top_goal + goal_noise, 0, "init_point"))
+
+        for i in range(5):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((top_goal + goal_noise, 1, "init_point"))
+            points_list.append((top_goal + goal_noise + np.array([0, 0, -0.005, 0,0,0]), 0, "init_point"))
 
-        for i in range(20):
+        for i in range(5):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((starting_location + goal_noise, 1, "init_point"))
-        
-        for i in range(20):
+            points_list.append((top_goal + goal_noise + np.array([0, 0, -0.01, 0,0,0]), 0, "init_point"))
+
+        for i in range(5):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((top_goal + goal_noise + np.array([0, 0, -0.01, 0,0,0]), 1, "init_point"))
+            points_list.append((top_goal + goal_noise + np.array([0, 0, -0.02, 0,0,0]), 0, "init_point"))
 
-
-        for i in range(20):
+        #
+        for i in range(5):
             goal_noise = np.zeros(6)
 
             goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((starting_location + goal_noise, 1, "init_point"))
+            points_list.append((top_goal + goal_noise, 0, "init_point"))
 
-        for i in range(20):
-            goal_noise = np.zeros(6)
-
-            goal_noise[:2] = np.random.normal(0.0, 1.0, 2) *0.02
-            points_list.append((top_goal + goal_noise, 1, "init_point"))
-       
 
 
         # points_list.append((final_point, 1, "final_point"))

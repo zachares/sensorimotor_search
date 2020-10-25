@@ -99,10 +99,10 @@ if __name__ == '__main__':
 	def append_x(l, item, times):
 		for i in range(times):
 			l.append(item)
-	append_x(noise_list, 0.075, 10)
-	append_x(noise_list, 0.1, 10)
-	append_x(noise_list, 0.05, 60)
 	append_x(noise_list, 0, 60)
+	append_x(noise_list, 0.05, 60)
+	append_x(noise_list, 0.075, 30)
+	append_x(noise_list, 0.1, 10)
 
 	# append_x(noise_list, 0.1, 25)
 	# append_x(noise_list, 0.2, 20)
@@ -152,20 +152,30 @@ if __name__ == '__main__':
 		points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 0, "init_point"))
 		# points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
 		# points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
+		points_list.append((top_goal+ np.array([0, 0, 0.02, 0,0,0]), 1, "init_point"))
+
+		points_list.append((top_goal+ np.array([0, 0, 0.02, 0,0,0]), 1, "init_point"))
 		points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
-		points_list.append((top_goal+ np.array([0, 0, 0.01, 0,0,0]), 1, "init_point"))
+
 
 		points_list.append((top_goal, 1, "init_point"))
 		points_list.append((top_goal, 1, "init_point"))
+		# points_list.append((top_goal+ np.array([0, 0, 0.02, 0,0,0]), 1, "init_point"))
+		points_list.append((top_goal, 1, "init_point"))
+		points_list.append((top_goal + np.array([0, 0, -0.01, 0,0,0]), 0, "top"))
+
+		points_list.append((top_goal + np.array([0, 0, -0.01, 0,0,0]), 1, "top"))
+		points_list.append((top_goal + np.array([0, 0, -0.01, 0,0,0]), 1, "top"))
+		points_list.append((top_goal + np.array([0, 0, -0.03, 0,0,0]), 1, "top"))
+		points_list.append((top_goal + np.array([0, 0, -0.03, 0,0,0]), 0, "top"))
 
 		points_list.append((top_goal + np.array([0, 0, -0.03, 0,0,0]), 0, "top"))
-		points_list.append((top_goal + np.array([0, 0, -0.03, 0,0,0]), 2, "top"))
 
 		points_list.append((top_goal + np.array([0, 0, -0.06, 0,0,0]), 0, "top"))
-		points_list.append((top_goal + np.array([0, 0, -0.06, 0,0,0]), 2, "top"))
+		points_list.append((top_goal + np.array([0, 0, -0.06, 0,0,0]), 0, "top"))
 
-		# points_list.append((top_goal + np.array([0, 0, -0.09, 0,0,0]), 0, "top"))
-		points_list.append((top_goal + np.array([0, 0, -0.09, 0,0,0]), 2, "top"))
+		points_list.append((top_goal + np.array([0, 0, -0.09, 0,0,0]), 0, "top"))
+		# points_list.append((top_goal + np.array([0, 0, -0.09, 0,0,0]), 2, "top"))
 
 		# points_list.append((final_point, 1, "final_point"))
 		# points_list.append((top_goal + plus_offset, 0, "top plus"))
