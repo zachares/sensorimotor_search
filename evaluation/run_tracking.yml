@@ -1,7 +1,0 @@
-run_tracker:
-  date: '20200531'
-  debugging: 0
-  development: 5
-  evaluation: 30
-  testing: 0
-  training: 0

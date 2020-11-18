@@ -41,10 +41,11 @@ conda install -c intel scikit-learn
 conda install -c conda-forge gym
 
 conda install h5py
+conda install matplotlib
 
 # CHECK PATH create project directory
-mkdir /scr-ssd/sens_search_new/
-cd /scr-ssd/sens_search_new/
+mkdir /scr-ssd/sens_search/
+cd /scr-ssd/sens_search/
 
 # adding and installing robosuite
 git clone -b peter_devel https://github.com/stanford-iprl-lab/robosuite.git
@@ -62,15 +63,15 @@ cd robosuite
 pip install -e .
 cd ..
 
-git clone -b https://github.com/zachares/rlkit.git
-cd rlkit
-pip install -e .
-cd ..
+# git clone -b https://github.com/zachares/rlkit.git
+# cd rlkit
+# pip install -e .
+# cd ..
 
-git clone https://github.com/vitchyr/viskit.git
-cd viskit
-pip install -e .
-cd ..
+# git clone https://github.com/vitchyr/viskit.git
+# cd viskit
+# pip install -e .
+# cd ..
 
 git clone -b https://github.com/zachares/supervised_learning.git
 cd supervised_learning

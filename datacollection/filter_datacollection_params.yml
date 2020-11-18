@@ -8,31 +8,25 @@ control_params:
   horizon_bool: False
 
 task_params:
-  max_big_steps: 10
-  constraint_type: 1
-  shift_bool: 1.0
   horizon: 100
   plus_offset: [ 0, 0, 0.04] # should match number of dimensions in action space
   workspace_dim: 0.02
-  seed: 4321
-  selection_mode: 3
+  scale: 1.0
   ignore_done: False
 
 logging_params:
-  logging_folder: /scr2/muj_random_20200728/ #"/scr2/muj_senssearch_dataset10HZ_SAC_20200706_representation/" #"/scr2/muj_senssearch_dataset10HZ_SAC_20200704_noisy_data/"
+  logging_folder: /scr2/muj_random_3_objects_20201116/ 
   logging_data_bool: 1.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
   image_size: 32
   collect_depth: 1.0
-  camera_name: insertion
+  camera_name: eye_in_hand
   num_trials: 3000
 
-policy_keys: ['rel_pos', 'contact', 'peg_type'] # ["encoding"] # 
-traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
+policy_keys: ['rel_pos', 'contact', 'peg_type']
+traj_keys: ["force_hi_freq", "action", "proprio", "joint_pos", "joint_vel", "contact", 'done', 'reward'] # , 'rel_proprio'
 
-model_params:
-  use_cuda: True
-  action_dim: 3
-  state_dim: 7
-  torch_policy_path:  
+use_cuda: True
+action_size: 3
+state_size: 7

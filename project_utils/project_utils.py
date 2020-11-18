@@ -124,81 +124,8 @@ def print_histogram(probs, labels, direction = False, histogram_height = 5): # d
 
 def toTorch(array, device):
     return torch.from_numpy(array).to(device).float()
-'''
-Outer Loop Functions
-'''
-def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_model = None, num_each_object_list = None):
-	num_substates = len(substate_names)
-	task_dict = {}
-	# print(num_actions, substate_names, observation_names, loglikelihood_model.shape, num_each_object_list)
 
-	task_dict['tool_names'] = substate_names
-	task_dict['num_tools'] = len(task_dict['tool_names'])
 
-	if num_each_object_list is not None: # states only without copies of the same substate
-		task_dict['num_each_object'] = num_each_object_list
-
-		substate_idxs = []
-		for i, num_object in enumerate(task_dict['num_each_object']):
-			for j in range(num_object):
-				substate_idxs.append(i)
-
-		assert num_actions <= len(substate_idxs)
-		task_dict["states"] = list(itertools.permutations(substate_idxs, num_actions))
-	else:
-		raise Exception('Due the space complexity of this formulation,\n\
-		 it is better to use a  different POMDP formulation where each\n\
-		  objects type is estimated seperately')
-
-	task_dict["substate_names"] = substate_names
-	task_dict["num_substates"] = num_substates
-	task_dict["num_actions"] = num_actions
-	task_dict["num_states"] = len(task_dict["states"])
-	task_dict['observations'] = [ i for i in range(len(observation_names)) ]
-	task_dict['obs_names'] = observation_names
-	task_dict['num_obs'] = len(task_dict['observations'])
-
-	task_dict['alpha_vectors'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_states'])) # reward vector
-
-	for act_idx in range(num_actions):
-		for tool_idx in range(task_dict['num_tools']):
-			for state_idx, state in enumerate(task_dict['states']):
-				substate_idx = state[act_idx]
-				if substate_idx == tool_idx:
-					task_dict['alpha_vectors'][tool_idx, act_idx, state_idx] = 1.0
-
-	task_dict['beta_vectors'] =  np.zeros((num_actions, num_substates, task_dict['num_states'])) # marginalizing vector
-
-	for act_idx in range(num_actions):
-		for state_idx, state in enumerate(task_dict['states']):
-			substate_idx = state[act_idx]
-			task_dict['beta_vectors'][act_idx, substate_idx, state_idx] = 1.0
-
-	if loglikelihood_model is not None:
-		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_obs'], task_dict['num_states']))
-
-		for tool_idx in range(task_dict['num_tools']):
-			for obs_idx in task_dict['observations']:
-				for act_idx in range(num_actions):
-					for state_idx, state in enumerate(task_dict['states']):
-						substate_idx = state[act_idx]
-						task_dict['loglikelihood_matrix'][tool_idx, act_idx, obs_idx, state_idx] =\
-						 loglikelihood_model[tool_idx, obs_idx, substate_idx]
-	else:
-		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_obs'], task_dict['num_states']))
-
-		default_logprob = np.log(1 / task_dict['num_obs'])
-
-		task_dict['loglikelihood_matrix'][:] = default_logprob
-
-	task_dict['substate_idxs'] = np.zeros((num_actions, task_dict['num_states'])).astype(np.int16)
-
-	for act_idx in range(num_actions):
-		for state_idx, state in enumerate(task_dict['states']):
-			substate_idx = state[act_idx]
-			task_dict['substate_idxs'][act_idx, state_idx] = substate_idx
-
-	return task_dict
 
 	# ### to avoid search during online execution
 	# task_dict['obs2idx'] = {} 

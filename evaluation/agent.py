@@ -14,6 +14,79 @@ from collections import OrderedDict
 import multinomial as multinomial
 import project_utils as pu
 
+def gen_task_dict(num_actions, substate_names, observation_names, loglikelihood_model = None, num_each_object_list = None):
+	num_substates = len(substate_names)
+	task_dict = {}
+	# print(num_actions, substate_names, observation_names, loglikelihood_model.shape, num_each_object_list)
+
+	task_dict['tool_names'] = substate_names
+	task_dict['num_tools'] = len(task_dict['tool_names'])
+
+	if num_each_object_list is not None: # states only without copies of the same substate
+		task_dict['num_each_object'] = num_each_object_list
+
+		substate_idxs = []
+		for i, num_object in enumerate(task_dict['num_each_object']):
+			for j in range(num_object):
+				substate_idxs.append(i)
+
+		assert num_actions <= len(substate_idxs)
+		task_dict["states"] = list(itertools.permutations(substate_idxs, num_actions))
+	else:
+		raise Exception('Due the space and time complexity of this formulation,\n\
+		 it is better to use a  different POMDP formulation where each\n\
+		  objects type is estimated seperately')
+
+	task_dict["substate_names"] = substate_names
+	task_dict["num_substates"] = num_substates
+	task_dict["num_actions"] = num_actions
+	task_dict["num_states"] = len(task_dict["states"])
+	task_dict['observations'] = [ i for i in range(len(observation_names)) ]
+	task_dict['obs_names'] = observation_names
+	task_dict['num_obs'] = len(task_dict['observations'])
+
+	task_dict['alpha_vectors'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_states'])) # reward vector
+
+	for act_idx in range(num_actions):
+		for tool_idx in range(task_dict['num_tools']):
+			for state_idx, state in enumerate(task_dict['states']):
+				substate_idx = state[act_idx]
+				if substate_idx == tool_idx:
+					task_dict['alpha_vectors'][tool_idx, act_idx, state_idx] = 1.0
+
+	task_dict['beta_vectors'] =  np.zeros((num_actions, num_substates, task_dict['num_states'])) # marginalizing vector
+
+	for act_idx in range(num_actions):
+		for state_idx, state in enumerate(task_dict['states']):
+			substate_idx = state[act_idx]
+			task_dict['beta_vectors'][act_idx, substate_idx, state_idx] = 1.0
+
+	if loglikelihood_model is not None:
+		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_obs'], task_dict['num_states']))
+
+		for tool_idx in range(task_dict['num_tools']):
+			for obs_idx in task_dict['observations']:
+				for act_idx in range(num_actions):
+					for state_idx, state in enumerate(task_dict['states']):
+						substate_idx = state[act_idx]
+						task_dict['loglikelihood_matrix'][tool_idx, act_idx, obs_idx, state_idx] =\
+						 loglikelihood_model[tool_idx, obs_idx, substate_idx]
+	else:
+		task_dict['loglikelihood_matrix'] = np.zeros((task_dict['num_tools'], num_actions, task_dict['num_obs'], task_dict['num_states']))
+
+		default_logprob = np.log(1 / task_dict['num_obs'])
+
+		task_dict['loglikelihood_matrix'][:] = default_logprob
+
+	task_dict['substate_idxs'] = np.zeros((num_actions, task_dict['num_states'])).astype(np.int16)
+
+	for act_idx in range(num_actions):
+		for state_idx, state in enumerate(task_dict['states']):
+			substate_idx = state[act_idx]
+			task_dict['substate_idxs'][act_idx, state_idx] = substate_idx
+
+	return task_dict
+
 class Joint_POMDP(object):
 	def __init__(self, env, mode = 2, device = None, print_info = True, horizon = 3, success_params = None):
 		self.env = env		
@@ -23,20 +96,20 @@ class Joint_POMDP(object):
 		self.success_params = success_params
 		# print('\n\n\n', self.success_params, '\n\n\n')
 		
-		self.print_info = False
 		self.reset()
 		self.print_info = print_info
+		self.print_info = False
 
 	def reset(self, config_type = '3_small_objects_fit', peg_idx = None):
 		self.env.reset(initialize = False, config_type = config_type, peg_idx = peg_idx)
 
 		if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'get_loglikelihood_model') and self.mode != 0:
-			print("GOT LIKELIHOOD MODEL")
+			# print("GOT LIKELIHOOD MODEL")
 			loglikelihood_model = self.env.sensor.get_loglikelihood_model()
 		else:
 			loglikelihood_model = None
 
-		self.task_dict = pu.gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
+		self.task_dict = gen_task_dict(sum(self.env.robo_env.num_boxes), self.env.robo_env.hole_names,\
 			 self.env.robo_env.obs_names, num_each_object_list = self.env.robo_env.num_boxes,\
 			  loglikelihood_model = loglikelihood_model)
 
@@ -44,6 +117,8 @@ class Joint_POMDP(object):
 
 		if not self.env.robo_env.reload:
 			self.reset_probs()
+			self.completed_tasks = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
+			self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
 
 		self.step_count = 0
 
@@ -52,12 +127,10 @@ class Joint_POMDP(object):
 		self.corr_action_idx_list = []
 		self.corr_state_idx_list = OrderedDict()
 
-
+		# if self.env.reload:
 		for j in range(self.task_dict['num_actions']):
-			if self.env.robo_env.hole_sites[j][3] == 0:
-					self.corr_action_idx_list.append(j)
-
-			self.corr_state_idx_list[j] = []
+			if self.env.robo_env.hole_sites[j][1] == self.env.robo_env.peg_idx:
+				self.corr_action_idx_list.append(j)
 
 		for i, state in enumerate(self.task_dict['states']):
 			correct = True
@@ -67,31 +140,21 @@ class Joint_POMDP(object):
 
 			if correct:
 				self.corr_state_idx = i
-
-			for j in self.corr_action_idx_list:
-				substate_idx = state[j]
-
-				if substate_idx == self.env.robo_env.peg_idx:
-					self.corr_state_idx_list[j].append(i)
 		
 	def reset_probs(self):
-		self.completed_tasks = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
 		self.state_probs = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
 		self.state_probs = self.state_probs.float().to(self.device)
-		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
-		self.states = torch.zeros((self.task_dict['num_tools'], self.task_dict['num_actions'])).float().to(self.device)
 
 	def choose_action(self):
-
+		# print("Peg Index: ", self.env.get_goal())
+		# print("Env Peg Index", self.env.robo_env.peg_idx)
+		# print("Env Tool Index", self.env.robo_env.tool_idx)
 		# print("Completed Tasks: ", self.completed_tasks)
 
 		if self.completed_tasks.size()[0] - self.completed_tasks.sum() == 1:
 			print("Single Option ", self.completed_tasks.min(0)[1].item())
 			return self.completed_tasks.min(0)[1].item()
 
-		# if self.success_params is None:
-		# 	alphas = (1 / self.action_counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
-		# else:
 		print("Success Params", self.success_params[self.env.get_goal()])
 		alpha = self.success_params[self.env.get_goal()]
 		alphas = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * alpha
@@ -104,62 +167,15 @@ class Joint_POMDP(object):
 
 			weights = prob_fit
 
-		elif self.mode == 1: # sampling prior, no update
-			print("Sampling Vision Prior")
-			# reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
-			# uninfo_prior = torch.ones((self.task_dict["num_states"])) / self.task_dict["num_states"]
-			# state_prior = uninfo_prior.float().to(self.device).unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
-			# prob_fit = (reward_vectors * state_prior * alphas).sum(1)
-
-			# weights = ((prob_fit * (1 - self.completed_tasks)) / (prob_fit * (1 - self.completed_tasks)).sum()).cpu().numpy()
-
-			# print("prob weights: ", weights)
-
-			# action_idx = np.argmax(np.random.multinomial(1, weights / np.sum(weights), size = 1))
-			possible_actions = []
-			for i in range(self.task_dict['num_actions']):
-				if self.completed_tasks[i] == 0:
-					possible_actions.append(i)
-
-			# print('Possible Actions: ', possible_actions)
-			action_idx = random.choice(possible_actions)
-
-			print('Index: ', action_idx)
-
-			return action_idx
-
-		elif self.mode == 2: # with classifier and state estimation
+		elif self.mode == 1: # with classifier and state estimation
 			print("Greedy")
 			reward_vectors = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device)
 			state_prior = self.state_probs.unsqueeze(0).repeat_interleave(self.task_dict['num_actions'],0)
 			prob_fit = (reward_vectors * state_prior * alphas).sum(1)
 
-			weights = prob_fit
+			weights = prob_fit		
 
-		elif self.mode == 3: # with classifier and state estimation
-			print("Regression")
-			print("States: ", self.states[self.env.get_goal()].cpu().numpy())
-			states = self.states[self.env.get_goal()]
-
-			weights = torch.where(states == 0, torch.ones_like(states), torch.zeros_like(states))
-
-			# if torch.sum(weights) == 0:
-			# 	print("Iterating")
-			# 	weights = (1 / self.action_counts) * (1 - self.completed_tasks)
-				
-				# possible_actions = []
-				# for i in range(self.task_dict['num_actions']):
-				# 	if self.completed_tasks[i] == 0:
-				# 		possible_actions.append(i)
-
-				# print('Possible Actions: ', possible_actions)
-				# action_idx = random.choice(possible_actions)
-
-				# print('Index: ', action_idx)
-
-				# return action_idx			
-
-		elif self.mode == 4:
+		elif self.mode == 2:
 			print("POMDP with horizon - ",  self.horizon)
 			prev_time = time.time()
 			weights = self.POMDP_value_iteration(self.state_probs, self.action_counts, horizon = self.horizon)
@@ -170,6 +186,8 @@ class Joint_POMDP(object):
 			raise Exception('Mode ', self.mode, ' current unsupported')
 
 		weights = weights * (1 - self.completed_tasks)
+
+		print("Decision Weights: ", weights.cpu().numpy())
 
 		max_value = 0
 		max_idxs = []
@@ -183,6 +201,7 @@ class Joint_POMDP(object):
 			elif weight == max_value:
 				max_idxs.append(i)
 
+		### breaking ties by visiting the least visited object of the ties
 		if len(max_idxs) > 1:
 			# print("Tie")
 			weights = ((1 / self.action_counts) * (1 - self.completed_tasks))[max_idxs]
@@ -201,11 +220,7 @@ class Joint_POMDP(object):
 		return action_idx  
 
 	def update_state_probs(self, action_idx, obs_idx, obs_state_logprobs = None, obs_substate_logprobs = None):
-		if self.success_params is None:
-			prob_success = (1 / self.action_counts[action_idx])
-		else:
-			prob_success = self.success_params[self.env.get_goal()]
-
+		prob_success = self.success_params[self.env.get_goal()]
 		alphas = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal(), action_idx], self.device) * prob_success
 		transition_function = 1 - alphas
 
@@ -213,13 +228,24 @@ class Joint_POMDP(object):
 		
 		assert (obs_state_logprobs is not None) or (obs_substate_logprobs is not None)
 
+		if self.mode == 0:
+			state_logprobs 
+
 		if obs_state_logprobs is not None:
-			state_logprobs = obs_state_logprobs[obs_idx]
+			if self.mode == 0:
+				state_logprobs = torch.zeros_like(obs_state_logprobs[obs_idx])
+			else:
+				state_logprobs = obs_state_logprobs[obs_idx]				
+
 			self.state_probs = F.softmax(torch.log(state_prior) +\
 			 state_logprobs[self.task_dict['substate_idxs'][action_idx]] +\
 			  torch.log(transition_function), dim = 0)
 		else:
-			substate_logprobs = obs_substate_logprobs[obs_idx]
+			if self.mode == 0:
+				substate_logprobs = torch.zeros_like(obs_substate_logprobs[obs_idx])
+			else:
+				substate_logprobs = obs_substate_logprobs[obs_idx]
+
 			self.state_probs = F.softmax(torch.log(state_prior) +\
 			 substate_logprobs +\
 			  torch.log(transition_function), dim = 0)
@@ -228,40 +254,16 @@ class Joint_POMDP(object):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
 		print("Updating based on observation")
 		self.step_count += 1
-		
 		self.action_counts[action_idx] += 1
-
-		if obs_idx == 0: # classified as fit
-			self.states[self.env.get_goal(),  action_idx] = 0
-			for i in range(self.task_dict['num_tools']):
-				if i == self.env.get_goal():
-					continue
-
-				self.states[i, action_idx] = 1
-		else:
-			self.states[self.env.get_goal(),  action_idx] = obs_idx
 
 		if obs_state_logprobs is not None:
 			print("Received likelihood model")
-			if self.mode != 0:
-				for i in range(self.task_dict['num_obs']):
-					state_logprobs = obs_state_logprobs[i]
-					self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, i] = state_logprobs[self.task_dict['substate_idxs'][action_idx]]	
 
-				self.update_state_probs(action_idx, obs_idx, obs_state_logprobs = pu.toTorch(obs_state_logprobs, self.device))
-			else:
-				self.update_state_probs(action_idx, obs_idx, obs_substate_logprobs = pu.toTorch(self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx], self.device))
+			# for i in range(self.task_dict['num_obs']):
+			# 	state_logprobs = obs_state_logprobs[i]
+			# 	self.task_dict['loglikelihood_matrix'][self.env.get_goal(), action_idx, i] = state_logprobs[self.task_dict['substate_idxs'][action_idx]]	
 
-			if action_idx in self.corr_action_idx_list:
-				print("Calculated prob_diff")
-				sum_events = 0
-				count = 0
-
-				for i in self.corr_state_idx_list[action_idx]:
-					sum_events += self.state_probs[i]
-					count += 1
-
-				self.prob_diff = self.state_probs[self.corr_state_idx].item() / sum_events.item() - 1 / count
+			self.update_state_probs(action_idx, obs_idx, obs_state_logprobs = pu.toTorch(obs_state_logprobs, self.device))
 
 		if self.print_info and hasattr(self.env, 'sensor'):
 			obs = self.task_dict['obs_names'][obs_idx]
@@ -291,15 +293,12 @@ class Joint_POMDP(object):
 
 			print("Probabilities", probs.detach().cpu().numpy())
 
-			pu.print_histogram(probs, self.task_dict["substate_names"], histogram_height = 10)
+			pu.print_histogram(probs, self.task_dict["substate_names"], histogram_height = 5)
 		print("##############################################\n")
 
 	def POMDP_value_iteration(self, state_probs, counts, horizon = 1): # depth of value iteration, calculating expected value
-		if self.success_params is None:
-			probs_success = (1 / counts).unsqueeze(1).repeat_interleave(self.task_dict['num_states'],1)
-		else:
-			prob_success = self.success_params[self.env.get_goal()]
-			probs_success = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * prob_success
+		prob_success = self.success_params[self.env.get_goal()]
+		probs_success = torch.ones((self.task_dict['num_actions'], self.task_dict['num_states'])).to(self.device) * prob_success
 
 		alphas = pu.toTorch(self.task_dict['alpha_vectors'][self.env.get_goal()], self.device) * probs_success
 		transition_function = 1 - alphas
@@ -351,7 +350,7 @@ class Joint_POMDP(object):
 
 		return margin
 
-class Separate_POMDP(object):
+class Seperate_POMDP(object):
 	def __init__(self, env, mode = 2, device = None, print_info = True, horizon = 3, success_params = None):
 		self.env = env		
 		self.device = device
@@ -363,26 +362,38 @@ class Separate_POMDP(object):
 		self.print_info = print_info
 		self.reset()
 
-	def reset(self):
-		self.env.reset(initialize = False)
+	def reset(self, config_type = '3_small_objects_fit', peg_idx = None):
+		self.env.reset(initialize = False, config_type = config_type, peg_idx = peg_idx)
+
 		self.task_dict = {}
 
 		if hasattr(self.env, 'sensor') and hasattr(self.env.sensor, 'get_loglikelihood_model'):
 			self.task_dict['loglikelihood_matrix'] = self.env.sensor.get_loglikelihood_model()
 		else:
-			self.task_dict['loglikelihood_matrix'] = np.log(np.ones((self.env.robo_env.peg_names, len(self.env.robo_env.hole_names),\
-			 len(self.env.robo_env.hole_names))) / len(self.env.robo_env.hole_names))
+			self.task_dict['loglikelihood_matrix'] = np.log(np.ones((self.env.robo_env.peg_names, len(self.env.robo_env.obs_names),\
+			 len(self.env.robo_env.hole_names))) / len(self.env.robo_env.obs_names))
 
 		self.task_dict['num_tools'] = len(self.env.robo_env.peg_names)
 		self.task_dict['num_actions'] = len(self.env.robo_env.hole_sites.keys())
 		self.task_dict['num_substates'] = len(self.env.robo_env.hole_names)
 		self.task_dict['substate_names'] = self.env.robo_env.hole_names
-		self.task_dict['num_obs'] = len(self.env.robo_env.hole_names)
-		self.task_dict['obs_names'] = self.env.robo_env.hole_names
+		self.task_dict['num_obs'] = len(self.env.robo_env.obs_names)
+		self.task_dict['obs_names'] = self.env.robo_env.obs_names
 
 		self.gt_dict = self.env.get_gt_dict()
-		self.reset_probs()
+
+		if not self.env.robo_env.reload:
+			self.reset_probs()
+			self.completed_tasks = torch.zeros(self.task_dict['num_actions']).float().to(self.device)
+			self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
+
 		self.step_count = 0
+
+		self.corr_action_idx_list = []
+
+		for j in range(self.task_dict['num_actions']):
+			if self.env.robo_env.hole_sites[j][1] == self.env.robo_env.peg_idx:
+				self.corr_action_idx_list.append(j)
 
 		if self.print_info:
 			self.print_hypothesis()
@@ -391,39 +402,18 @@ class Separate_POMDP(object):
 		self.state_probs = torch.ones((self.task_dict['num_actions'], self.task_dict["num_substates"])) / self.task_dict["num_substates"]
 		self.state_probs = self.state_probs.float().to(self.device)
 
-		self.action_counts = torch.ones(self.task_dict['num_actions']).float().to(self.device)
-		self.corr_action_idx_list = []
-
-		for j in range(self.task_dict['num_actions']):
-			if self.env.robo_env.hole_sites[j][3] == 0:
-					self.corr_action_idx_list.append(j)
-
 	def choose_action(self):
-		if self.success_params is None:
-			probs_success = 1 / counts
-		else:
-			probs_success = self.success_params[self.env.get_goal()] * torch.ones(self.task_dict['num_actions']).to(self.device)
+		probs_success = self.success_params[self.env.get_goal()] * torch.ones(self.task_dict['num_actions']).to(self.device)
 
 		if self.mode == 0: # iterator
-			print("Iterating")
-			print("Index of hole choice: ", self.action_counts.min(0)[1].item())
-			return self.action_counts.min(0)[1].item()
+			print("Greedy with Failure Only")
+			weights = self.state_probs[:, self.env.get_goal()] * probs_success
 
-		elif self.mode == 2: # with classifier and state estimation
+		elif self.mode == 1: # with classifier and state estimation
 			print("Greedy")
 			weights = self.state_probs[:, self.env.get_goal()] * probs_success
 
-		elif self.mode == 3: # with classifier and state estimation
-			print("Explore")
-			prob_success = self.state_probs[:, self.env.get_goal()]	* probs_success	
-			substate_entropy = (-self.state_probs * torch.log(self.state_probs)).sum(-1)
-
-			weights = prob_fit + 2 * substate_entropy
-
-			print("Prob Success: ", prob_success)
-			print("Entropy Bonus: ", 2 * substate_entropy)
-
-		elif self.mode == 4:
+		elif self.mode == 2:
 			print("POMDP with horizon - ",  self.horizon)
 			prev_time = time.time()
 			weights = self.POMDP_value_iteration(self.state_probs, self.action_counts, horizon = self.horizon)
@@ -433,7 +423,34 @@ class Separate_POMDP(object):
 		else:
 			raise Exception('Mode ', self.mode, ' current unsupported')
 
-		action_idx = weights.max(0)[1].item()
+		weights = weights * (1 - self.completed_tasks)
+
+		print("Decision Weights: ", weights.cpu().numpy())
+
+		max_value = 0
+		max_idxs = []
+
+		for i in range(weights.size(0)):
+			weight = weights[i].item()
+			if weight > max_value:
+				max_idxs = [i]
+				max_value = weight
+
+			elif weight == max_value:
+				max_idxs.append(i)
+
+		### breaking ties by visiting the least visited object
+		if len(max_idxs) > 1:
+			# print("Tie")
+			weights = ((1 / self.action_counts) * (1 - self.completed_tasks))[max_idxs]
+			# print(max_idxs)
+			max_idx = weights.max(0)[1].item()
+			# print(max_idx)
+			action_idx = max_idxs[max_idx]
+			# print(action_idx)
+
+		else:
+			action_idx = max_idxs[0]
 
 		if self.print_info:
 			print("Index of hole choice: ", action_idx)
@@ -441,48 +458,31 @@ class Separate_POMDP(object):
 		return action_idx  
 
 	def update_state_probs(self, action_idx, obs_idx, obs_state_logprobs):
-		if self.success_params is None:
-			prob_success = 1 / counts[action_idx]
-			transition_prob = 1 - prob_success
-		else:
-			prob_success = self.success_params[self.env.get_goal()]
-			transition_prob = 1 - prob_success
+		prob_success = self.success_params[self.env.get_goal()]
+		transition_prob = 1 - prob_success
 
 		transition_function = torch.ones(self.task_dict['num_substates']).to(self.device)
 		transition_function[self.env.get_goal()] = transition_prob
 
 		state_prior = self.state_probs[action_idx].clone()
 		
-		state_logprobs = obs_state_logprobs[obs_idx]
+		if self.mode == 0:
+			state_logprobs = torch.zeros_like(obs_state_logprobs[obs_idx])
+		else:
+			state_logprobs = obs_state_logprobs[obs_idx]
 
-		state_posterior_logits = torch.log(state_prior) + state_logprobs + torch.log(transition_function)
-
-		self.state_probs[action_idx] = multinomial.logits2probs(state_posterior_logits)
+		self.state_probs[action_idx] = F.softmax(torch.log(state_prior) + state_logprobs +\
+		 torch.log(transition_function), dim = 0)
 
 	def new_obs(self, action_idx, obs_idx, obs_state_logprobs):
 		# obs_idxs is a tuple of indicies to the likelihood matrix element to look up
 		print("Updating based on observation")
 		self.step_count += 1
-		
 		self.action_counts[action_idx] += 1
 
-		if hasattr(self.env, 'sensor'):
-			self.task_dict['loglikelihood_matrix'][self.env.get_goal()] = obs_state_logprobs	
-
 		if obs_state_logprobs is not None:
+			# self.task_dict['loglikelihood_matrix'][self.env.get_goal()] = obs_state_logprobs	
 			self.update_state_probs(action_idx, obs_idx, pu.toTorch(obs_state_logprobs, self.device))
-
-			if action_idx in self.corr_action_idx_list:
-				self.prob_diff = 0
-				count = 0
-				for i in range(self.task_dict['num_actions']):
-					if i == action_idx:
-						continue
-
-					self.prob_diff += (self.state_probs[i, self.env.robo_env.hole_sites[i][2]] - 1 / self.task_dict['num_substates']).item()
-					count += 1
-
-				self.prob_diff = self.prob_diff / count
 
 		if self.print_info and hasattr(self.env, 'sensor'):
 			obs = self.task_dict['obs_names'][obs_idx]
@@ -494,7 +494,7 @@ class Separate_POMDP(object):
 					gt_props += " - " + info
 			
 			print(gt_props)
-			self.print_hypothesis()
+			# self.print_hypothesis()
 
 	def print_hypothesis(self):
 		for act_idx in range(self.task_dict["num_actions"]):
@@ -505,7 +505,7 @@ class Separate_POMDP(object):
 
 			print("Probabilities", probs.detach().cpu().numpy())
 
-			pu.print_histogram(probs, self.task_dict["substate_names"], histogram_height = 10)
+			pu.print_histogram(probs, self.task_dict["substate_names"], histogram_height = 5)
 		print("##############################################\n")
 
 	def POMDP_value_iteration(self, state_probs, counts, horizon = 1): # depth of value iteration, calculating expected value
@@ -550,142 +550,142 @@ class Separate_POMDP(object):
 
 			return (exp_reward + (p_o_given_a * value).sum(1))
 
-def main():
-	device = torch.device("cuda")
+# def main():
+# 	device = torch.device("cuda")
 
-	mode = 0 # iterator
-	mode = 1 # Upper confidence bounds
-	mode = 2 # greedy approach with state estimation
-	mode = 3 # belief mdp value iteration with fixed horizon
+# 	mode = 0 # iterator
+# 	mode = 1 # Upper confidence bounds
+# 	mode = 2 # greedy approach with state estimation
+# 	mode = 3 # belief mdp value iteration with fixed horizon
 
-	## success rate if correct building material is chosen
-	success_rate =  0.7
+# 	## success rate if correct building material is chosen
+# 	success_rate =  0.7
 
-	num_block_types = 4
-	num_each_block = [1,1,1,1]
+# 	num_block_types = 4
+# 	num_each_block = [1,1,1,1]
 
-	num_trials = 10000 #00
+# 	num_trials = 10000 #00
 
-	uncertainty = 0.2 # 0.1 - 90%, 0.2 - 85%, 0.3 - 77%, 0.5 - 66%
-	# Toy problem
-	block_types = ['lego','kinect','popsicle_stick','play_dough', 'red_brick', '2by4', 'cement', 'steel_ibeams']
-	block_types = block_types[:num_block_types]
+# 	uncertainty = 0.2 # 0.1 - 90%, 0.2 - 85%, 0.3 - 77%, 0.5 - 66%
+# 	# Toy problem
+# 	block_types = ['lego','kinect','popsicle_stick','play_dough', 'red_brick', '2by4', 'cement', 'steel_ibeams']
+# 	block_types = block_types[:num_block_types]
 
-	num_blocks = len(block_types)
-	substate_names = block_types
-	obs_names = substate_names[:]
+# 	num_blocks = len(block_types)
+# 	substate_names = block_types
+# 	obs_names = substate_names[:]
 
-	goal_idx = random.choice(range(len(block_types)))
-	goal = block_types[goal_idx]
+# 	goal_idx = random.choice(range(len(block_types)))
+# 	goal = block_types[goal_idx]
 
-	### uncertainty addition to observation model
-	cand_blocks = OrderedDict()
-	cand_num = 0
+# 	### uncertainty addition to observation model
+# 	cand_blocks = OrderedDict()
+# 	cand_num = 0
 
-	for i, num_block in enumerate(num_each_block):
-		bt =  block_types[i]
-		for j in range(num_block):
-			cand_blocks[cand_num] = (bt, i)
-			cand_num += 1
+# 	for i, num_block in enumerate(num_each_block):
+# 		bt =  block_types[i]
+# 		for j in range(num_block):
+# 			cand_blocks[cand_num] = (bt, i)
+# 			cand_num += 1
 
-	num_cand = len(cand_blocks.keys())
+# 	num_cand = len(cand_blocks.keys())
 
-	### generating observation model
-	likelihood_model = torch.zeros((num_blocks, num_blocks, num_blocks)) # tools, observations, states
+# 	### generating observation model
+# 	likelihood_model = torch.zeros((num_blocks, num_blocks, num_blocks)) # tools, observations, states
 
-	for i in range(num_blocks):
-		likelihood_model[:,i,i] = 1.0
+# 	for i in range(num_blocks):
+# 		likelihood_model[:,i,i] = 1.0
 
-	### adding uncertainty and normalizing
-	noise = Uniform(0, uncertainty)
-	likelihood_model += noise.rsample(sample_shape=likelihood_model.size())
-	# normalizing over the dimension of observations
-	likelihood_model = likelihood_model / likelihood_model.sum(1).unsqueeze(1).repeat_interleave(num_blocks, 1)
+# 	### adding uncertainty and normalizing
+# 	noise = Uniform(0, uncertainty)
+# 	likelihood_model += noise.rsample(sample_shape=likelihood_model.size())
+# 	# normalizing over the dimension of observations
+# 	likelihood_model = likelihood_model / likelihood_model.sum(1).unsqueeze(1).repeat_interleave(num_blocks, 1)
 
-	# print("Success Rate: ", success_rate)
+# 	# print("Success Rate: ", success_rate)
 
-	class Block_Env(object):
-		def __init__(self, goal_idx, cand_blocks, likelihood_model):
-			self.goal_idx = goal_idx
-			self.cand_blocks = cand_blocks
-			self.likelihood_model = likelihood_model
+# 	class Block_Env(object):
+# 		def __init__(self, goal_idx, cand_blocks, likelihood_model):
+# 			self.goal_idx = goal_idx
+# 			self.cand_blocks = cand_blocks
+# 			self.likelihood_model = likelihood_model
 
-		def reset(self, initialize = False):
-			pass
+# 		def reset(self, initialize = False):
+# 			pass
 
-		def get_goal(self):
-			return self.goal_idx
+# 		def get_goal(self):
+# 			return self.goal_idx
 
-		def get_gt_dict(self):
-			return self.cand_blocks
+# 		def get_gt_dict(self):
+# 			return self.cand_blocks
 
-		def get_obs(self, action_idx):
-			substate_idx = self.cand_blocks[action_idx][1]
-			probs = self.likelihood_model[self.goal_idx, :, substate_idx]
-			obs_idx = np.argmax(np.random.multinomial(1, probs.numpy(), size = 1))
+# 		def get_obs(self, action_idx):
+# 			substate_idx = self.cand_blocks[action_idx][1]
+# 			probs = self.likelihood_model[self.goal_idx, :, substate_idx]
+# 			obs_idx = np.argmax(np.random.multinomial(1, probs.numpy(), size = 1))
 
-			# print(self.likelihood_model)
-			# print(probs)
-			# print(obs_idx)
-			# a =  input("Continue?")
-			return obs_idx
+# 			# print(self.likelihood_model)
+# 			# print(probs)
+# 			# print(obs_idx)
+# 			# a =  input("Continue?")
+# 			return obs_idx
 
-	block_env = Block_Env(goal_idx, cand_blocks, likelihood_model)
+# 	block_env = Block_Env(goal_idx, cand_blocks, likelihood_model)
 
-	if all(num == 1.0 for num in num_each_block):
-		print("Using Constraint that there is one of each object type")
-		task_dict = pu.gen_task_dict(num_cand, substate_names, obs_names,\
-		 loglikelihood_model = torch.log(likelihood_model).cpu().numpy(), constraint_type = 1)
-	else:
-		print("No constraint on the type of each candidate object")
-		task_dict = pu.gen_task_dict(num_cand, substate_names, obs_names,\
-		 loglikelihood_model = torch.log(likelihood_model).cpu().numpy(), constraint_type = 0)
+# 	if all(num == 1.0 for num in num_each_block):
+# 		print("Using Constraint that there is one of each object type")
+# 		task_dict = pu.gen_task_dict(num_cand, substate_names, obs_names,\
+# 		 loglikelihood_model = torch.log(likelihood_model).cpu().numpy(), constraint_type = 1)
+# 	else:
+# 		print("No constraint on the type of each candidate object")
+# 		task_dict = pu.gen_task_dict(num_cand, substate_names, obs_names,\
+# 		 loglikelihood_model = torch.log(likelihood_model).cpu().numpy(), constraint_type = 0)
 
-	decision_model = Outer_Loop(block_env, task_dict, mode=mode, device = device, print_info = False)
+# 	decision_model = Outer_Loop(block_env, task_dict, mode=mode, device = device, print_info = False)
 
-	trial_idx = 0
-	step_counts = []
+# 	trial_idx = 0
+# 	step_counts = []
 
-	while trial_idx < num_trials:
-		# print(trial_idx)
-		# print('\n #################### \n New Task \n ###################### \n')
-		goal_idx = random.choice(range(len(block_types)))
-		goal = block_types[goal_idx]
-		decision_model.env.goal_idx = goal_idx
+# 	while trial_idx < num_trials:
+# 		# print(trial_idx)
+# 		# print('\n #################### \n New Task \n ###################### \n')
+# 		goal_idx = random.choice(range(len(block_types)))
+# 		goal = block_types[goal_idx]
+# 		decision_model.env.goal_idx = goal_idx
 
-		corr_idxs = []
-		for k, v in block_env.cand_blocks.items():
-			if v[1] == goal_idx:
-				corr_idxs.append(k)
+# 		corr_idxs = []
+# 		for k, v in block_env.cand_blocks.items():
+# 			if v[1] == goal_idx:
+# 				corr_idxs.append(k)
 
-		decision_model.reset()
-		done_bool = False
-		num_steps = 0
-		while not done_bool:
-			act_idx = decision_model.choose_action()
-			obs_idxs = decision_model.env.get_obs(act_idx)
-			num_steps += 1
+# 		decision_model.reset()
+# 		done_bool = False
+# 		num_steps = 0
+# 		while not done_bool:
+# 			act_idx = decision_model.choose_action()
+# 			obs_idxs = decision_model.env.get_obs(act_idx)
+# 			num_steps += 1
 
-			# print("Comparison", act_idx, corr_idxs)
-			if act_idx in corr_idxs:
-				if np.random.binomial(1, success_rate, 1) == 1:
-					done_bool = True
-					# print("Completed")
+# 			# print("Comparison", act_idx, corr_idxs)
+# 			if act_idx in corr_idxs:
+# 				if np.random.binomial(1, success_rate, 1) == 1:
+# 					done_bool = True
+# 					# print("Completed")
 		
-			decision_model.new_obs(act_idx, obs_idxs)
+# 			decision_model.new_obs(act_idx, obs_idxs)
 
-			# a = input("Continue?")
+# 			# a = input("Continue?")
 
-		step_counts.append(num_steps)
+# 		step_counts.append(num_steps)
 
-		trial_idx += 1
+# 		trial_idx += 1
 
-	print("Averages Number of Steps: ", np.mean(step_counts))
-	print("Standard Deviation of Steps: ", np.std(step_counts))
-		# print("Averages Number of Steps: ", np.mean(step_counts), ' c parameter', c_range[i])
+# 	print("Averages Number of Steps: ", np.mean(step_counts))
+# 	print("Standard Deviation of Steps: ", np.std(step_counts))
+# 		# print("Averages Number of Steps: ", np.mean(step_counts), ' c parameter', c_range[i])
 
-if __name__ == "__main__":
-	main()
+# if __name__ == "__main__":
+# 	main()
 
 			# print(self.state_probs)
 

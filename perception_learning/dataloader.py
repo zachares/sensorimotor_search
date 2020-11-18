@@ -84,8 +84,6 @@ class Custom_DataLoader(Dataset):
 
             self.idx_dict['max_length'] = self.max_length
 
-            self.idx_dict["policies"] = []
-
             self.idx_dict['force_mean'] = np.zeros(6)
             self.idx_dict['force_std'] = np.zeros(6)
             self.count = 0
@@ -98,26 +96,16 @@ class Custom_DataLoader(Dataset):
                 dev_bool = np.random.binomial(1, 1 - self.dev_ratio, 1) ### 1 is train, 0 is val
                 dataset = read_h5(filename)
 
-                # if np.array(dataset['peg_idx'])[0] >= self.num_objects or np.array(dataset['hole_idx'])[0] >= self.num_objects:
-                #     continue
-
-                # policy = dataset["policy"][-1,0]
-
                 forces = np.array(dataset['force_hi_freq'][:,:,:6])
 
-                rel_proprio = np.array(dataset['rel_proprio'])
-                length = rel_proprio.shape[0]
-
-                # tolerance = 0.025
-
-                # if np.linalg.norm(rel_proprio[0,:2]) > tolerance:
-                #     print(filename)
-                #     continue
+                if 'proprio' in dataset.keys():
+                    proprio = np.array(dataset['proprio'])
+                else:
+                    proprio = np.array(dataset['rel_proprio'])
+                    
+                length = proprio.shape[0]
  
                 dataset.close()               
-
-                # if policy not in self.idx_dict["policies"]:
-                #     self.idx_dict["policies"].append(policy)
 
                 if length <= self.min_length:
                     continue
@@ -192,14 +180,10 @@ class Custom_DataLoader(Dataset):
         # prev_time = time.time()
         dataset = read_h5(self.idx_dict[key_set][idx])
 
-        # if idx == 0:
-        #     idx_unpaired = idx + 1
-        # elif idx == (len(self.idx_dict[key_set].keys()) - 1):
-        #     idx_unpaired = idx - 1
-        # else:
-        #     idx_unpaired = idx + random.choice([-1,1])
-
-        # dataset_unpaired = read_h5(self.idx_dict[key_set][idx_unpaired])
+        # max_length = 200
+        # min_length = self.idx_dict["min_length"]
+        # idx0 = 0
+        # idx1 = np.random.choice(range(min_length, max_traj_length)) # end idx
 
         max_traj_length = np.array(dataset['proprio']).shape[0]
 
@@ -208,14 +192,13 @@ class Custom_DataLoader(Dataset):
 
         idx0 = np.random.choice(max_traj_length - min_length) # beginning idx
         idx1 = np.random.choice(range(idx0 + min_length, min(idx0 + max_length, max_traj_length))) # end idx
+        # print('\n', idx0, ' ', idx1)
 
         padded = max_length - idx1 + idx0 + 1
         unpadded = idx1 - idx0 - 1
 
         sample = {}
         sample['input_length'] = np.array(unpadded)
-
-        # pixel_shift = np.random.choice(range(-10,11), 2)
 
         for key in self.dataset_keys:
             if key == 'action':
@@ -237,38 +220,33 @@ class Custom_DataLoader(Dataset):
                 sample[key + '_unpaired'] = np.concatenate([sample[key + '_unpaired'],\
                  np.zeros((padded, sample[key + '_unpaired'].shape[1], sample[key + '_unpaired'].shape[2]))], axis = 0)
 
-            elif key == 'rel_proprio':   
+            elif key == 'proprio' or key == 'rel_proprio':   
                 sample[key] = np.array(dataset[key][idx0:idx1])
 
-                # sample['rel_pos_prior_mean'] = 100 * (sample[key][-1,:2] - np.array(dataset[key])[0,:2])
-                # sample['rel_pos_prior_var'] = np.square(np.random.uniform(low=1e-1, high =2, size = 2)) 
+                # this code is here if you are using the dataset used for the paper where the position recorded
+                # for the robot endeffector in proprio is the same as the position recorded for the relative proprio
+                # they both record the relative position instead of proprio recording the global position
+                # this bug is fixed in the data collection code and a new data set has already been collected
+                if key == 'rel_proprio':
+                    sample['final_rel_pos'] =  100 * sample[key][-1,:2]
+                    hole_info = np.array(dataset['hole_info'])
+                    hole_idxs = np.array(dataset['hole_info'])[:,0]
 
-                sample['rel_pos_prior_mean'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][0,:2]) #np.random.uniform(low=-0.03, high = 0.03, size = 2)
-                sample['rel_pos_prior_var'] = np.ones(2) #np.square(np.random.uniform(low=1e-1, high =3, size = 2))
+                    # print(hole_idxs == sample['state_idx'])
+                    cand_idx = np.where(hole_idxs == sample['state_idx'], np.ones_like(hole_idxs), np.zeros_like(hole_idxs)).argmax(0)
+                    # print(cand_idx)
+                    sample['object_pos'] = hole_info[cand_idx][4:6]
+                    sample['final_pos'] = sample['final_rel_pos'] + sample['object_pos']
+                else:
+                    sample['object_pos'] = 100 * np.array(dataset['object_pos'])[:2] 
+                    sample['final_pos'] = 100 * sample[key][-1,:2]
 
-                sample['final_rel_pos'] = 100 * sample[key][-1,:2]
-
+                # this is the relative position estimate according to the initial position belief from the simulated
+                # vision based object detector used to collect this trajectory
                 sample['rel_pos_estimate'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][0,:2]) #100 * np.random.uniform(low=-0.03, high = 0.03, size = 2) #(sample[key][-1,:2] - sample[key][0,:2])
-
-                sample['next_rel_pos'] = 100 * np.array(dataset[key][idx1, :2])
-
-                sample['reference_pos'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][0,:2])
+                # sample['rel_pos_estimate'] = 100 * np.array(dataset[key][idx1-1,:2] - dataset[key][idx0,:2]) #100 * np.random.uniform(low=-0.03, high = 0.03, size = 2) #(sample[key][-1,:2] - sample[key][0,:2])
 
                 sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-
-            elif key == 'proprio':   
-                sample[key] = np.array(dataset[key][idx0:idx1])
-
-                sample[key + '_unpaired'] = sample[key] #shuffle_along_axis(sample[key], 0)
-
-                sample['final_pos'] = sample[key][-1,:2]
-                sample['next_pos'] = np.array(dataset[key][idx1, :2])
-                
-                sample['final_pos_change'] = 1000 * sample[key][-1,:2] - sample[key][-2,:2]
-                sample['next_pos_change'] = 1000 * np.array(dataset[key][idx1, :2]) - sample[key][-1,:2]
-
-                sample[key] = np.concatenate([sample[key], np.zeros((padded, sample[key].shape[1]))], axis = 0)
-                sample[key + '_unpaired'] = np.concatenate([sample[key + '_unpaired'], np.zeros((padded, sample[key + '_unpaired'].shape[1]))], axis = 0)
 
             elif key == 'contact':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1]).astype(np.int32)
@@ -293,43 +271,37 @@ class Custom_DataLoader(Dataset):
                 sample["state_prior"] = np.random.uniform(low=0, high=1, size = sample[key].shape[0])
                 sample['state_prior'] = sample['state_prior'] / np.sum(sample['state_prior'])
 
-                # sample['type_particles_idx'] = np.random.randint(sample[key].shape[0], size = num_particles)
-
-                # sample['weights'] = np.random.uniform(low=0, high=1, size = num_particles)
-                # sample['weights_particles'] = sample['weights'] / np.sum(sample['weights'])
-
-            #     if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
-            #         sample['done_mask'] = np.zeros((sample[key].size))
-            #     else:
-            #         sample['done_mask'] = np.ones((sample[key].size))
-
-            elif key == 'fit_vector':
-                sample[key] = np.array(dataset[key])
-                # print("Fit Vector: ", sample[key])
-                sample["obs_vector"] = sample[key]
-                sample["fit_idx"] = np.array(sample[key].argmax(0))
-                # sample["obs_idx"] = np.array(sample[key].argmax(0))
-                
-                # if np.sum(np.array(dataset['done'][(idx0 + 1):idx1])) > 0:
-                #     sample['done_mask'] = np.zeros((sample[key].size))
-                # else:
-                #     sample['done_mask'] = np.ones((sample[key].size))
-
         if sample['tool_idx'] == sample['state_idx']:
             tool_list = list(range(self.idx_dict['num_objects']))
             tool_list.remove(sample["tool_vector"].argmax(0))
+            sample['fit_idx'] = np.array(0)
 
             sample['new_tool_idx'] = np.array(random.choice(tool_list))
         else:
             sample['new_tool_idx'] = sample['state_idx']
+            sample['fit_idx'] = np.array(1)
 
         if sample['new_tool_idx'] == sample['state_idx']:
             sample['new_fit_idx'] = np.array(0)
         else:
             sample['new_fit_idx'] = np.array(1)
 
-        sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])
-        # sample["pol_idx"] = np.array(dataset['policy'][-1,0])
+        sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])     
+
+        # theta = np.random.uniform(low=0.0, high=2*np.pi)
+        # r = np.random.uniform(low=0.0, high =2.0)
+
+        # sample['pos_prior_mean'] = np.array([r * np.cos(theta), r * np.sin(theta)]) + sample['object_pos']
+        sample['pos_prior_mean'] = np.random.uniform(low=-2.0, high =2.0, size=2) + sample['object_pos']
+
+        
+        sample['pos_prior_var'] = np.ones(2)
+
+        # print(sample['pos_prior_mean'] - sample['object_pos'])
+        # print(sample['initial_rel_pos'])
+        # print(sample['final_pos'])
+        # print(sample['final_rel_pos'])
+        # print(sample['object_pos'])
 
         dataset.close()
         # dataset_unpaired.close()
@@ -340,79 +312,3 @@ class Custom_DataLoader(Dataset):
         ##########################################################
         # print(time.time() - prev_time)
         return self.transform(sample)
-
-
-            # elif key == 'hole_info':
-            #     sample['hole_sites'] = np.array(dataset[key])[:,:2] - np.array([[0.5, 0.0],[0.5, 0.0],[0.5, 0.0]])
-
-            #     pixels = np.array(dataset[key])[:,-2:]
-
-            #     sample['pixels'] = pixels + pixel_shift
-
-            #     sample['heat_map_idx'] = np.zeros((3,128,128))
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1])] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1])] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1])] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) + 1, int(pixels[0,1] + pixel_shift[1]) + 1] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) + 1, int(pixels[1,1] + pixel_shift[1]) + 1] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) + 1, int(pixels[2,1] + pixel_shift[1]) + 1] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) - 1, int(pixels[0,1] + pixel_shift[1]) + 1] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) - 1, int(pixels[1,1] + pixel_shift[1]) + 1] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) - 1, int(pixels[2,1] + pixel_shift[1]) + 1] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) + 1, int(pixels[0,1] + pixel_shift[1]) - 1] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) + 1, int(pixels[1,1] + pixel_shift[1]) - 1] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) + 1, int(pixels[2,1] + pixel_shift[1]) - 1] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) - 1, int(pixels[0,1] + pixel_shift[1]) - 1] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) - 1, int(pixels[1,1] + pixel_shift[1]) - 1] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) - 1, int(pixels[2,1] + pixel_shift[1]) - 1] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1]) + 1] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1]) + 1] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1]) + 1] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) + 1, int(pixels[0,1] + pixel_shift[1])] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) + 1, int(pixels[1,1] + pixel_shift[1])] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) + 1, int(pixels[2,1] + pixel_shift[1])] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1]) - 1] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1]) - 1] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1]) - 1] = 1.0
-
-            #     sample['heat_map_idx'][0, int(pixels[0,0] + pixel_shift[0]) - 1, int(pixels[0,1] + pixel_shift[1])] = 1.0
-            #     sample['heat_map_idx'][1, int(pixels[1,0] + pixel_shift[0]) - 1, int(pixels[1,1] + pixel_shift[1])] = 1.0
-            #     sample['heat_map_idx'][2, int(pixels[2,0] + pixel_shift[0]) - 1, int(pixels[2,1] + pixel_shift[1])] = 1.0
-
-            #     # print(np.array(dataset[key])[:,:3])
-
-            # elif key == 'reference_image':
-            #     image = np.array(dataset[key]) / 255.0
-            #     sample[key] = add_noise_and_shift(image, noise = 0.03, shift_x = pixel_shift[0] , shift_y = pixel_shift[1])
-
-            # elif key == 'reference_point_cloud':
-            #     sample[key] = add_noise_and_shift(np.array(dataset[key]), noise = 0.005, shift_x = pixel_shift[0] , shift_y = pixel_shift[1])
-
-            # elif key == 'reference_depth':
-            #     sample[key] = add_noise_and_shift(np.array(dataset[key]), noise = 0.03, shift_x = pixel_shift[0] , shift_y = pixel_shift[1])
-        # sample["correct_site"] = sample['hole_sites'][sample['state_idx']]
-        # sample['point_cloud_point_est'] = sample['reference_point_cloud']\
-        # [int(pixels[sample['state_idx'],0] + pixel_shift[0]), int(pixels[sample['state_idx'],1] + pixel_shift[1]), :2]
-
-        # sample['point_cloud_point_ests'] = np.concatenate([\
-        #     np.expand_dims(sample['reference_point_cloud'][int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1]), :2], axis = 0),\
-        #     np.expand_dims(sample['reference_point_cloud'][int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1]), :2], axis = 0),\
-        #     np.expand_dims(sample['reference_point_cloud'][int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1]), :2], axis = 0)\
-        #     ], axis = 0)
-        # print("point cloud est 0", sample['reference_point_cloud'][int(pixels[0,0] + pixel_shift[0]), int(pixels[0,1] + pixel_shift[1])])
-        # print("point cloud est 1", sample['reference_point_cloud'][int(pixels[1,0] + pixel_shift[0]), int(pixels[1,1] + pixel_shift[1])])
-        # print("point cloud est 2", sample['reference_point_cloud'][int(pixels[2,0] + pixel_shift[0]), int(pixels[2,1] + pixel_shift[1])])
-
-        # print("point cloud est 0", np.array(dataset['reference_point_cloud'])[int(pixels[0,0]), int(pixels[0,1])])
-        # print("point cloud est 1", np.array(dataset['reference_point_cloud'])[int(pixels[1,0]), int(pixels[1,1])])
-        # print("point cloud est 2", np.array(dataset['reference_point_cloud'])[int(pixels[2,0]), int(pixels[2,1])])
-
-        # plot_image(np.rot90(np.transpose(sample["rgbd_last"][:-1], (1,2,0)), k = 1))
-        # a = input("")

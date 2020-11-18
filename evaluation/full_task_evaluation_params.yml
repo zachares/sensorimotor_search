@@ -1,0 +1,48 @@
+# want to use the same control parameters, peg list, options list and fit list
+# as those used to collect the dataset which was used to train the networks
+control_params:
+  kp: [6, 6, 6]
+  control_freq: 10
+  tol: [0.0005, 0.0005, 0.001] #should match number of dimensions in action spac
+  movement_horizon: 100
+  noise_std: [0.0, 0.0, 0.00] #0.025 good noise scale - should match number of dimensions in action spac
+  tolerance_bool: True
+  horizon_bool: False
+
+task_params:
+  constraint_type: 0
+  shift_bool: 1.0
+  horizon: 100
+  plus_offset: [ 0, 0, 0.04] # should match number of dimensions in action space
+  workspace_dim: 0.02
+  scale: 1.0 # goes to zero
+  seed: 4321
+  selection_mode: 3
+  ignore_done: False
+
+logging_params:
+  logging_folder: '/scr-ssd/sens_search_logging/evaluation/full_task/'
+  logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
+  display_bool: 0.0 # 1 if display should be on, 0 if display should be off
+  collect_vision_bool: 0.0
+  image_size: 32
+  collect_depth: 1.0
+  camera_name: insertion
+  num_samples: 300
+  experiment_name: 'failureonly_seperate_stepcounts03_temp'
+
+traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
+use_cuda: True
+action_size: 3
+eval: True
+success_params: [0.346, 0.274, 0.301] # success rate with one attempt - radius 1.5cm
+
+policy_keys: [rel_proprio]
+state_size: 3
+
+info_flow:
+  StatePosSensor_wConstantUncertainty: # /scr-ssd/sens_search_logging/models/20201026_training_24_w_3smallobjects_fit_point_estimate/
+    model_folder: /scr-ssd/sens_search_logging/models/20201026_training_26_w_3smallobjects_fit_point_estimate/
+    epoch: 5000
+    sensor: True
+    encoder: False
