@@ -6,6 +6,7 @@ This is the code associated with the research project "Interpreting Contact Inte
 
 Run the following lines on a linux terminal to install the required software libraries to run the paper code, please pay attention to the comments above each set of lines to run to make sure you are using the right paths for your file system.
 
+```python
 #Assuming you have installed Anaconda 3
 
 conda create -n sens_search python=3.7
@@ -127,12 +128,13 @@ cd ..
 git clone -b sens_search https://github.com/zachares/sensorimotor_search.git
 
 cd sensorimotor_search
+'''
 
 pip install -e .
 
 cd ..
 
-
+```
 
 
 
