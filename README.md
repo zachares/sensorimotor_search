@@ -14,6 +14,7 @@ conda activate sens_search
 
 
 #Setting environmental variables for running mujoco and activating renderer
+
 cd $CONDA_PREFIX
 
 mkdir -p ./etc/conda/activate.d
