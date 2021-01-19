@@ -128,7 +128,6 @@ cd ..
 git clone -b sens_search https://github.com/zachares/sensorimotor_search.git
 
 cd sensorimotor_search
-'''
 
 pip install -e .
 
