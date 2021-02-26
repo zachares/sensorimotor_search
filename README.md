@@ -116,9 +116,7 @@ cd ..
 #cd ..
 
 
-git clone https://github.com/zachares/deep_learning.git
-
-git checkout 74101ca544c7ee8365657c6ba26c92d9ff54a21dcd
+git clone -b paper_code https://github.com/zachares/deep_learning.git
 
 cd deep_learning 
 
