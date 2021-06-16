@@ -193,8 +193,8 @@ if __name__ == '__main__':
 				error_final = np.linalg.norm(pos_final - pos_actual)
 
 				if attempt_count == 1 and not env.done_bool:
-					errors[attempt_count-1].append(min(error_init, 0.04))
-					errors[attempt_count].append(min(error_final, 0.04))
+					errors[attempt_count-1].append(error_init)
+					errors[attempt_count].append(error_final)
 
 					innovation.append([pos_actual - pos_temp_init, pos_final - pos_temp_init])
 

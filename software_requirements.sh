@@ -73,8 +73,8 @@ cd ..
 # pip install -e .
 # cd ..
 
-git clone -b https://github.com/zachares/supervised_learning.git
-cd supervised_learning
+git clone -b paper_code https://github.com/zachares/deep_learning.git
+cd deep_learning
 pip install -e .
 cd ..
 
