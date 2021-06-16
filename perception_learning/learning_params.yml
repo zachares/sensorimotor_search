@@ -1,4 +1,4 @@
-dataset_path: /scr2/muj_random_3_objects_new_02_control_range_fit_focused_20201016/
+dataset_path: /scr2/sens_search/paper_dataset/
 
 dataloading_params:
   num_workers: 6
@@ -19,61 +19,61 @@ training_params:
   run_mode: 1 # 0 - development, 1 - training, 2 - testing
 
 logging_params:
-  logging_folder: "/scr-ssd/sens_search_logging/" # Place your logging folder in a seperate location then your local code repository
-  run_notes: "_w_3smallobjects_fit_point_estimate"
+  logging_folder: "/scr2/sens_search/logging/" # Place your logging folder in a seperate location then your local code repository
+  run_notes: "_w_injected_noise"
 
 dataset_keys: ["force_hi_freq", "peg_vector", "hole_vector", "action", "rel_proprio", "contact", "hole_sites", 'done'] #, 'image', 'depth']
 
 info_flow:
-  # History_Encoder:
-  #   train: 1
-  #   model_folder: '' 
-  #   epoch: 0 
-  #   init_args:
-  #     num_objects: 3
-  #     action_size: 3
-  #     proprio_size: 12
-  #     force_size: [6, 50]
-  #     dropout_prob: 0.5
-  #     min_length: 20
-  #     residual_dims: 0
-  #   inputs:
-  #     rel_proprio: dataset
-  #     action: dataset
-  #     force_hi_freq: dataset
-  #     rel_pos_estimate: dataset
-  #     pos_prior_mean: dataset
-  #     final_pos: dataset
-  #     contact: dataset
-  #     tool_idx: dataset
-  #     state_idx: dataset
-  #     include_label: dataset
-  #     padding_mask: dataset
-  #     epoch: dataset
-  #   outputs:
-  #     pos_est:
-  #       inputs:
-  #         object_pos: dataset
-  #       losses:
-  #         L2:
-  #           weight: 5
-  #           logging_name: Position_Estimate
-  #       evals:
-  #         Continuous_Error:
-  #           logging_name:  Pos_Err_Force
-  #     obs_logits:
-  #       inputs:
-  #         fit_idx: dataset
-  #       losses: 
-  #         Multinomial_NLL:
-  #           weight: 5
-  #           logging_name: Obs_Shape_Class
-  #     obs_inputs:
-  #       inputs:
-  #         fit_idx: dataset
-  #       evals:
-  #         Multinomial_Accuracy:
-  #           logging_name: obs_classifier_accuracy
+# History_Encoder:
+#   train: 1
+#   model_folder: '' 
+#   epoch: 0 
+#   init_args:
+#     num_objects: 3
+#     action_size: 3
+#     proprio_size: 12
+#     force_size: [6, 50]
+#     dropout_prob: 0.5
+#     min_length: 20
+#     residual_dims: 0
+#   inputs:
+#     rel_proprio: dataset
+#     action: dataset
+#     force_hi_freq: dataset
+#     rel_pos_estimate: dataset
+#     pos_prior_mean: dataset
+#     final_pos: dataset
+#     contact: dataset
+#     tool_idx: dataset
+#     state_idx: dataset
+#     include_label: dataset
+#     padding_mask: dataset
+#     epoch: dataset
+#   outputs:
+#     pos_est:
+#       inputs:
+#         object_pos: dataset
+#       losses:
+#         L2:
+#           weight: 5
+#           logging_name: Position_Estimate
+#       evals:
+#         Continuous_Error:
+#           logging_name:  Pos_Err_Force
+#     obs_logits:
+#       inputs:
+#         fit_idx: dataset
+#       losses: 
+#         Multinomial_NLL:
+#           weight: 5
+#           logging_name: Obs_Shape_Class
+#     obs_inputs:
+#       inputs:
+#         fit_idx: dataset
+#       evals:
+#         Multinomial_Accuracy:
+#           logging_name: obs_classifier_accuracy
   StatePosSensor_wConstantUncertainty:
     train: 1
     model_folder: ''
@@ -101,6 +101,9 @@ info_flow:
       new_tool_idx: dataset
       fit_idx: dataset
       new_fit_idx: dataset
+      match_tool_idx : dataset
+      match_state_idx : dataset
+      match_idx : dataset
       padding_mask: dataset
       input_length: dataset
       epoch: dataset
@@ -122,24 +125,24 @@ info_flow:
           Gaussian_NLL:
             # weight: 10.0
             logging_name: Position_Estimate
-      obs_logits:
-        inputs:
-          fit_idx: StatePosSensor_wConstantUncertainty
-        losses:
-          Multinomial_NLL:
-            # weight: 2.0 # 5.0
-            logging_name: Obs_Shape_Class
-      obs_inputs:
-        inputs:
-          fit_idx: StatePosSensor_wConstantUncertainty
-        evals:
-          Multinomial_Accuracy:
-            logging_name: obs_classifier_accuracy
-      obs_logprobs_inputs:
-        losses:
-          Neg_Multinomial_Entropy:
-           # weight: 0.25
-            logging_name: ent_max_mult
+      #obs_logits:
+      #  inputs:
+      #    fit_idx: StatePosSensor_wConstantUncertainty
+      #  losses:
+      #    Multinomial_NLL:
+      #      # weight: 2.0 # 5.0
+      #      logging_name: Obs_Shape_Class
+      #obs_inputs:
+      #  inputs:
+      #    fit_idx: StatePosSensor_wConstantUncertainty
+      #  evals:
+      #    Multinomial_Accuracy:
+      #      logging_name: obs_classifier_accuracy
+      # obs_logprobs_inputs:
+      #   losses:
+      #     Neg_Multinomial_Entropy:
+      #      # weight: 0.25
+      #       logging_name: ent_max_mult
       state_logits:
         inputs:
           state_idx: dataset

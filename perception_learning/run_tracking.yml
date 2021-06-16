@@ -1,6 +1,6 @@
 run_tracker:
-  date: '20201118'
+  date: '20210411'
   debugging: 0
   development: 5
   testing: 0
-  training: 3
+  training: 1

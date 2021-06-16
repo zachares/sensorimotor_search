@@ -124,9 +124,9 @@ if __name__ == '__main__':
 
 	env = SensSearchWrapper(robo_env, cfg, selection_mode=2, **model_dict)
 
-	seperate = False
+	joint = False
 
-	if seperate:
+	if joint:
 		decision_model = Joint_POMDP(env, mode = 0, device = device,\
 			 success_params = success_params, horizon = 3)
 	else:
@@ -236,7 +236,7 @@ if __name__ == '__main__':
 				decision_model.completed_tasks[decision_model.corr_action_idx_list[0]] = 1.0
 				decision_model.env.robo_env.completed_tasks = decision_model.completed_tasks.cpu().numpy()
 				decision_model.reset(config_type = '3_small_objects_fit', peg_idx = pegs[-1])
-				decision_model.reset_probs()
+				# decision_model.reset_probs()
 				num_complete += 1
 
 			elif step_count >= 30:

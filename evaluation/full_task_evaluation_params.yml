@@ -21,7 +21,7 @@ task_params:
   ignore_done: False
 
 logging_params:
-  logging_folder: '/scr-ssd/sens_search_logging/evaluation/full_task/'
+  logging_folder: '/scr2/sens_search/evaluation_results/full_task/'
   logging_data_bool: 0.0 # 1.0 if the program should be saving data, 0.0 otherwise
   display_bool: 0.0 # 1 if display should be on, 0 if display should be off
   collect_vision_bool: 0.0
@@ -29,7 +29,7 @@ logging_params:
   collect_depth: 1.0
   camera_name: insertion
   num_samples: 300
-  experiment_name: 'failureonly_seperate_stepcounts03_temp'
+  experiment_name: 'w_ft_sensor_noise_position_only1'
 
 traj_keys: ["force_hi_freq", "rel_proprio", "proprio", "action", "contact", "joint_pos", "joint_vel"] #, "reward", "done", "policy"] # "image", "point_cloud", "depth", "depth_meters"] # rgbd:
 use_cuda: True
@@ -42,7 +42,7 @@ state_size: 3
 
 info_flow:
   StatePosSensor_wConstantUncertainty: # /scr-ssd/sens_search_logging/models/20201026_training_24_w_3smallobjects_fit_point_estimate/
-    model_folder: /scr-ssd/sens_search_logging/models/20201026_training_26_w_3smallobjects_fit_point_estimate/
-    epoch: 5000
+    model_folder: /scr2/sens_search/logging/models/20210321_training_5_w_injected_noise/ #/scr2/sens_search/logging/models/20210317_training_1_w_injected_noise/ # /scr-ssd/sens_search_logging/models/20201026_training_26_w_3smallobjects_fit_point_estimate/
+    epoch: 2000
     sensor: True
     encoder: False

@@ -135,7 +135,8 @@ class Joint_POMDP(object):
 		for i, state in enumerate(self.task_dict['states']):
 			correct = True
 			for cand_idx, substate_idx in enumerate(state):
-				if self.env.robo_env.hole_sites[cand_idx][2] != substate_idx:
+				#print(self.env.robo_env.hole_sites[cand_idx][2], substate_idx)
+				if self.env.robo_env.hole_sites[cand_idx][1] != substate_idx:
 					correct = False
 
 			if correct:
@@ -392,7 +393,7 @@ class Seperate_POMDP(object):
 		self.corr_action_idx_list = []
 
 		for j in range(self.task_dict['num_actions']):
-			if self.env.robo_env.hole_sites[j][1] == self.env.robo_env.peg_idx:
+			if self.env.robo_env.hole_sites[j][1] == self.env.robo_env.peg_idx and self.completed_tasks[j] != 1:
 				self.corr_action_idx_list.append(j)
 
 		if self.print_info:

@@ -365,6 +365,8 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         # small constant added to avoid numerical issues during training
         pos_ests_obs_noise = obs_noise_estimator(input_dict['tool_idx'].long()).pow(2) + 1e-2
 
+        #new_states_T = torch.cat([seq_enc, shape_embed(input_dict['new_tool_idx'])], dim = 1)
+
         if 'new_tool_idx' in input_dict.keys():
             new_states_T = torch.cat([seq_enc, shape_embed(input_dict['new_tool_idx'].long())], dim = 1)
             old_obs_logits = obs_classifier(states_T)
@@ -375,12 +377,16 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
             obs_logits = obs_classifier(states_T)
             if 'fit_idx' in input_dict.keys():
                 input_dict['full_fit_idx'] = input_dict['fit_idx']
-
         # likelihood network
         obs_state_logits = torch.reshape(obs_likelihood(input_dict['tool_idx'].long()), (input_dict['batch_size'], self.num_obs, self.num_states))
         obs_state_logprobs = F.log_softmax(obs_state_logits, dim = 1)
-
-        state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_logits[:input_dict['batch_size']], dim = 1).max(1)[1]]
+        
+        if not obs_classifier.training:
+            state_logprobs = obs_state_logprobs[torch.arange(input_dict['batch_size']), F.softmax(obs_classifier(states_T), dim = 1).max(1)[1]]
+        else:
+            obs_probs_test = F.softmax(obs_classifier(states_T), dim = 1)
+            obs_state_probs = F.softmax(obs_state_logits, dim=1)
+            state_logprobs = torch.log((obs_state_probs * obs_probs_test.unsqueeze(2).repeat_interleave(self.num_states, dim = 2)).sum(1))
 
         return pos_ests_obs, pos_ests_obs_noise, obs_logits, state_logprobs, obs_state_logprobs, states_T
 
@@ -510,6 +516,6 @@ class StatePosSensor_wConstantUncertainty(mm.Proto_Macromodel):
         input_dict['tool_idx'] = input_dict['peg_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
         input_dict['state_idx'] = input_dict['hole_vector'].max(0)[1].long().unsqueeze(0).repeat_interleave(T, 0)
         input_dict['contact'] = input_dict['contact'][:,1:].repeat_interleave(T,0)
-
+        #input_dict['new_tool_idx'] = input_dict['tool_idx']
         input_dict['rel_pos_estimate'] = 100 * (input_dict['proprio'][:,-1,:2] - input_dict['proprio'][:,0,:2]).repeat_interleave(T,0)
         input_dict['final_pos'] = 100 * input_dict['proprio'][:,-1,:2]

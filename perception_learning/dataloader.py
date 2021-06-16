@@ -209,7 +209,10 @@ class Custom_DataLoader(Dataset):
 
             elif key == 'force_hi_freq':
                 sample[key] = np.array(dataset[key][(idx0 + 1):idx1])
-
+                
+                simulated_noise = np.random.normal(loc = 0.0, scale = [0.1,0.1,0.1,0.005,0.005,0.003], size = sample[key].shape)
+                sample[key] = sample[key] + simulated_noise
+                
                 sample['final_force'] = sample[key][-1,-1]
                 sample['next_force'] = np.array(dataset[key][idx1,-1])
 
@@ -270,23 +273,40 @@ class Custom_DataLoader(Dataset):
                 
                 sample["state_prior"] = np.random.uniform(low=0, high=1, size = sample[key].shape[0])
                 sample['state_prior'] = sample['state_prior'] / np.sum(sample['state_prior'])
+                
+                sample['state_prior'] = np.ones(sample[key].shape[0])
+                sample['state_prior'] = sample['state_prior'] / sample['state_prior'].shape[0]
 
         if sample['tool_idx'] == sample['state_idx']:
-            tool_list = list(range(self.idx_dict['num_objects']))
-            tool_list.remove(sample["tool_vector"].argmax(0))
             sample['fit_idx'] = np.array(0)
-
-            sample['new_tool_idx'] = np.array(random.choice(tool_list))
         else:
-            sample['new_tool_idx'] = sample['state_idx']
             sample['fit_idx'] = np.array(1)
+
+        tool_list = list(range(self.idx_dict['num_objects']))
+        sample['new_tool_idx'] = np.array(random.choice(tool_list))
 
         if sample['new_tool_idx'] == sample['state_idx']:
             sample['new_fit_idx'] = np.array(0)
         else:
             sample['new_fit_idx'] = np.array(1)
 
+        tool_list = list(range(self.idx_dict['num_objects']))
+        tool_list.remove(sample["tool_vector"].argmax(0))
+  
+        tool_offset = self.idx_dict['num_objects'] * sample['tool_idx']
+  
+        sample['tt_idx'] = np.expand_dims(sample['tool_idx'] + tool_offset, axis = 0)
+        sample['nt_idx'] = np.array(tool_list) + tool_offset
+        # print(sample['tt_idx'].shape, sample['nt_idx'].shape)
         sample["padding_mask"] = np.concatenate([np.zeros(unpadded), np.ones(padded)])     
+  
+        sample['match_tool_idx'] = np.array(np.random.choice(list(range(self.idx_dict['num_objects']))))
+        sample['match_state_idx'] = np.array(np.random.choice(list(range(self.idx_dict['num_objects']))))
+  
+        if sample['match_tool_idx'] == sample['tool_idx'] and sample['match_state_idx'] == sample['state_idx']:
+            sample['match_idx'] = np.array(0)
+        else:
+            sample['match_idx'] = np.array(1)
 
         # theta = np.random.uniform(low=0.0, high=2*np.pi)
         # r = np.random.uniform(low=0.0, high =2.0)

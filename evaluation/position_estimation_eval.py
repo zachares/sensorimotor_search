@@ -246,13 +246,13 @@ if __name__ == '__main__':
 		print("Mean: ", np.mean(np.array(errors[0]) - np.array(errors[1])))
 		print("STD: ", np.std(np.array(errors[0]) - np.array(errors[1])))
 
-		# print("Saving results_dict to: ", logging_path)
-		# with open(logging_path, 'wb') as f:
-		# 	pickle.dump(errors, f, pickle.HIGHEST_PROTOCOL)
-
 		print("Saving results_dict to: ", logging_path)
 		with open(logging_path, 'wb') as f:
-			pickle.dump(innovation, f, pickle.HIGHEST_PROTOCOL)
+			pickle.dump(errors, f, pickle.HIGHEST_PROTOCOL)
+
+		#print("Saving results_dict to: ", logging_path)
+		#with open(logging_path, 'wb') as f:
+		#	pickle.dump(innovation, f, pickle.HIGHEST_PROTOCOL)
 
 
 
