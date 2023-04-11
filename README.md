@@ -85,7 +85,7 @@ cd /scr-ssd/sens_search/
 
 #Adding and installing robosuite
 
-git clone -b peter_devel https://github.com/stanford-iprl-lab/robosuite.git
+git clone https://github.com/ARISE-Initiative/robosuite
 
 pip install hjson pyquaternion pyyaml mujoco-py pybullet==1.9.5 gtimer
 
